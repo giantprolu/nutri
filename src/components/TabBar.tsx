@@ -77,6 +77,11 @@ function TabLink({ destination, pathname }: { destination: Destination; pathname
 export function TabBar() {
   const pathname = usePathname();
 
+  // L'écran de déverrouillage n'a pas de navigation : rien n'est accessible.
+  if (pathname.startsWith('/unlock')) {
+    return null;
+  }
+
   return (
     <nav
       aria-label="Navigation principale"

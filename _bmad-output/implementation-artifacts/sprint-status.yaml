@@ -35,9 +35,9 @@ project_key: NOKEY
 tracking_system: file-system
 story_location: _bmad-output/implementation-artifacts/stories
 development_status:
-  epic-1: backlog
-  1-1-squelette-applicatif-et-navigation: backlog
-  1-2-déverrouillage-par-mot-de-passe: backlog
+  epic-1: in-progress
+  1-1-squelette-applicatif-et-navigation: done
+  1-2-déverrouillage-par-mot-de-passe: done
   1-3-pwa-installable-et-écran-de-réglages: backlog
   epic-1-retrospective: optional
 
