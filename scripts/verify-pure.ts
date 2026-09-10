@@ -7,6 +7,7 @@ import assert from 'node:assert/strict';
 import { scaleMacros, isValidQuantity, isCompleteMacros, sumMacros } from '../src/lib/nutrition';
 import { todayInParis, isJournalDate, formatRelativeJournalDate } from '../src/lib/date';
 import { buildQuantityShortcuts } from '../src/lib/shortcuts';
+import { isValidBarcode } from '../src/lib/client/scanner';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -75,5 +76,14 @@ assert.deepEqual(
   [100],
   'une portion nulle est ignoree',
 );
+
+// FR-16 : un code-barres exploitable fait 8, 12 ou 13 chiffres.
+assert.equal(isValidBarcode('3017620422003'), true, 'EAN-13');
+assert.equal(isValidBarcode('40822938'), true, 'EAN-8');
+assert.equal(isValidBarcode('036000291452'), true, 'UPC-A');
+assert.equal(isValidBarcode('12345'), false, 'trop court');
+assert.equal(isValidBarcode('123456789012345'), false, 'trop long');
+assert.equal(isValidBarcode('30176204220O3'), false, 'lettre refusee');
+assert.equal(isValidBarcode(''), false, 'chaine vide refusee');
 
 console.log('Toutes les verifications pures passent.');

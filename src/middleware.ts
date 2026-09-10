@@ -28,7 +28,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Exclut les ressources statiques et la coquille PWA, accessibles sans session.
+  // `zxing` en fait partie : c'est un binaire public, et le laisser rediriger
+  // vers /unlock ferait mettre en cache la page de déverrouillage à sa place.
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icons|sw.js|offline).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icons|zxing|sw.js|offline).*)',
   ],
 };

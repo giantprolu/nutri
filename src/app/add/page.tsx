@@ -22,7 +22,7 @@ const MODES: Mode[] = [
     href: '/add/scan',
     label: 'Scanner',
     hint: 'Code-barres d’un produit industriel',
-    ready: false,
+    ready: true,
   },
   {
     href: '/add/search',

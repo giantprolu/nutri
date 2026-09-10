@@ -4,15 +4,17 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-zxing-wasm.mjs",
     "dev": "next dev",
+    "prebuild": "node scripts/copy-zxing-wasm.mjs",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json",
+    "verify": "tsx scripts/verify-pure.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "import:ciqual": "tsx scripts/import-ciqual.ts",
-    "verify": "tsx scripts/verify-pure.ts"
+    "import:ciqual": "tsx scripts/import-ciqual.ts"
   },
   "dependencies": {
     "@mistralai/mistralai": "2.7.0",
