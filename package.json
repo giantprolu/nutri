@@ -14,7 +14,8 @@
     "verify": "tsx scripts/verify-pure.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "import:ciqual": "tsx scripts/import-ciqual.ts"
+    "import:ciqual": "tsx scripts/import-ciqual.ts",
+    "verify:off": "tsx scripts/verify-off.ts"
   },
   "dependencies": {
     "@mistralai/mistralai": "2.7.0",

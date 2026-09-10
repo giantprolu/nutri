@@ -52,3 +52,31 @@ export const entries = pgTable(
 
 export type EntryRow = typeof entries.$inferSelect;
 export type NewEntryRow = typeof entries.$inferInsert;
+
+/**
+ * Cache produits (FR-14). La clé est le code-barres : un produit n'existe
+ * qu'une fois, et un second scan le retrouve sans appel réseau (FR-12).
+ *
+ * Les valeurs sont toujours exprimées pour 100 g (AD-8). La normalisation
+ * depuis Open Food Facts se fait à l'écriture, jamais à la lecture.
+ */
+export const products = pgTable(
+  'products',
+  {
+    barcode: text('barcode').primaryKey(),
+    name: text('name').notNull(),
+    kcal100g: nutrient('kcal_100g').notNull(),
+    protein100g: nutrient('protein_100g').notNull(),
+    carbs100g: nutrient('carbs_100g').notNull(),
+    fat100g: nutrient('fat_100g').notNull(),
+    /** Portion déclarée par Open Food Facts, proposée en raccourci (FR-9). */
+    servingSizeG: nutrient('serving_size_g'),
+    /** `off` ou `manual` : d'où vient la fiche. */
+    source: text('source').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('products_name_idx').on(table.name)],
+);
+
+export type ProductRow = typeof products.$inferSelect;
+export type NewProductRow = typeof products.$inferInsert;

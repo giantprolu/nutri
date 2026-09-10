@@ -53,7 +53,7 @@ development_status:
 
   epic-4: in-progress
   4-1-scanner-caméra-et-décodage: done
-  4-2-résolution-d-un-code-barres-et-cache-produits: backlog
+  4-2-résolution-d-un-code-barres-et-cache-produits: done
   4-3-produit-inconnu-ou-fiche-incomplète: backlog
   epic-4-retrospective: optional
 
