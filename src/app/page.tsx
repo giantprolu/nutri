@@ -21,7 +21,7 @@ export default async function JournalPage() {
       {entries.length === 0 ? (
         <EmptyState>Aucune entrée aujourd&apos;hui.</EmptyState>
       ) : (
-        <EntryList entries={entries} className="mt-4" />
+        <EntryList entries={entries} deletable className="mt-4" />
       )}
     </>
   );

@@ -41,9 +41,9 @@ development_status:
   1-3-pwa-installable-et-écran-de-réglages: done
   epic-1-retrospective: optional
 
-  epic-2: in-progress
+  epic-2: done
   2-1-affichage-du-journal-du-jour: done
-  2-2-suppression-d-une-entrée: backlog
+  2-2-suppression-d-une-entrée: done
   epic-2-retrospective: optional
 
   epic-3: backlog
