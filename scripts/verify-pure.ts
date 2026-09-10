@@ -6,6 +6,7 @@
 import assert from 'node:assert/strict';
 import { scaleMacros, isValidQuantity, isCompleteMacros, sumMacros } from '../src/lib/nutrition';
 import { todayInParis, isJournalDate, formatRelativeJournalDate } from '../src/lib/date';
+import { buildQuantityShortcuts } from '../src/lib/shortcuts';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -43,5 +44,36 @@ assert.equal(isJournalDate('2026-02-30'), false, 'date inexistante refusee');
 assert.equal(isJournalDate('2026-02-28'), true, 'date reelle acceptee');
 assert.equal(formatRelativeJournalDate('2026-09-10', '2026-09-10'), "Aujourd'hui");
 assert.equal(formatRelativeJournalDate('2026-09-09', '2026-09-10'), 'Hier');
+
+// FR-9 : ordre fixe portion, quantites recentes, 100 g.
+const withServing = buildQuantityShortcuts({ servingSizeG: 125, recentQuantities: [200, 150] });
+assert.deepEqual(
+  withServing.map((s) => s.grams),
+  [125, 200, 150, 100],
+  'portion puis recentes puis 100 g',
+);
+assert.equal(withServing[0]?.label, 'Portion (125 g)', 'la portion porte son libelle complet');
+
+// La plus recente d'abord, et au plus deux quantites recentes.
+const manyRecent = buildQuantityShortcuts({ recentQuantities: [200, 150, 80, 60] });
+assert.deepEqual(manyRecent.map((s) => s.grams), [200, 150, 100], 'deux recentes au maximum');
+
+// 100 g toujours propose, et jamais en double.
+assert.deepEqual(
+  buildQuantityShortcuts({ recentQuantities: [100, 150] }).map((s) => s.grams),
+  [100, 150],
+  '100 g deja recent n apparait qu une fois',
+);
+assert.deepEqual(
+  buildQuantityShortcuts({ servingSizeG: 100 }).map((s) => s.grams),
+  [100],
+  'portion de 100 g absorbe le raccourci par defaut',
+);
+assert.deepEqual(buildQuantityShortcuts({}).map((s) => s.grams), [100], '100 g seul par defaut');
+assert.deepEqual(
+  buildQuantityShortcuts({ servingSizeG: 0 }).map((s) => s.grams),
+  [100],
+  'une portion nulle est ignoree',
+);
 
 console.log('Toutes les verifications pures passent.');

@@ -2,7 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { QuantityPad, type QuantityShortcut } from '@/components/QuantityPad';
+import { QuantityPad } from '@/components/QuantityPad';
+import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { isValidNutrient } from '@/lib/nutrition';
 import type { Macros } from '@/lib/types';
@@ -67,11 +68,7 @@ export function ManualEntryFlow() {
       name: 'quantity',
       foodLabel: label,
       per100g: macros,
-      // Ordre fixe : dernières quantités puis 100 g (FR-9).
-      shortcuts: [
-        ...recent.map((grams) => ({ label: `${grams} g`, grams })),
-        ...(recent.includes(100) ? [] : [{ label: '100 g', grams: 100 }]),
-      ],
+      shortcuts: buildQuantityShortcuts({ recentQuantities: recent }),
     });
   }
 

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { MAX_QUANTITY_G, formatGrams, formatKcal, scaleMacros } from '@/lib/nutrition';
 import type { Macros } from '@/lib/types';
+import type { QuantityShortcut } from '@/lib/shortcuts';
 
 /**
  * Pavé de quantité (FR-8, FR-9). Étape terminale commune aux trois chemins
@@ -14,11 +15,7 @@ import type { Macros } from '@/lib/types';
  * où le rappel `onSubmit` devrait être une Server Action.
  */
 
-export interface QuantityShortcut {
-  /** Libellé affiché. La portion de référence porte son libellé complet (FR-9). */
-  label: string;
-  grams: number;
-}
+export type { QuantityShortcut };
 
 export function QuantityPad({
   foodLabel,
