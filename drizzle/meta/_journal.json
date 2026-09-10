@@ -15,6 +15,20 @@
       "when": 1789052089660,
       "tag": "0001_add_products",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789052417280,
+      "tag": "0002_add_ciqual_and_aliases",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1789052431245,
+      "tag": "0003_trigram_search",
+      "breakpoints": true
     }
   ]
 }

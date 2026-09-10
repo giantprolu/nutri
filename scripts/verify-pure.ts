@@ -8,6 +8,7 @@ import { scaleMacros, isValidQuantity, isCompleteMacros, sumMacros } from '../sr
 import { todayInParis, isJournalDate, formatRelativeJournalDate } from '../src/lib/date';
 import { buildQuantityShortcuts } from '../src/lib/shortcuts';
 import { isValidBarcode } from '../src/lib/client/scanner';
+import { mapColumns, parseNutrient, isCompleteRow, normalizeHeader } from './ciqual-parse';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -85,5 +86,42 @@ assert.equal(isValidBarcode('12345'), false, 'trop court');
 assert.equal(isValidBarcode('123456789012345'), false, 'trop long');
 assert.equal(isValidBarcode('30176204220O3'), false, 'lettre refusee');
 assert.equal(isValidBarcode(''), false, 'chaine vide refusee');
+
+// FR-6 : normalisation des valeurs du CSV ANSES.
+assert.equal(parseNutrient('12,5'), 12.5, 'virgule decimale');
+assert.equal(parseNutrient('1 234,5'), 1234.5, 'espace insecable de milliers');
+assert.equal(parseNutrient('traces'), 0, 'traces valent zero');
+assert.equal(parseNutrient('< 0,1'), 0, 'inferieur a un seuil vaut zero');
+assert.equal(parseNutrient('-'), null, 'tiret vaut inconnu');
+assert.equal(parseNutrient(''), null, 'vide vaut inconnu');
+assert.equal(parseNutrient('nd'), null, 'non determine vaut inconnu');
+assert.equal(parseNutrient(undefined), null, 'colonne absente vaut inconnu');
+assert.equal(parseNutrient('abc'), null, 'texte non numerique vaut inconnu');
+assert.equal(parseNutrient('539'), 539, 'entier simple');
+
+// FR-6 : un aliment incomplet est importe mais exclu de la recherche.
+assert.equal(isCompleteRow({ kcal: 539, protein: 6.3, carbs: 57.5, fat: 30.9 }), true);
+assert.equal(isCompleteRow({ kcal: 539, protein: null, carbs: 57.5, fat: 30.9 }), false);
+assert.equal(isCompleteRow({ kcal: 0, protein: 0, carbs: 0, fat: 0 }), true, 'zero reste complet');
+
+// Les en-tetes varient d'un millesime a l'autre : accents et casse ignores.
+assert.equal(normalizeHeader('  Energie, Règlement UE  '), 'energie, reglement ue');
+const headers = [
+  'alim_code',
+  'alim_nom_fr',
+  'Energie, Règlement UE N° 1169/2011 (kcal/100 g)',
+  'Protéines, N x facteur de Jones (g/100 g)',
+  'Glucides (g/100 g)',
+  'Lipides (g/100 g)',
+];
+const mapped = mapColumns(headers);
+assert.equal(mapped.ok, true, 'en-tetes ANSES reconnus');
+if (mapped.ok) {
+  assert.equal(mapped.columns.code, 'alim_code');
+  assert.equal(mapped.columns.kcal, 'Energie, Règlement UE N° 1169/2011 (kcal/100 g)');
+  assert.equal(mapped.columns.protein, 'Protéines, N x facteur de Jones (g/100 g)');
+}
+const incompleteHeaders = mapColumns(['alim_code', 'alim_nom_fr']);
+assert.equal(incompleteHeaders.ok, false, 'colonnes manquantes signalees');
 
 console.log('Toutes les verifications pures passent.');

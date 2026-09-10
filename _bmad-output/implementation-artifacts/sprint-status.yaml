@@ -57,9 +57,9 @@ development_status:
   4-3-produit-inconnu-ou-fiche-incomplète: done
   epic-4-retrospective: optional
 
-  epic-5: backlog
-  5-1-import-de-la-table-ciqual: backlog
-  5-2-recherche-textuelle-d-un-aliment: backlog
+  epic-5: done
+  5-1-import-de-la-table-ciqual: done
+  5-2-recherche-textuelle-d-un-aliment: done
   epic-5-retrospective: optional
 
   epic-6: backlog

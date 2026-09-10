@@ -28,7 +28,7 @@ const MODES: Mode[] = [
     href: '/add/search',
     label: 'Rechercher',
     hint: 'Par nom, dans CIQUAL et les produits scannés',
-    ready: false,
+    ready: true,
   },
   {
     href: '/add/photo',

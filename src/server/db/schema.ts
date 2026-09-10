@@ -1,5 +1,6 @@
 import {
   bigserial,
+  boolean,
   date,
   index,
   numeric,
@@ -80,3 +81,41 @@ export const products = pgTable(
 
 export type ProductRow = typeof products.$inferSelect;
 export type NewProductRow = typeof products.$inferInsert;
+
+/**
+ * Table CIQUAL (ANSES, licence Etalab), importée depuis le CSV (FR-6).
+ *
+ * `isComplete` distingue les aliments exploitables : une ligne dont l'énergie
+ * ou l'une des trois macros n'est pas lisible est importée quand même, pour
+ * que l'import reste idempotent sur le code CIQUAL, mais exclue de la recherche.
+ */
+export const ciqualFoods = pgTable('ciqual_foods', {
+  ciqualCode: text('ciqual_code').primaryKey(),
+  name: text('name').notNull(),
+  kcal100g: nutrient('kcal_100g'),
+  protein100g: nutrient('protein_100g'),
+  carbs100g: nutrient('carbs_100g'),
+  fat100g: nutrient('fat_100g'),
+  isComplete: boolean('is_complete').notNull().default(false),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type CiqualFoodRow = typeof ciqualFoods.$inferSelect;
+export type NewCiqualFoodRow = typeof ciqualFoods.$inferInsert;
+
+/**
+ * Alias d'aliment (FR-19) : l'association mémorisée entre un nom libre rendu
+ * par le modèle de vision et l'aliment de référence choisi par l'utilisateur.
+ *
+ * `aliasNorm` est le nom normalisé (minuscules, sans accents) et porte
+ * l'unicité : un nom libre ne porte jamais plus d'un alias.
+ */
+export const foodAliases = pgTable('food_aliases', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  aliasNorm: text('alias_norm').notNull().unique(),
+  targetKind: text('target_kind').notNull(),
+  targetRef: text('target_ref').notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type FoodAliasRow = typeof foodAliases.$inferSelect;
