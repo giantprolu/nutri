@@ -9,7 +9,7 @@ project_level: 2
 
 ## 0. Objet du document
 
-Ce PRD est le document de référence pour la conception technique et le découpage en stories de NutriPerso. Il s'appuie sur le product brief situé dans `_bmad-output/planning-artifacts/briefs/brief-nutri-perso-2026-09-10/brief.md` et ne le répète pas : le brief porte le pourquoi, ce document porte le quoi. Le vocabulaire est fixé au glossaire (§3) et employé tel quel partout ailleurs. Les fonctionnalités sont regroupées en §4, chacune portant ses exigences fonctionnelles numérotées globalement de FR-1 à FR-24. Les hypothèses inférées sans confirmation sont marquées en ligne et reprises en §9.
+Ce PRD est le document de référence pour la conception technique et le découpage en stories de NutriPerso. Il s'appuie sur le product brief situé dans `_bmad-output/planning-artifacts/briefs/brief-nutri-perso-2026-09-10/brief.md` et ne le répète pas : le brief porte le pourquoi, ce document porte le quoi. Le vocabulaire est fixé au glossaire (§3) et employé tel quel partout ailleurs. Les fonctionnalités sont regroupées en §4, chacune portant ses exigences fonctionnelles numérotées globalement de FR-1 à FR-25. Les hypothèses inférées sans confirmation sont marquées en ligne et reprises en §9.
 
 ## 1. Vision
 
@@ -60,6 +60,7 @@ Toute personne autre que le propriétaire de l'instance. Il n'y a pas de second 
 - **Macros** — Le quadruplet énergie (kcal), protéines (g), glucides (g), lipides (g). C'est le seul jeu de valeurs nutritionnelles suivi par le produit.
 - **Macros figées** — Les macros recopiées dans une entrée au moment de son enregistrement, exprimées pour la quantité effectivement consommée. Elles ne sont jamais recalculées.
 - **Aliment de référence** — Une fiche nutritionnelle exprimée pour 100 g, servant de source à une entrée. C'est un terme générique : un aliment de référence est soit un aliment CIQUAL, soit un produit.
+- **Entrée ad hoc** — Une entrée dont les valeurs nutritionnelles ont été saisies directement par l'utilisateur, sans aliment de référence. Elle ne laisse aucune trace réutilisable : rien n'est ajouté au cache produits ni aux aliments CIQUAL.
 - **Aliment CIQUAL** — Un aliment de référence issu de la table CIQUAL de l'ANSES, identifié par son code CIQUAL. Environ 3200 lignes, importées une fois depuis un fichier CSV.
 - **Produit** — Un aliment de référence identifié par un code-barres, issu d'Open Food Facts ou saisi manuellement, et conservé dans le cache produits. La clé est le code-barres.
 - **Cache produits** — La table locale des produits. Alimentée par chaque scan réussi et par chaque saisie manuelle. Elle est consultée avant tout appel réseau.
@@ -193,6 +194,19 @@ L'utilisateur peut enregistrer une entrée, dont les macros sont calculées puis
 - L'entrée conserve la désignation de l'aliment au moment de l'enregistrement, en plus de la référence à sa source.
 - Modifier ensuite l'aliment de référence source ne change aucune entrée déjà enregistrée. Vérifie la règle métier centrale du brief.
 - Après enregistrement, l'application revient au journal du jour avec les totaux à jour.
+
+#### FR-25 : Entrée ad hoc
+
+L'utilisateur peut enregistrer une entrée en saisissant lui-même sa désignation et ses valeurs nutritionnelles, sans passer par un aliment de référence.
+
+**Conséquences (testables) :**
+- Le formulaire exige une désignation, l'énergie et les trois macros pour 100 g, puis une quantité.
+- L'entrée créée porte `source_kind` à `manual` et aucune référence de source.
+- Rien n'est ajouté au cache produits ni aux aliments CIQUAL : une entrée ad hoc ne pollue aucune table de référence.
+- Les macros sont figées selon la même règle que toute autre entrée (FR-10).
+
+**Hors périmètre :**
+- La réutilisation d'une entrée ad hoc comme aliment de référence. Les raccourcis de quantité (FR-9) restent disponibles sur la désignation exacte, ce qui suffit à l'usage répété d'un même plat maison.
 
 ### 4.5 Scan de code-barres
 
@@ -372,6 +386,7 @@ L'utilisateur peut accéder à un écran regroupant les actions et informations 
 - Journal du jour avec totaux de macros, ajout et suppression d'entrées.
 - Import de la table CIQUAL et recherche textuelle tolérante aux accents.
 - Ajout par recherche textuelle, avec raccourcis de quantité.
+- Ajout par saisie ad hoc, sans aliment de référence.
 - Ajout par scan de code-barres, avec cache produits et repli en saisie manuelle.
 - Ajout par reconnaissance photo, avec candidats CIQUAL et alias mémorisés.
 - Historique consultable par date.
