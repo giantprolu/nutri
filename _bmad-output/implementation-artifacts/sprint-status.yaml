@@ -46,8 +46,8 @@ development_status:
   2-2-suppression-d-une-entrée: done
   epic-2-retrospective: optional
 
-  epic-3: backlog
-  3-1-saisie-manuelle-complète-d-une-entrée: backlog
+  epic-3: in-progress
+  3-1-saisie-manuelle-complète-d-une-entrée: done
   3-2-raccourcis-de-quantité: backlog
   epic-3-retrospective: optional
 
