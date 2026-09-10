@@ -81,3 +81,31 @@ avertissement de dépréciation à l'installation.
 
 **À faire côté humain.** Rien pour l'instant. Le point se résoudra en passant
 à Next 16, dont la configuration ESLint suit la ligne 10.
+
+---
+
+## Bilan de fin de sprint
+
+Les 15 stories sont livrées. `npm run build`, `npm run lint`,
+`npm run typecheck` et `npm run verify` passent sans erreur ni avertissement.
+
+**Ce qui a été vérifié en exécution.** Les 12 routes serveur ont été
+interrogées sur un serveur de production local : codes 401 sans session, 400
+sur entrée invalide, 413 au-delà de 4 Mo, 404 sur date inexistante, et
+`Cache-Control: no-store` sur `/api`. Le contrat avec Open Food Facts a été
+confronté au service réel. Les invariants d'architecture ont été vérifiés par
+inspection du code : aucun appel Open Food Facts côté serveur, SDK Mistral
+importé dans un seul fichier, aucune clé dans le bundle client, aucune
+jointure d'affichage entre le journal et les tables de référence.
+
+**Ce qui reste non vérifié, faute de base.** Tout ce qui exige une exécution
+SQL : l'idempotence réelle de l'import CIQUAL, le plan d'exécution de la
+recherche trigramme, les totaux sommés par Postgres, l'unicité des alias.
+Le code compile et les requêtes sont écrites, mais elles n'ont jamais tourné.
+C'est la conséquence directe de B-2 et B-4.
+
+**Premier geste après avoir provisionné la base.** Appliquer les migrations,
+importer CIQUAL deux fois de suite pour confirmer l'idempotence, puis lancer
+un `EXPLAIN ANALYZE` sur la requête de recherche pour confirmer que l'index
+GIN est bien retenu. Si un balayage séquentiel apparaît, l'expression de la
+requête a divergé de celle de l'index de la migration 0003.

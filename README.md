@@ -1,0 +1,95 @@
+# NutriPerso
+
+Registre alimentaire personnel. PWA installable sur iPhone, mono-utilisateur,
+sans compte ni objectif ni coaching.
+
+Le sprint BMAD est terminé : 7 epics, 15 stories. Les artefacts de conception
+vivent dans `_bmad-output/`, le suivi dans
+`_bmad-output/implementation-artifacts/sprint-status.yaml`.
+
+## Ce qu'il reste à faire pour que l'application tourne
+
+Le code compile et l'analyse statique passe, mais rien n'a pu être exécuté
+contre une vraie base. Les quatre étapes ci-dessous sont à faire à la main.
+Le détail de chaque blocage est dans `BLOCKERS.md`.
+
+**1. Créer la base.** Ouvrir un projet sur Neon, récupérer la chaîne de
+connexion, puis :
+
+```bash
+cp .env.example .env.local
+# renseigner DATABASE_URL, APP_PASSWORD et SESSION_SECRET
+npm run db:migrate
+```
+
+`SESSION_SECRET` se génère avec `openssl rand -base64 32`.
+
+**2. Importer la table CIQUAL.** Le fichier n'est pas versionné : il vient du
+site de l'ANSES et son téléchargement demande une intervention humaine.
+
+```bash
+# placer le CSV dans data/ciqual.csv
+npm run import:ciqual -- data/ciqual.csv
+```
+
+Le script est idempotent. Le relancer met à jour les lignes existantes sans
+créer de doublon.
+
+**3. Créer la clé Mistral.** Sans elle, la reconnaissance photo répond 503 et
+l'interface bascule sur la recherche textuelle. Les deux autres chemins
+d'ajout fonctionnent sans.
+
+**4. Pousser sur GitHub.** Aucune clé SSH ni `gh` n'est installé sur la
+machine où le sprint a tourné. Les commits sont en local sur `bmad/dev`.
+
+```bash
+ssh-keygen -t ed25519 -C "ton-email"
+# ajouter la cle publique au compte GitHub, creer le depot, puis
+git push -u origin main
+git push -u origin bmad/dev
+```
+
+## Commandes
+
+| Commande | Rôle |
+|---|---|
+| `npm run dev` | Serveur de développement |
+| `npm run build` | Compilation de production |
+| `npm run lint` | Analyse statique |
+| `npm run typecheck` | Types de l'application et du service worker |
+| `npm run verify` | Vérifications du domaine, sans base |
+| `npm run verify:off` | Contrat avec Open Food Facts, demande le réseau |
+| `npm run db:generate` | Génère une migration depuis le schéma |
+| `npm run db:migrate` | Applique les migrations |
+| `npm run import:ciqual` | Importe la table CIQUAL |
+
+## Ce qui structure le code
+
+Cinq décisions expliquent l'essentiel de l'architecture. Le détail est dans
+`_bmad-output/planning-artifacts/architecture/`.
+
+**Les macros d'une entrée sont figées à l'écriture.** La table `entries` porte
+ses propres valeurs nutritionnelles et une copie du nom de l'aliment. Aucune
+requête d'affichage ne la joint à une table de référence. Corriger une fiche
+produit ne change donc rien à l'historique.
+
+**Open Food Facts est appelé depuis le navigateur.** Sa limite est de 15
+requêtes par minute et par adresse IP. Passer par une fonction serveur
+mutualiserait l'IP et consommerait ce quota pour tout le monde.
+
+**Le succès d'un appel Open Food Facts se lit dans le corps.** L'API répond
+HTTP 200 même quand le produit est introuvable. Le seul indicateur exploitable
+est le champ `status`.
+
+**La clé Mistral ne franchit jamais la frontière serveur.** Le SDK n'est
+importé que dans `src/server/clients/mistral.ts`.
+
+**Postgres est la seule source de vérité.** Le stockage local d'une PWA iOS
+est purgé après sept jours sans ouverture. Le service worker ne met en cache
+que la coquille applicative.
+
+## Ce que le produit ne fait pas
+
+Pas de conseil nutritionnel, pas d'objectif calorique, pas de notification,
+pas de suivi du poids, pas de recettes, pas d'export, pas de graphiques. Cette
+liste est un choix de conception, pas un retard de livraison.
