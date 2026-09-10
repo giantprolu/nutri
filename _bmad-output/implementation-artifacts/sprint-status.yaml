@@ -62,8 +62,8 @@ development_status:
   5-2-recherche-textuelle-d-un-aliment: done
   epic-5-retrospective: optional
 
-  epic-6: backlog
-  6-1-consultation-des-journaux-passés: backlog
+  epic-6: done
+  6-1-consultation-des-journaux-passés: done
   epic-6-retrospective: optional
 
   epic-7: backlog
