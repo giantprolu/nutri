@@ -38,7 +38,7 @@ const config = [
     },
   },
   {
-    files: ['src/server/env.ts', 'scripts/**/*.ts', 'drizzle.config.ts'],
+    files: ['src/server/env.ts', 'scripts/**/*.ts', 'drizzle.config.ts', 'next.config.ts'],
     rules: { 'no-restricted-syntax': 'off' },
   },
 ];

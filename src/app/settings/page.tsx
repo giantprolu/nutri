@@ -1,11 +1,49 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { EmptyState } from '@/components/EmptyState';
+import { LockButton } from './LockButton';
+import { APP_VERSION } from '@/lib/version';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * Écran de réglages (FR-24).
+ * La procédure d'installation est permanente et non rejetable : iOS ne permet
+ * aucune invite automatique, et le chemin est assez obscur pour être rappelé.
+ */
 export default function SettingsPage() {
   return (
     <>
       <ScreenHeader title="Réglages" />
-      <EmptyState>Rien à régler pour l&apos;instant.</EmptyState>
+
+      <section className="rounded-box border border-base-300 bg-base-200 p-4">
+        <h2 className="text-sm font-medium">Installer sur l&apos;écran d&apos;accueil</h2>
+        <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm text-ink-secondary">
+          <li>Ouvre NutriPerso dans Safari.</li>
+          <li>Touche le bouton Partager, en bas de l&apos;écran.</li>
+          <li>Choisis « Sur l&apos;écran d&apos;accueil ».</li>
+          <li>Valide. L&apos;application s&apos;ouvrira sans barre d&apos;adresse.</li>
+        </ol>
+      </section>
+
+      <section className="mt-4 rounded-box border border-base-300 bg-base-200 p-4">
+        <h2 className="text-sm font-medium">Session</h2>
+        <p className="mt-1 text-sm text-ink-secondary">
+          Le verrouillage supprime le cookie et redemande le mot de passe.
+        </p>
+        <div className="mt-3">
+          <LockButton />
+        </div>
+      </section>
+
+      <dl className="mt-4 rounded-box border border-base-300 bg-base-200 p-4 text-sm">
+        <div className="flex items-baseline justify-between">
+          <dt className="text-ink-secondary">Version</dt>
+          <dd className="tabular">{APP_VERSION}</dd>
+        </div>
+        <div className="mt-2 flex items-baseline justify-between">
+          <dt className="text-ink-secondary">Dernier import CIQUAL</dt>
+          <dd className="tabular text-ink-secondary">jamais</dd>
+        </div>
+      </dl>
     </>
   );
 }

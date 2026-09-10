@@ -14,3 +14,5 @@ yarn-error.log*
 next-env.d.ts
 .venv/
 __pycache__/
+public/sw.js
+public/swe-worker-*.js
