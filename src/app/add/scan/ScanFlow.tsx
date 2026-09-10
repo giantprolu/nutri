@@ -6,7 +6,8 @@ import { ScannerView } from './ScannerView';
 import { QuantityPad } from '@/components/QuantityPad';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
-import { resolveBarcode } from '@/lib/client/products';
+import { cacheProduct, resolveBarcode } from '@/lib/client/products';
+import { ProductForm, type ProductFormValues } from '@/components/ProductForm';
 import type { OffPartialProduct, ReferenceFood } from '@/lib/types';
 
 /**
@@ -29,20 +30,24 @@ export function ScanFlow() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const goToQuantity = useCallback(async (product: ReferenceFood) => {
+    const recent = await fetchRecentQuantities('product', product.ref, product.name);
+    setStep({
+      name: 'quantity',
+      product,
+      shortcuts: buildQuantityShortcuts({
+        servingSizeG: product.servingSizeG,
+        recentQuantities: recent,
+      }),
+    });
+  }, []);
+
   const handleBarcode = useCallback(async (barcode: string) => {
     setStep({ name: 'resolving', barcode });
     const result = await resolveBarcode(barcode);
 
     if (result.kind === 'cached' || result.kind === 'fetched') {
-      const recent = await fetchRecentQuantities('product', result.product.ref, result.product.name);
-      setStep({
-        name: 'quantity',
-        product: result.product,
-        shortcuts: buildQuantityShortcuts({
-          servingSizeG: result.product.servingSizeG,
-          recentQuantities: recent,
-        }),
-      });
+      await goToQuantity(result.product);
       return;
     }
 
@@ -59,7 +64,28 @@ export function ScanFlow() {
             ? 'Fiche incomplète. Complète les valeurs manquantes.'
             : 'Service indisponible. Saisis les valeurs.',
     });
-  }, []);
+  }, [goToQuantity]);
+
+  /** La fiche saisie rejoint le cache, puis le parcours reprend son cours (FR-15). */
+  async function saveProduct(barcode: string, values: ProductFormValues) {
+    setSubmitting(true);
+    setError(null);
+
+    const stored = await cacheProduct({
+      barcode,
+      name: values.name,
+      per100g: values.per100g,
+      servingSizeG: values.servingSizeG,
+      source: 'manual',
+    });
+
+    setSubmitting(false);
+    if (!stored) {
+      setError('Enregistrement du produit impossible.');
+      return;
+    }
+    await goToQuantity(stored);
+  }
 
   async function save(quantityG: number) {
     if (step.name !== 'quantity') {
@@ -102,18 +128,35 @@ export function ScanFlow() {
   }
 
   if (step.name === 'unresolved') {
+    const barcode = step.barcode;
     return (
       <div className="flex flex-col gap-4">
         <div role="alert" className="rounded-box border border-base-300 bg-base-200 p-4">
-          <p className="tabular text-sm text-ink-secondary">{step.barcode}</p>
+          <p className="tabular text-sm text-ink-secondary">{barcode}</p>
           <p className="mt-1 text-sm">{step.message}</p>
-          {step.partial?.name ? (
-            <p className="mt-2 text-xs text-ink-secondary">Nom connu : {step.partial.name}</p>
-          ) : null}
         </div>
+
+        <ProductForm
+          barcode={barcode}
+          initialName={step.partial?.name ?? null}
+          initialPer100g={step.partial?.per100g ?? {}}
+          initialServingSizeG={step.partial?.servingSizeG ?? null}
+          submitting={submitting}
+          onSubmit={(values) => saveProduct(barcode, values)}
+        />
+
+        {error ? (
+          <p role="alert" className="text-sm text-error">
+            {error}
+          </p>
+        ) : null}
+
         <button
           type="button"
-          onClick={() => setStep({ name: 'scanning' })}
+          onClick={() => {
+            setError(null);
+            setStep({ name: 'scanning' });
+          }}
           className="tap-target w-full rounded-field border border-base-300 py-3 text-sm font-medium"
         >
           Scanner un autre code
