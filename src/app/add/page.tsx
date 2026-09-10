@@ -34,7 +34,7 @@ const MODES: Mode[] = [
     href: '/add/photo',
     label: 'Photo',
     hint: 'Reconnaissance d’aliments sur une assiette',
-    ready: false,
+    ready: true,
   },
   {
     href: '/add/manual',

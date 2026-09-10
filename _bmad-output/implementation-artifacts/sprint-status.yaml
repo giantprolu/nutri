@@ -66,7 +66,7 @@ development_status:
   6-1-consultation-des-journaux-passés: done
   epic-6-retrospective: optional
 
-  epic-7: backlog
-  7-1-envoi-d-une-photo-et-reconnaissance: backlog
-  7-2-candidats-ciqual-et-alias-mémorisés: backlog
+  epic-7: done
+  7-1-envoi-d-une-photo-et-reconnaissance: done
+  7-2-candidats-ciqual-et-alias-mémorisés: done
   epic-7-retrospective: optional
