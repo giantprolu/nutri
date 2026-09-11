@@ -1,15 +1,35 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { LockButton } from './LockButton';
 import { APP_VERSION } from '@/lib/version';
+import { formatStampDate } from '@/lib/date';
+import { getCiqualStatus } from '@/server/db/queries/ciqual';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * L'état de la table de référence est indicatif : une base injoignable ne doit
+ * pas emporter tout l'écran, dont le reste ne dépend d'aucune donnée (AD-12).
+ */
+async function readCiqualLine(): Promise<string> {
+  try {
+    const status = await getCiqualStatus();
+    if (status.lastImportedAt === null) {
+      return 'jamais';
+    }
+    return `${status.count} aliments, ${formatStampDate(status.lastImportedAt)}`;
+  } catch {
+    return 'indisponible';
+  }
+}
 
 /**
  * Écran de réglages (FR-24).
  * La procédure d'installation est permanente et non rejetable : iOS ne permet
  * aucune invite automatique, et le chemin est assez obscur pour être rappelé.
  */
-export default function SettingsPage() {
+export default async function SettingsPage() {
+  const ciqualLine = await readCiqualLine();
+
   return (
     <>
       <ScreenHeader title="Réglages" />
@@ -41,7 +61,7 @@ export default function SettingsPage() {
         </div>
         <div className="mt-2 flex items-baseline justify-between">
           <dt className="text-ink-secondary">Dernier import CIQUAL</dt>
-          <dd className="tabular text-ink-secondary">jamais</dd>
+          <dd className="tabular text-ink-secondary">{ciqualLine}</dd>
         </div>
       </dl>
     </>

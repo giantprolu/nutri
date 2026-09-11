@@ -56,3 +56,18 @@ export function formatRelativeJournalDate(
   }
   return formatJournalDate(isoDate);
 }
+
+/**
+ * « 11 septembre 2026 », pour un horodatage technique et non une date de
+ * journal : l'import CIQUAL de l'écran de réglages n'a pas de jour de repas.
+ */
+const stampFormatter = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: JOURNAL_TIME_ZONE,
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+});
+
+export function formatStampDate(value: Date): string {
+  return stampFormatter.format(value);
+}
