@@ -9,6 +9,13 @@ import { todayInParis, isJournalDate, formatRelativeJournalDate } from '../src/l
 import { buildQuantityShortcuts } from '../src/lib/shortcuts';
 import { isValidBarcode } from '../src/lib/client/scanner';
 import { mapColumns, parseNutrient, isCompleteRow, normalizeHeader } from './ciqual-parse';
+import {
+  computeEnergyTarget,
+  mifflinStJeor,
+  katchMcArdle,
+  isValidBodyProfile,
+  type BodyProfile,
+} from '../src/lib/energy';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -123,5 +130,110 @@ if (mapped.ok) {
 }
 const incompleteHeaders = mapColumns(['alim_code', 'alim_nom_fr']);
 assert.equal(incompleteHeaders.ok, false, 'colonnes manquantes signalees');
+
+// --- Besoin energetique (questionnaire) ---
+// Attendus calcules a la main, equation par equation.
+
+// Mifflin-St Jeor : 10x80 + 6,25x180 - 5x30 + 5 = 1780.
+assert.equal(mifflinStJeor({ sex: 'male', weightKg: 80, heightCm: 180, ageYears: 30 }), 1780);
+// Femme : la meme expression moins 161 au lieu de plus 5.
+assert.equal(mifflinStJeor({ sex: 'female', weightKg: 60, heightCm: 165, ageYears: 40 }), 1270.25);
+// Katch-McArdle : 370 + 21,6 x 68 kg de masse maigre.
+assert.ok(Math.abs(katchMcArdle(80, 15) - 1838.8) < 1e-9, 'Katch-McArdle a la virgule pres');
+
+const baseProfile: BodyProfile = {
+  sex: 'male',
+  ageYears: 30,
+  heightCm: 180,
+  weightKg: 80,
+  activity: 'moderate',
+  goal: 'lose',
+  ratePercentPerWeek: 0.5,
+};
+
+// Perte de 0,5 % de 80 kg par semaine : 400 g, soit 3080 kcal, soit 440 par jour.
+const cut = computeEnergyTarget(baseProfile);
+assert.equal(cut.bmrKcal, 1780, 'metabolisme de base');
+assert.equal(cut.maintenanceKcal, 2759, 'depense totale a 1,55');
+assert.equal(cut.adjustmentKcal, -440, 'ecart quotidien');
+assert.equal(cut.targetKcal, 2319, 'cible en deficit');
+assert.equal(cut.floored, false, 'aucun plancher ne mord ici');
+assert.equal(cut.equation, 'mifflin-st-jeor');
+assert.equal(cut.proteinG, 160, 'proteines a 2 g/kg en deficit');
+assert.equal(cut.fatG, 64.4, 'lipides a 25 % des calories');
+assert.equal(cut.carbsG, 274.8, 'glucides en reste');
+
+// La somme des macros redonne la cible, a l'arrondi pres.
+const recomposed = cut.proteinG * 4 + cut.carbsG * 4 + cut.fatG * 9;
+assert.ok(Math.abs(recomposed - cut.targetKcal) < 2, 'les macros somment a la cible');
+
+// Maintien : aucun ecart, la cible est la depense.
+const maintain = computeEnergyTarget({
+  ...baseProfile,
+  sex: 'female',
+  weightKg: 60,
+  heightCm: 165,
+  ageYears: 40,
+  activity: 'sedentary',
+  goal: 'maintain',
+  ratePercentPerWeek: 0,
+});
+assert.equal(maintain.adjustmentKcal, 0, 'pas d ecart en maintien');
+assert.equal(maintain.targetKcal, 1524, 'cible de maintien');
+
+// Prise de masse : l'ecart est positif.
+const bulk = computeEnergyTarget({
+  ...baseProfile,
+  weightKg: 75,
+  heightCm: 178,
+  ageYears: 25,
+  activity: 'active',
+  goal: 'gain',
+  ratePercentPerWeek: 0.25,
+});
+assert.equal(bulk.adjustmentKcal, 206, 'surplus quotidien');
+assert.equal(bulk.targetKcal, 3212, 'cible en prise');
+assert.ok(bulk.targetKcal > bulk.maintenanceKcal, 'la prise depasse la depense');
+
+// Plancher : un rythme trop ambitieux passerait sous le minimum clinique.
+const floored = computeEnergyTarget({
+  ...baseProfile,
+  sex: 'female',
+  weightKg: 50,
+  heightCm: 160,
+  activity: 'sedentary',
+  goal: 'lose',
+  ratePercentPerWeek: 1,
+});
+assert.equal(floored.targetKcal, 1200, 'cible relevee au plancher feminin');
+assert.equal(floored.floored, true, 'le rythme demande est signale inatteignable');
+assert.ok(floored.targetKcal > floored.bmrKcal, 'jamais sous le metabolisme de base');
+
+// Masse grasse connue : Katch-McArdle et proteines sur la masse maigre.
+const withBodyFat = computeEnergyTarget({ ...baseProfile, bodyFatPercent: 15 });
+assert.equal(withBodyFat.equation, 'katch-mcardle', 'equation basculee');
+assert.equal(withBodyFat.bmrKcal, 1839, 'metabolisme sur la masse maigre');
+assert.equal(withBodyFat.proteinG, 163.2, 'proteines a 2,4 g/kg de masse maigre');
+
+// Bornes du questionnaire.
+assert.equal(isValidBodyProfile(baseProfile), true, 'profil plausible accepte');
+assert.equal(isValidBodyProfile({ ...baseProfile, ageYears: 12 }), false, 'age trop bas');
+assert.equal(isValidBodyProfile({ ...baseProfile, heightCm: 300 }), false, 'taille invraisemblable');
+assert.equal(isValidBodyProfile({ ...baseProfile, weightKg: 0 }), false, 'poids nul');
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, ratePercentPerWeek: 2 }),
+  false,
+  'perte de 2 % par semaine refusee',
+);
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, goal: 'gain', ratePercentPerWeek: 1 }),
+  false,
+  'prise de 1 % par semaine refusee',
+);
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, bodyFatPercent: 90 }),
+  false,
+  'taux de masse grasse invraisemblable',
+);
 
 console.log('Toutes les verifications pures passent.');
