@@ -3,12 +3,22 @@ import { LockButton } from './LockButton';
 import { HealthBridge } from './HealthBridge';
 import { currentUserId } from '@/server/guard';
 import { hasIngestToken } from '@/server/db/queries/users';
+import { bridgeStatus } from '@/server/services/profile';
 import { APP_VERSION } from '@/lib/version';
 import Link from 'next/link';
 import { formatStampDate } from '@/lib/date';
 import { getCiqualStatus } from '@/server/db/queries/ciqual';
 
 export const dynamic = 'force-dynamic';
+
+/** Repli quand la base est injoignable : l'écran doit survivre à une panne. */
+const EMPTY_STATUS = {
+  lastDay: null,
+  lastKcal: null,
+  dayCount: 0,
+  averageKcal: 0,
+  requiredDays: 3,
+};
 
 /**
  * L'état de la table de référence est indicatif : une base injoignable ne doit
@@ -33,9 +43,12 @@ async function readCiqualLine(): Promise<string> {
  */
 export default async function SettingsPage() {
   const userId = await currentUserId();
-  const [ciqualLine, tokenExists] = await Promise.all([
+  const [ciqualLine, tokenExists, status] = await Promise.all([
     readCiqualLine(),
     userId === null ? Promise.resolve(false) : hasIngestToken(userId),
+    userId === null
+      ? Promise.resolve(EMPTY_STATUS)
+      : bridgeStatus(userId).catch(() => EMPTY_STATUS),
   ]);
 
   return (
@@ -62,7 +75,7 @@ export default async function SettingsPage() {
         </p>
       </Link>
 
-      <HealthBridge hasToken={tokenExists} />
+      <HealthBridge hasToken={tokenExists} status={status} />
 
       <section className="mt-4 rounded-box border border-base-300 bg-base-200 p-4">
         <h2 className="text-sm font-medium">Session</h2>

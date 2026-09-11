@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { formatRelativeJournalDate } from '@/lib/date';
 
 /**
  * Pont vers Santé d'Apple, par l'app Raccourcis (FR-27).
@@ -14,7 +15,24 @@ import { useState } from 'react';
  * au même titre qu'un mot de passe, il n'ouvre qu'une route en écriture, mais
  * le réafficher en permanence inviterait à le laisser traîner.
  */
-export function HealthBridge({ hasToken }: { hasToken: boolean }) {
+export interface BridgeStatus {
+  /** Dernière journée reçue, formatée pour l'affichage. */
+  lastDay: string | null;
+  lastKcal: number | null;
+  /** Journées complètes retenues dans la moyenne, et cette moyenne. */
+  dayCount: number;
+  averageKcal: number;
+  /** Nombre de journées requis avant que la cible bascule. */
+  requiredDays: number;
+}
+
+export function HealthBridge({
+  hasToken,
+  status,
+}: {
+  hasToken: boolean;
+  status: BridgeStatus;
+}) {
   const [token, setToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
   // Lue au rendu client : l'adresse dépend de l'origine d'où la page est
@@ -61,6 +79,41 @@ export function HealthBridge({ hasToken }: { hasToken: boolean }) {
       </ol>
 
       <p className="tabular mt-3 break-all rounded-field bg-base-300 p-3 text-xs">{endpoint}</p>
+
+      <div className="mt-4 border-t border-base-300 pt-3">
+        <h3 className="text-sm font-medium">État</h3>
+        {status.lastDay === null ? (
+          <p className="mt-1 text-sm text-ink-secondary">
+            Aucune journée reçue pour l&apos;instant.
+          </p>
+        ) : (
+          <dl className="mt-2 flex flex-col gap-2 text-sm">
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-secondary">Dernière journée reçue</dt>
+              <dd className="tabular">
+                {formatRelativeJournalDate(status.lastDay)}
+                {status.lastKcal === null ? '' : ` · ${Math.round(status.lastKcal)} kcal`}
+              </dd>
+            </div>
+            <div className="flex items-baseline justify-between">
+              <dt className="text-ink-secondary">Moyenne retenue</dt>
+              <dd className="tabular">
+                {status.dayCount === 0
+                  ? '—'
+                  : `${Math.round(status.averageKcal)} kcal sur ${status.dayCount} j`}
+              </dd>
+            </div>
+          </dl>
+        )}
+
+        <p className="mt-2 text-xs text-ink-secondary">
+          {status.dayCount >= status.requiredDays
+            ? 'La cible suit ta dépense mesurée.'
+            : `Encore ${status.requiredDays - status.dayCount} journée${
+                status.requiredDays - status.dayCount > 1 ? 's' : ''
+              } avant que la cible bascule sur la mesure.`}
+        </p>
+      </div>
 
       {token ? (
         <>

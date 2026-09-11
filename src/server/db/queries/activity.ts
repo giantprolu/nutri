@@ -87,3 +87,39 @@ export async function activityBaseline(
     dayCount: Number(row?.days ?? 0),
   };
 }
+
+export interface LastActivity {
+  day: string;
+  activeKcal: number;
+  receivedAt: Date;
+}
+
+/**
+ * La dernière journée reçue, pour que l'écran de réglages dise si le raccourci
+ * tourne encore. Une automatisation silencieuse qui a cessé de fonctionner est
+ * indiscernable d'une automatisation qui marche, sauf à l'afficher quelque part.
+ */
+export async function lastActivity(userId: number): Promise<LastActivity | null> {
+  const result = await db().execute<{
+    day: string;
+    active_kcal: string;
+    updated_at: string;
+  }>(sql`
+    SELECT day, active_kcal, updated_at
+    FROM daily_activity
+    WHERE user_id = ${userId}
+    ORDER BY day DESC
+    LIMIT 1
+  `);
+
+  const row = result.rows[0];
+  if (!row) {
+    return null;
+  }
+  return {
+    // Le pilote rend une date complète ; seule la journée nous intéresse.
+    day: String(row.day).slice(0, 10),
+    activeKcal: Number(row.active_kcal),
+    receivedAt: new Date(row.updated_at),
+  };
+}

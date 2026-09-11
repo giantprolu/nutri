@@ -2,7 +2,7 @@ import 'server-only';
 import { ageInYears, todayInParis } from '@/lib/date';
 import { computeEnergyTarget, isValidBodyProfile, type EnergyTarget } from '@/lib/energy';
 import { findProfile, saveProfile, type Profile } from '../db/queries/profiles';
-import { activityBaseline } from '../db/queries/activity';
+import { activityBaseline, lastActivity } from '../db/queries/activity';
 
 /**
  * Service du profil et de la cible calorique.
@@ -61,6 +61,26 @@ export async function targetFor(userId: number): Promise<EnergyTarget | null> {
   return baseline.dayCount >= MIN_MEASURED_DAYS
     ? computeEnergyTarget(body, baseline.averageActiveKcal)
     : computeEnergyTarget(body);
+}
+
+/**
+ * État du pont Santé, pour l'écran de réglages. Les seuils viennent d'ici et
+ * non de l'écran : une valeur recopiée dans l'interface se désynchroniserait
+ * du calcul à la première modification.
+ */
+export async function bridgeStatus(userId: number) {
+  const [baseline, last] = await Promise.all([
+    activityBaseline(userId, todayInParis(), ACTIVITY_WINDOW_DAYS),
+    lastActivity(userId),
+  ]);
+
+  return {
+    lastDay: last?.day ?? null,
+    lastKcal: last?.activeKcal ?? null,
+    dayCount: baseline.dayCount,
+    averageKcal: baseline.averageActiveKcal,
+    requiredDays: MIN_MEASURED_DAYS,
+  };
 }
 
 export function profileFor(userId: number): Promise<Profile | null> {
