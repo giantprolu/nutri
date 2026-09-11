@@ -3,6 +3,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { TotalsCard } from '@/components/TotalsCard';
 import { EntryList } from '@/components/EntryList';
 import { journalForToday } from '@/server/services/entries';
+import { requireUserId } from '@/server/guard';
 import { formatRelativeJournalDate, todayInParis } from '@/lib/date';
 
 // Le journal vient du serveur à chaque navigation : rien n'est mis en cache (AD-5).
@@ -11,7 +12,7 @@ export const dynamic = 'force-dynamic';
 /** Journal du jour (FR-4). Composant serveur : aucun import client (AD-10). */
 export default async function JournalPage() {
   const today = todayInParis();
-  const { totals, entries } = await journalForToday();
+  const { totals, entries } = await journalForToday(await requireUserId());
 
   return (
     <>

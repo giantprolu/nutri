@@ -1,5 +1,5 @@
 import 'server-only';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../db/client';
 import { search } from './search';
 import type { Candidate, ReferenceFood } from '@/lib/types';
@@ -29,12 +29,18 @@ export function normalizeAlias(name: string): string {
 }
 
 async function findAliasTarget(
+  userId: number,
   name: string,
 ): Promise<{ kind: 'ciqual' | 'product'; ref: string } | null> {
   const [row] = await db()
     .select()
     .from(schema.foodAliases)
-    .where(eq(schema.foodAliases.aliasNorm, normalizeAlias(name)))
+    .where(
+      and(
+        eq(schema.foodAliases.userId, userId),
+        eq(schema.foodAliases.aliasNorm, normalizeAlias(name)),
+      ),
+    )
     .limit(1);
 
   if (!row) {
@@ -96,11 +102,11 @@ async function loadReferenceFood(
  * Candidats pour un nom reconnu (FR-18).
  * Un alias déjà choisi passe en tête et n'apparaît pas deux fois.
  */
-export async function candidatesFor(name: string): Promise<Candidate[]> {
+export async function candidatesFor(userId: number, name: string): Promise<Candidate[]> {
   const hits = await search(name, MAX_CANDIDATES);
   const candidates: Candidate[] = hits.map((hit) => ({ ...hit, fromAlias: false }));
 
-  const alias = await findAliasTarget(name);
+  const alias = await findAliasTarget(userId, name);
   if (!alias) {
     return candidates.slice(0, MAX_CANDIDATES);
   }
@@ -120,11 +126,13 @@ export async function candidatesFor(name: string): Promise<Candidate[]> {
 
 /** Crée ou met à jour l'alias d'un nom (FR-19). Un nouveau choix remplace l'ancien. */
 export async function rememberAlias(
+  userId: number,
   name: string,
   targetKind: 'ciqual' | 'product',
   targetRef: string,
 ): Promise<void> {
   const values = {
+    userId,
     aliasNorm: normalizeAlias(name),
     targetKind,
     targetRef,
@@ -135,7 +143,8 @@ export async function rememberAlias(
     .insert(schema.foodAliases)
     .values(values)
     .onConflictDoUpdate({
-      target: schema.foodAliases.aliasNorm,
+      // Le conflit porte sur le couple, comme la contrainte d'unicité.
+      target: [schema.foodAliases.userId, schema.foodAliases.aliasNorm],
       set: {
         targetKind: sql`excluded.target_kind`,
         targetRef: sql`excluded.target_ref`,

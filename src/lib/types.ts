@@ -58,6 +58,7 @@ export interface ApiErrorBody {
 export type ApiErrorCode =
   | 'unauthorized'
   | 'invalid_input'
+  | 'email_taken'
   | 'not_found'
   | 'payload_too_large'
   | 'model_unavailable'

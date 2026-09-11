@@ -1,5 +1,5 @@
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { removeEntry } from '@/server/services/entries';
 
 export const runtime = 'nodejs';
@@ -9,7 +9,8 @@ export async function DELETE(
   _request: Request,
   context: { params: Promise<{ id: string }> },
 ): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -19,7 +20,7 @@ export async function DELETE(
     return apiError('invalid_input');
   }
 
-  const removed = await removeEntry(numericId);
+  const removed = await removeEntry(userId, numericId);
   if (!removed) {
     return apiError('not_found');
   }

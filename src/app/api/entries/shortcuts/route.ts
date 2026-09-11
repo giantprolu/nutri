@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { quantityShortcuts } from '@/server/services/entries';
 
 export const runtime = 'nodejs';
@@ -13,7 +13,8 @@ const querySchema = z.object({
 
 /** Les deux dernières quantités saisies pour un aliment (FR-9). */
 export async function GET(request: Request): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -28,6 +29,7 @@ export async function GET(request: Request): Promise<Response> {
   }
 
   const quantities = await quantityShortcuts(
+    userId,
     parsed.data.sourceKind,
     parsed.data.sourceRef,
     parsed.data.foodLabel,

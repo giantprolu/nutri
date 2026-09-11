@@ -24,19 +24,23 @@ export interface JournalView {
   entries: Entry[];
 }
 
-export async function journalForDate(entryDate: string): Promise<JournalView> {
+export async function journalForDate(
+  userId: number,
+  entryDate: string,
+): Promise<JournalView> {
   const [totals, entries] = await Promise.all([
-    totalsForDate(entryDate),
-    listEntriesForDate(entryDate),
+    totalsForDate(userId, entryDate),
+    listEntriesForDate(userId, entryDate),
   ]);
   return { totals, entries };
 }
 
-export function journalForToday(): Promise<JournalView> {
-  return journalForDate(todayInParis());
+export function journalForToday(userId: number): Promise<JournalView> {
+  return journalForDate(userId, todayInParis());
 }
 
 export interface RecordEntryInput {
+  userId: number;
   foodLabel: string;
   /** Valeurs pour 100 g de l'aliment de référence, ou saisies à la main (FR-25). */
   per100g: Macros;
@@ -57,6 +61,7 @@ export async function recordEntry(input: RecordEntryInput): Promise<RecordEntryR
   }
 
   const entry = await insertEntry({
+    userId: input.userId,
     entryDate: input.entryDate ?? todayInParis(),
     foodLabel: input.foodLabel,
     quantityG: input.quantityG,
@@ -68,18 +73,23 @@ export async function recordEntry(input: RecordEntryInput): Promise<RecordEntryR
   return { kind: 'created', entry };
 }
 
-export function removeEntry(id: number): Promise<boolean> {
-  return deleteEntry(id);
+export function removeEntry(userId: number, id: number): Promise<boolean> {
+  return deleteEntry(userId, id);
 }
 
-export function historyPage(limit: number, offset: number): Promise<DayTotals[]> {
-  return listDayTotals(limit, offset);
+export function historyPage(
+  userId: number,
+  limit: number,
+  offset: number,
+): Promise<DayTotals[]> {
+  return listDayTotals(userId, limit, offset);
 }
 
 export function quantityShortcuts(
+  userId: number,
   sourceKind: SourceKind,
   sourceRef: string | null,
   foodLabel: string,
 ): Promise<number[]> {
-  return recentQuantities(sourceKind, sourceRef, foodLabel);
+  return recentQuantities(userId, sourceKind, sourceRef, foodLabel);
 }

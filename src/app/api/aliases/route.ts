@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { rememberAlias } from '@/server/services/aliases';
 
 export const runtime = 'nodejs';
@@ -13,7 +13,8 @@ const bodySchema = z.object({
 
 /** Mémorise le choix de l'utilisateur pour un nom reconnu (FR-19). */
 export async function POST(request: Request): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -29,6 +30,6 @@ export async function POST(request: Request): Promise<Response> {
     return apiError('invalid_input');
   }
 
-  await rememberAlias(parsed.data.name, parsed.data.targetKind, parsed.data.targetRef);
+  await rememberAlias(userId, parsed.data.name, parsed.data.targetKind, parsed.data.targetRef);
   return Response.json({ ok: true });
 }

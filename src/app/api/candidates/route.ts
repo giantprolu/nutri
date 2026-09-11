@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { candidatesFor } from '@/server/services/aliases';
 
 export const runtime = 'nodejs';
@@ -11,7 +11,8 @@ const bodySchema = z.object({
 
 /** Candidats CIQUAL pour chaque nom reconnu (FR-18). */
 export async function POST(request: Request): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -30,7 +31,7 @@ export async function POST(request: Request): Promise<Response> {
   const results = await Promise.all(
     parsed.data.names.map(async (name) => ({
       name,
-      candidates: await candidatesFor(name),
+      candidates: await candidatesFor(userId, name),
     })),
   );
 

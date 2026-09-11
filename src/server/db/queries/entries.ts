@@ -9,6 +9,11 @@ import type { DayTotals, Entry, Macros, SourceKind } from '@/lib/types';
  * Toute lecture porte sur `entries` seule : aucune jointure vers une table de
  * référence, sous peine de faire bouger l'historique (AD-1). Les sommes sont
  * calculées par Postgres, en numeric, pour éviter la dérive flottante (AD-9).
+ *
+ * Chaque fonction reçoit l'utilisateur en premier argument, et aucune n'en
+ * déduit un toute seule. C'est délibéré : le compilateur refuse alors tout
+ * appel qui aurait oublié le cloisonnement, ce qu'une lecture implicite de la
+ * session depuis cette couche ne permettrait pas de garantir.
  */
 
 /** Les colonnes numeric arrivent en chaîne par le pilote : conversion unique ici. */
@@ -34,17 +39,20 @@ function toEntry(row: typeof schema.entries.$inferSelect): Entry {
 }
 
 /** Les entrées d'une date, dans l'ordre de saisie (FR-4). */
-export async function listEntriesForDate(entryDate: string): Promise<Entry[]> {
+export async function listEntriesForDate(
+  userId: number,
+  entryDate: string,
+): Promise<Entry[]> {
   const rows = await db()
     .select()
     .from(schema.entries)
-    .where(eq(schema.entries.entryDate, entryDate))
+    .where(and(eq(schema.entries.userId, userId), eq(schema.entries.entryDate, entryDate)))
     .orderBy(asc(schema.entries.createdAt), asc(schema.entries.id));
   return rows.map(toEntry);
 }
 
 /** Totaux d'une date, sommés par Postgres (FR-4, AD-9). */
-export async function totalsForDate(entryDate: string): Promise<DayTotals> {
+export async function totalsForDate(userId: number, entryDate: string): Promise<DayTotals> {
   const [row] = await db()
     .select({
       kcal: sql<string>`coalesce(sum(${schema.entries.kcal}), 0)`,
@@ -54,7 +62,7 @@ export async function totalsForDate(entryDate: string): Promise<DayTotals> {
       entryCount: sql<string>`count(*)`,
     })
     .from(schema.entries)
-    .where(eq(schema.entries.entryDate, entryDate));
+    .where(and(eq(schema.entries.userId, userId), eq(schema.entries.entryDate, entryDate)));
 
   const macros: Macros = {
     kcal: toNumber(row?.kcal ?? null),
@@ -67,7 +75,11 @@ export async function totalsForDate(entryDate: string): Promise<DayTotals> {
 }
 
 /** Les dates renseignées, de la plus récente à la plus ancienne (FR-20). */
-export async function listDayTotals(limit: number, offset: number): Promise<DayTotals[]> {
+export async function listDayTotals(
+  userId: number,
+  limit: number,
+  offset: number,
+): Promise<DayTotals[]> {
   const rows = await db()
     .select({
       entryDate: schema.entries.entryDate,
@@ -78,6 +90,7 @@ export async function listDayTotals(limit: number, offset: number): Promise<DayT
       entryCount: sql<string>`count(*)`,
     })
     .from(schema.entries)
+    .where(eq(schema.entries.userId, userId))
     .groupBy(schema.entries.entryDate)
     .orderBy(desc(schema.entries.entryDate))
     .limit(limit)
@@ -96,6 +109,7 @@ export async function listDayTotals(limit: number, offset: number): Promise<DayT
 }
 
 export interface InsertEntryInput {
+  userId: number;
   entryDate: string;
   foodLabel: string;
   quantityG: number;
@@ -109,6 +123,7 @@ export async function insertEntry(input: InsertEntryInput): Promise<Entry> {
   const [row] = await db()
     .insert(schema.entries)
     .values({
+      userId: input.userId,
       entryDate: input.entryDate,
       foodLabel: input.foodLabel,
       quantityG: String(input.quantityG),
@@ -128,10 +143,12 @@ export async function insertEntry(input: InsertEntryInput): Promise<Entry> {
 }
 
 /** Supprime une entrée (FR-5). Renvoie faux si elle n'existait pas. */
-export async function deleteEntry(id: number): Promise<boolean> {
+export async function deleteEntry(userId: number, id: number): Promise<boolean> {
   const rows = await db()
     .delete(schema.entries)
-    .where(eq(schema.entries.id, id))
+    // L'identifiant seul ne suffit pas : sans le propriétaire, un numéro deviné
+    // supprimerait l'entrée de quelqu'un d'autre.
+    .where(and(eq(schema.entries.userId, userId), eq(schema.entries.id, id)))
     .returning({ id: schema.entries.id });
   return rows.length > 0;
 }
@@ -141,6 +158,7 @@ export async function deleteEntry(id: number): Promise<boolean> {
  * Une entrée ad hoc n'a pas de référence : on retombe sur la désignation.
  */
 export async function recentQuantities(
+  userId: number,
   sourceKind: SourceKind,
   sourceRef: string | null,
   foodLabel: string,
@@ -148,8 +166,16 @@ export async function recentQuantities(
 ): Promise<number[]> {
   const matchesSource =
     sourceRef === null
-      ? and(eq(schema.entries.sourceKind, sourceKind), eq(schema.entries.foodLabel, foodLabel))
-      : and(eq(schema.entries.sourceKind, sourceKind), eq(schema.entries.sourceRef, sourceRef));
+      ? and(
+          eq(schema.entries.userId, userId),
+          eq(schema.entries.sourceKind, sourceKind),
+          eq(schema.entries.foodLabel, foodLabel),
+        )
+      : and(
+          eq(schema.entries.userId, userId),
+          eq(schema.entries.sourceKind, sourceKind),
+          eq(schema.entries.sourceRef, sourceRef),
+        );
 
   const rows = await db()
     .select({

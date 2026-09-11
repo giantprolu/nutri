@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { recordEntry } from '@/server/services/entries';
 import { MAX_QUANTITY_G } from '@/lib/nutrition';
 import { isJournalDate } from '@/lib/date';
@@ -26,7 +26,8 @@ const createSchema = z.object({
 
 /** Enregistre une entrée avec ses macros figées (FR-10, FR-25). */
 export async function POST(request: Request): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -42,7 +43,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError('invalid_input');
   }
 
-  const result = await recordEntry(parsed.data);
+  const result = await recordEntry({ ...parsed.data, userId });
   if (result.kind === 'invalid_quantity') {
     return apiError('invalid_input', 'Quantité invalide.');
   }

@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
-import { hasSession } from '@/server/guard';
+import { currentUserId } from '@/server/guard';
 import { historyPage } from '@/server/services/entries';
 
 export const runtime = 'nodejs';
@@ -12,7 +12,8 @@ const querySchema = z.object({
 
 /** Pages suivantes de l'historique, chargées progressivement (FR-20). */
 export async function GET(request: Request): Promise<Response> {
-  if (!(await hasSession())) {
+  const userId = await currentUserId();
+  if (userId === null) {
     return apiError('unauthorized');
   }
 
@@ -25,6 +26,6 @@ export async function GET(request: Request): Promise<Response> {
     return apiError('invalid_input');
   }
 
-  const days = await historyPage(parsed.data.limit, parsed.data.offset);
+  const days = await historyPage(userId, parsed.data.limit, parsed.data.offset);
   return Response.json({ days });
 }

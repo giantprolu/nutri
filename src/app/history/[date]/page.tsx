@@ -4,6 +4,7 @@ import { EmptyState } from '@/components/EmptyState';
 import { TotalsCard } from '@/components/TotalsCard';
 import { EntryList } from '@/components/EntryList';
 import { journalForDate } from '@/server/services/entries';
+import { requireUserId } from '@/server/guard';
 import { formatRelativeJournalDate, isJournalDate } from '@/lib/date';
 
 export const dynamic = 'force-dynamic';
@@ -28,7 +29,7 @@ export default async function HistoryDayPage({
     notFound();
   }
 
-  const { totals, entries } = await journalForDate(date);
+  const { totals, entries } = await journalForDate(await requireUserId(), date);
   if (entries.length === 0) {
     return (
       <>

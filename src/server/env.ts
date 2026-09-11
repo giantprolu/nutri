@@ -12,7 +12,6 @@ import { z } from 'zod';
 
 const schema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
-  APP_PASSWORD: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(16).optional(),
   MISTRAL_API_KEY: z.string().min(1).optional(),
   // pixtral-12b-2409 a disparu du catalogue Mistral, vérifié le 11/09/2026
@@ -66,9 +65,6 @@ export const env = {
   get databaseUrl(): string | undefined {
     return read().DATABASE_URL;
   },
-  get appPassword(): string | undefined {
-    return read().APP_PASSWORD;
-  },
   get sessionSecret(): string | undefined {
     return read().SESSION_SECRET;
   },
@@ -91,7 +87,9 @@ export const env = {
  * Exigée à l'usage, pas au démarrage : le build doit passer sans secret
  * (B-2, B-3 de BLOCKERS.md), la requête qui en a besoin échoue explicitement.
  */
-export function requireEnv(name: 'DATABASE_URL' | 'APP_PASSWORD' | 'SESSION_SECRET' | 'MISTRAL_API_KEY'): string {
+export function requireEnv(
+  name: 'DATABASE_URL' | 'SESSION_SECRET' | 'MISTRAL_API_KEY',
+): string {
   const value = read()[name];
   if (!value) {
     throw new Error(`${name} n'est pas configurée.`);

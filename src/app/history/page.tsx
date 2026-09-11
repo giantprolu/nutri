@@ -1,6 +1,7 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { historyPage } from '@/server/services/entries';
+import { requireUserId } from '@/server/guard';
 import { DayRow } from './DayRow';
 import { LoadMore } from './LoadMore';
 
@@ -15,7 +16,7 @@ const PAGE_SIZE = 30;
  * groupe sur `entries`, une date sans entrée n'a donc aucune ligne.
  */
 export default async function HistoryPage() {
-  const days = await historyPage(PAGE_SIZE, 0);
+  const days = await historyPage(await requireUserId(), PAGE_SIZE, 0);
 
   if (days.length === 0) {
     return (

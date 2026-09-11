@@ -7,6 +7,7 @@ import type { ApiErrorBody, ApiErrorCode } from '@/lib/types';
 const MESSAGES: Record<ApiErrorCode, string> = {
   unauthorized: 'Session requise.',
   invalid_input: 'Requête invalide.',
+  email_taken: 'Cette adresse a déjà un compte.',
   not_found: 'Introuvable.',
   payload_too_large: 'Image trop lourde.',
   model_unavailable: 'Reconnaissance indisponible.',
@@ -18,6 +19,7 @@ const MESSAGES: Record<ApiErrorCode, string> = {
 const STATUS: Record<ApiErrorCode, number> = {
   unauthorized: 401,
   invalid_input: 400,
+  email_taken: 409,
   not_found: 404,
   payload_too_large: 413,
   model_unavailable: 503,

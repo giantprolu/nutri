@@ -29,6 +29,13 @@
       "when": 1789052431245,
       "tag": "0003_trigram_search",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1789136355244,
+      "tag": "0004_sharp_sentry",
+      "breakpoints": true
     }
   ]
 }

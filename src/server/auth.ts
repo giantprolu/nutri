@@ -1,14 +1,16 @@
 import { env, requireEnv } from './env';
 
 /**
- * Session mono-utilisateur (AD-7).
+ * Sessions et mots de passe.
  *
- * Il n'y a pas d'utilisateur derrière une session, seulement la preuve que le
- * mot de passe a été fourni. La charge utile du cookie ne contient qu'un
- * horodatage d'émission, signé en HMAC-SHA-256.
+ * Le cookie porte l'identifiant de l'utilisateur et l'horodatage d'émission,
+ * signés ensemble en HMAC-SHA-256. Signer le couple et non chaque moitié
+ * empêche de recoller l'identifiant d'un compte à l'horodatage d'un autre.
  *
  * Tout passe par Web Crypto plutôt que node:crypto : le middleware tourne en
- * Edge runtime, où node:crypto n'est pas disponible.
+ * Edge runtime, où node:crypto n'est pas disponible. C'est aussi ce qui dicte
+ * PBKDF2 pour les mots de passe, faute de bcrypt ou d'argon2 dans cet
+ * environnement.
  */
 
 export const SESSION_COOKIE = 'nutriperso_session';
@@ -53,62 +55,139 @@ function timingSafeEqual(a: string, b: string): boolean {
 }
 
 /**
- * Vérifie le mot de passe applicatif.
- * Les deux valeurs sont passées au HMAC avant comparaison, ce qui ramène des
- * chaînes de longueurs différentes à des empreintes de longueur fixe.
+ * Coût du hachage de mot de passe. PBKDF2-HMAC-SHA256 à 210 000 tours est la
+ * valeur recommandée par l'OWASP pour cet algorithme. Le nombre est écrit dans
+ * l'empreinte : le relever plus tard n'invalidera pas les comptes existants,
+ * qui se rehâcheront à leur prochaine connexion réussie.
  */
-export async function verifyPassword(candidate: string): Promise<boolean> {
-  const expected = requireEnv('APP_PASSWORD');
-  const secret = requireEnv('SESSION_SECRET');
-  const [candidateDigest, expectedDigest] = await Promise.all([
-    hmac(secret, candidate),
-    hmac(secret, expected),
-  ]);
-  return timingSafeEqual(toBase64Url(candidateDigest), toBase64Url(expectedDigest));
+const PBKDF2_ITERATIONS = 210_000;
+const PBKDF2_KEY_BITS = 256;
+const SALT_BYTES = 16;
+
+/** Longueur minimale exigée à l'inscription. */
+export const MIN_PASSWORD_LENGTH = 10;
+
+function fromBase64Url(value: string): Uint8Array {
+  const padded = value.replaceAll('-', '+').replaceAll('_', '/');
+  const binary = atob(padded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes;
 }
 
-/** Fabrique la valeur du cookie de session. */
-export async function issueSessionToken(now: number = Date.now()): Promise<string> {
-  const secret = requireEnv('SESSION_SECRET');
-  const issuedAt = String(now);
-  const signature = await hmac(secret, issuedAt);
-  return `${issuedAt}.${toBase64Url(signature)}`;
+async function pbkdf2(
+  password: string,
+  salt: Uint8Array,
+  iterations: number,
+): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey(
+    'raw',
+    encoder.encode(password),
+    'PBKDF2',
+    false,
+    ['deriveBits'],
+  );
+  const bits = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', hash: 'SHA-256', salt: salt as BufferSource, iterations },
+    key,
+    PBKDF2_KEY_BITS,
+  );
+  return new Uint8Array(bits);
 }
 
 /**
- * Valide un cookie de session : signature intacte et âge sous la limite.
- * Renvoie un booléen plutôt que de lever, la session absente étant un cas
- * nominal et non une erreur (AD-12).
+ * Empreinte d'un mot de passe, au format `pbkdf2$sha256$tours$sel$empreinte`.
+ * Le sel et le nombre de tours voyagent avec l'empreinte : rien d'autre n'est
+ * nécessaire pour la vérifier, et rien ne dépend d'une constante du code.
+ */
+export async function hashPassword(password: string): Promise<string> {
+  const salt = crypto.getRandomValues(new Uint8Array(SALT_BYTES));
+  const derived = await pbkdf2(password, salt, PBKDF2_ITERATIONS);
+  return `pbkdf2$sha256$${PBKDF2_ITERATIONS}$${toBase64Url(salt)}$${toBase64Url(derived)}`;
+}
+
+/**
+ * Vérifie un mot de passe contre son empreinte stockée.
+ * La comparaison est en temps constant : sortir tôt sur la première différence
+ * rendrait le temps de réponse dépendant du préfixe correct.
+ */
+export async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const parts = stored.split('$');
+  if (parts.length !== 5 || parts[0] !== 'pbkdf2' || parts[1] !== 'sha256') {
+    return false;
+  }
+  const iterations = Number(parts[2]);
+  if (!Number.isSafeInteger(iterations) || iterations <= 0) {
+    return false;
+  }
+  const derived = await pbkdf2(password, fromBase64Url(parts[3] ?? ''), iterations);
+  return timingSafeEqual(toBase64Url(derived), parts[4] ?? '');
+}
+
+/**
+ * Fabrique la valeur du cookie : `utilisateur.horodatage.signature`.
+ * La signature couvre les deux premiers champs ensemble, de sorte qu'aucun
+ * fragment d'un cookie valide ne puisse être recollé à celui d'un autre compte.
+ */
+export async function issueSessionToken(
+  userId: number,
+  now: number = Date.now(),
+): Promise<string> {
+  const secret = requireEnv('SESSION_SECRET');
+  const payload = `${userId}.${now}`;
+  return `${payload}.${toBase64Url(await hmac(secret, payload))}`;
+}
+
+/**
+ * Lit un cookie de session et rend l'identifiant qu'il porte.
+ * Rend `null` plutôt que de lever, la session absente étant un cas nominal et
+ * non une erreur (AD-12). Signature intacte et âge sous la limite sont exigés.
+ */
+export async function readSessionToken(
+  token: string | undefined,
+  now: number = Date.now(),
+): Promise<number | null> {
+  if (!token) {
+    return null;
+  }
+  const secret = env.sessionSecret;
+  if (!secret) {
+    return null;
+  }
+
+  const parts = token.split('.');
+  if (parts.length !== 3) {
+    return null;
+  }
+  const [rawUserId, rawIssuedAt, signature] = parts as [string, string, string];
+
+  const userId = Number(rawUserId);
+  const issuedAtMs = Number(rawIssuedAt);
+  if (!Number.isSafeInteger(userId) || userId <= 0) {
+    return null;
+  }
+  if (!Number.isSafeInteger(issuedAtMs) || issuedAtMs > now) {
+    return null;
+  }
+  if ((now - issuedAtMs) / 1000 > SESSION_MAX_AGE_SECONDS) {
+    return null;
+  }
+
+  const expected = toBase64Url(await hmac(secret, `${rawUserId}.${rawIssuedAt}`));
+  return timingSafeEqual(signature, expected) ? userId : null;
+}
+
+/**
+ * Vrai si le cookie est exploitable. Le middleware n'a pas besoin de savoir
+ * qui est connecté, seulement que quelqu'un l'est.
  */
 export async function isValidSessionToken(
   token: string | undefined,
   now: number = Date.now(),
 ): Promise<boolean> {
-  if (!token) {
-    return false;
-  }
-  const secret = env.sessionSecret;
-  if (!secret) {
-    return false;
-  }
-
-  const separator = token.lastIndexOf('.');
-  if (separator <= 0) {
-    return false;
-  }
-  const issuedAt = token.slice(0, separator);
-  const signature = token.slice(separator + 1);
-
-  const issuedAtMs = Number(issuedAt);
-  if (!Number.isSafeInteger(issuedAtMs) || issuedAtMs > now) {
-    return false;
-  }
-  if ((now - issuedAtMs) / 1000 > SESSION_MAX_AGE_SECONDS) {
-    return false;
-  }
-
-  const expected = toBase64Url(await hmac(secret, issuedAt));
-  return timingSafeEqual(signature, expected);
+  return (await readSessionToken(token, now)) !== null;
 }
 
 /**
