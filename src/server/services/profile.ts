@@ -1,7 +1,8 @@
 import 'server-only';
-import { ageInYears } from '@/lib/date';
+import { ageInYears, todayInParis } from '@/lib/date';
 import { computeEnergyTarget, isValidBodyProfile, type EnergyTarget } from '@/lib/energy';
 import { findProfile, saveProfile, type Profile } from '../db/queries/profiles';
+import { activityBaseline } from '../db/queries/activity';
 
 /**
  * Service du profil et de la cible calorique.
@@ -10,6 +11,20 @@ import { findProfile, saveProfile, type Profile } from '../db/queries/profiles';
  * lui-même reste dans `@/lib/energy`, pur et testable sans base ; ce module ne
  * fait que l'alimenter et refuser les mesures invraisemblables.
  */
+
+/**
+ * Fenêtre de moyenne des dépenses mesurées, en jours. Deux semaines couvrent
+ * un cycle d'entraînement complet, semaines creuses comprises, sans remonter
+ * si loin qu'un changement d'habitude mette un mois à se voir.
+ */
+const ACTIVITY_WINDOW_DAYS = 14;
+
+/**
+ * Nombre de journées mesurées en dessous duquel on garde le facteur déclaré.
+ * Une ou deux journées ne disent rien d'une habitude, et une seule sortie
+ * exceptionnelle ferait alors bondir la cible pour deux semaines.
+ */
+const MIN_MEASURED_DAYS = 3;
 
 export type { Profile };
 
@@ -38,7 +53,14 @@ export async function targetFor(userId: number): Promise<EnergyTarget | null> {
     return null;
   }
   const body = toBodyProfile(profile);
-  return isValidBodyProfile(body) ? computeEnergyTarget(body) : null;
+  if (!isValidBodyProfile(body)) {
+    return null;
+  }
+
+  const baseline = await activityBaseline(userId, todayInParis(), ACTIVITY_WINDOW_DAYS);
+  return baseline.dayCount >= MIN_MEASURED_DAYS
+    ? computeEnergyTarget(body, baseline.averageActiveKcal)
+    : computeEnergyTarget(body);
 }
 
 export function profileFor(userId: number): Promise<Profile | null> {

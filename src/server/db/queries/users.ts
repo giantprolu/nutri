@@ -20,6 +20,7 @@ export interface UserAccount {
   id: number;
   email: string;
   passwordHash: string;
+  ingestToken: string | null;
 }
 
 export async function findUserByEmail(email: string): Promise<UserAccount | null> {
@@ -51,4 +52,47 @@ export async function createUser(
     .returning();
 
   return row ? { kind: 'created', user: row } : { kind: 'email_taken' };
+}
+
+/**
+ * L'utilisateur désigné par un jeton d'ingestion.
+ *
+ * Le jeton est comparé en base et non en mémoire : une comparaison de chaînes
+ * côté application sortirait au premier caractère différent, et l'index
+ * unique de Postgres ne dépend pas du contenu comparé.
+ */
+export async function findUserByIngestToken(token: string): Promise<UserAccount | null> {
+  const [row] = await db()
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.ingestToken, token))
+    .limit(1);
+  return row ?? null;
+}
+
+/**
+ * Fabrique un jeton pour l'utilisateur et remplace celui qui existait.
+ * Remplacer plutôt que conserver : c'est ce qui rend la révocation possible
+ * quand un raccourci a été partagé par erreur.
+ */
+export async function rotateIngestToken(userId: number): Promise<string> {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  let binary = '';
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte);
+  }
+  const token = btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replaceAll('=', '');
+
+  await db().update(schema.users).set({ ingestToken: token }).where(eq(schema.users.id, userId));
+  return token;
+}
+
+/** Vrai si un jeton existe déjà, sans le révéler. */
+export async function hasIngestToken(userId: number): Promise<boolean> {
+  const [row] = await db()
+    .select({ token: schema.users.ingestToken })
+    .from(schema.users)
+    .where(eq(schema.users.id, userId))
+    .limit(1);
+  return row?.token != null;
 }

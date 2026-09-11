@@ -220,6 +220,20 @@ assert.equal(withBodyFat.equation, 'katch-mcardle', 'equation basculee');
 assert.equal(withBodyFat.bmrKcal, 1839, 'metabolisme sur la masse maigre');
 assert.equal(withBodyFat.proteinG, 163.2, 'proteines a 2,4 g/kg de masse maigre');
 
+// Dépense mesurée : modèle additif, le facteur déclaré est ignoré.
+// 1780 de base plus 900 mesurées font 2680, contre 2759 avec le facteur 1,55.
+const measured = computeEnergyTarget(baseProfile, 900);
+assert.equal(measured.maintenanceKcal, 2680, 'base plus depense mesuree');
+assert.equal(measured.basis, 'measured', 'origine mesuree');
+assert.equal(measured.targetKcal, 2240, 'cible sur depense mesuree');
+assert.equal(cut.basis, 'declared', 'origine declaree sans mesure');
+
+// Une mesure nulle reste une mesure : un jour sans bouger ne bascule pas sur
+// le facteur déclaré, sans quoi l'immobilité augmenterait la cible.
+const still = computeEnergyTarget(baseProfile, 0);
+assert.equal(still.maintenanceKcal, 1780, 'depense nulle prise au mot');
+assert.equal(still.basis, 'measured');
+
 // Bornes du questionnaire.
 assert.equal(isValidBodyProfile(baseProfile), true, 'profil plausible accepte');
 assert.equal(isValidBodyProfile({ ...baseProfile, ageYears: 12 }), false, 'age trop bas');

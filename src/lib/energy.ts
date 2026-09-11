@@ -31,9 +31,13 @@ export type Sex = 'male' | 'female';
 export type Goal = 'lose' | 'maintain' | 'gain';
 
 /**
- * Niveau d'activité, multiplicateur appliqué au métabolisme de base.
+ * Niveau d'activité déclaré, multiplicateur appliqué au métabolisme de base.
  * Valeurs conventionnelles reprises de Harris-Benedict. Le niveau porte sur la
  * semaine entière, travail et entraînement confondus.
+ *
+ * Ce n'est qu'un repli. Dès qu'une dépense mesurée existe, elle la remplace :
+ * choisir un multiplicateur dans une liste est l'étape la plus grossière de
+ * tout le calcul, et la seule qu'un capteur sache faire mieux.
  */
 export const ACTIVITY_FACTORS = {
   sedentary: 1.2,
@@ -139,6 +143,11 @@ export interface EnergyTarget {
   floored: boolean;
   /** Équation employée pour le métabolisme de base. */
   equation: 'mifflin-st-jeor' | 'katch-mcardle';
+  /**
+   * Origine de la dépense d'activité : `measured` quand elle vient d'un
+   * capteur, `declared` quand elle vient du niveau choisi au questionnaire.
+   */
+  basis: 'measured' | 'declared';
   proteinG: number;
   carbsG: number;
   fatG: number;
@@ -252,13 +261,22 @@ function splitMacros(
  * Les étapes intermédiaires sont rendues pour que l'écran montre d'où vient le
  * chiffre plutôt que de l'asséner.
  */
-export function computeEnergyTarget(profile: BodyProfile): EnergyTarget {
+export function computeEnergyTarget(
+  profile: BodyProfile,
+  measuredActiveKcal?: number,
+): EnergyTarget {
   const useKatch = profile.bodyFatPercent !== undefined;
   const bmr = useKatch
     ? katchMcArdle(profile.weightKg, profile.bodyFatPercent as number)
     : mifflinStJeor(profile);
 
-  const maintenance = bmr * ACTIVITY_FACTORS[profile.activity];
+  // Modèle additif quand la dépense est mesurée : Santé compte l'énergie
+  // active en plus du repos, les deux s'ajoutent donc sans se recouvrir.
+  // Modèle multiplicatif sinon, faute de mieux.
+  const measured = measuredActiveKcal !== undefined && Number.isFinite(measuredActiveKcal);
+  const maintenance = measured
+    ? bmr + Math.max(0, measuredActiveKcal as number)
+    : bmr * ACTIVITY_FACTORS[profile.activity];
   const adjustment = dailyAdjustment(profile);
   const raw = maintenance + adjustment;
 
@@ -274,6 +292,7 @@ export function computeEnergyTarget(profile: BodyProfile): EnergyTarget {
     targetKcal: target,
     floored: target > Math.round(raw),
     equation: useKatch ? 'katch-mcardle' : 'mifflin-st-jeor',
+    basis: measured ? 'measured' : 'declared',
     ...splitMacros(target, profile),
   };
 }

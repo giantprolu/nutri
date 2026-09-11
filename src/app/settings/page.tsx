@@ -1,5 +1,8 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { LockButton } from './LockButton';
+import { HealthBridge } from './HealthBridge';
+import { currentUserId } from '@/server/guard';
+import { hasIngestToken } from '@/server/db/queries/users';
 import { APP_VERSION } from '@/lib/version';
 import Link from 'next/link';
 import { formatStampDate } from '@/lib/date';
@@ -29,7 +32,11 @@ async function readCiqualLine(): Promise<string> {
  * aucune invite automatique, et le chemin est assez obscur pour être rappelé.
  */
 export default async function SettingsPage() {
-  const ciqualLine = await readCiqualLine();
+  const userId = await currentUserId();
+  const [ciqualLine, tokenExists] = await Promise.all([
+    readCiqualLine(),
+    userId === null ? Promise.resolve(false) : hasIngestToken(userId),
+  ]);
 
   return (
     <>
@@ -54,6 +61,8 @@ export default async function SettingsPage() {
           Mesures, activité et objectif. Sert à calculer la cible quotidienne.
         </p>
       </Link>
+
+      <HealthBridge hasToken={tokenExists} />
 
       <section className="mt-4 rounded-box border border-base-300 bg-base-200 p-4">
         <h2 className="text-sm font-medium">Session</h2>

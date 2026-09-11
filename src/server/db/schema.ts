@@ -38,9 +38,49 @@ export const users = pgTable('users', {
   email: text('email').notNull().unique(),
   /** Empreinte PBKDF2, sel et nombre de tours compris. Jamais le mot de passe. */
   passwordHash: text('password_hash').notNull(),
+  /**
+   * Jeton d'ingestion, pour les raccourcis iOS qui n'ont pas de cookie de
+   * session. Stocké en clair, contrairement au mot de passe : l'utilisateur
+   * doit pouvoir le recopier dans son raccourci. Il n'ouvre qu'une seule
+   * route, en écriture, et se régénère à la demande.
+   */
+  ingestToken: text('ingest_token').unique(),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export type UserRow = typeof users.$inferSelect;
+
+/**
+ * Dépense d'activité mesurée, une ligne par jour et par source.
+ *
+ * `active_kcal` est l'énergie dépensée en plus du métabolisme de base, telle
+ * que la compte Santé d'Apple. Elle s'ajoute donc au métabolisme sans le
+ * recouvrir, là où un facteur d'activité le multipliait au jugé.
+ *
+ * La source est conservée parce que les mesures se recouvrent : une sortie
+ * enregistrée sur Strava figure aussi dans Santé si la montre l'a vue. Les
+ * additionner compterait deux fois la même dépense, le service en retient donc
+ * une seule par jour.
+ */
+export const dailyActivity = pgTable(
+  'daily_activity',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Jour civil, en Europe/Paris comme le journal (AD-11). */
+    day: date('day').notNull(),
+    /** `health` ou `strava`. */
+    source: text('source').notNull(),
+    activeKcal: numeric('active_kcal', { precision: 7, scale: 1 }).notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    unique('daily_activity_user_day_source_key').on(table.userId, table.day, table.source),
+    index('daily_activity_user_day_idx').on(table.userId, table.day),
+  ],
+);
+export type DailyActivityRow = typeof dailyActivity.$inferSelect;
 
 /**
  * Profil corporel et objectif, un par utilisateur. Sert au calcul de la cible
