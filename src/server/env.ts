@@ -30,11 +30,27 @@ type Env = z.infer<typeof schema>;
 
 let cached: Env | null = null;
 
+/**
+ * Une variable déclarée sans valeur arrive comme chaîne vide, pas comme
+ * absente. C'est le cas courant sur Vercel, où la case existe dès que le nom
+ * est saisi. Sans ce nettoyage, `.default()` ne s'applique jamais et une seule
+ * case laissée vide fait échouer toute la configuration, donc la connexion.
+ */
+function withoutEmpty(source: Record<string, string | undefined>): Record<string, string> {
+  const cleaned: Record<string, string> = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined && value.trim() !== '') {
+      cleaned[key] = value;
+    }
+  }
+  return cleaned;
+}
+
 function read(): Env {
   if (cached) {
     return cached;
   }
-  const parsed = schema.safeParse(process.env);
+  const parsed = schema.safeParse(withoutEmpty(process.env));
   if (!parsed.success) {
     throw new Error(
       `Configuration invalide : ${parsed.error.issues
