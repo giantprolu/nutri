@@ -22,6 +22,33 @@ import { mapColumns, parseNutrient, isCompleteRow } from './ciqual-parse';
 
 const DEFAULT_PATH = 'data/ciqual.csv';
 
+/**
+ * Les libellés de l'ANSES sont coupés par des retours à la ligne dans le
+ * tableur d'origine. Ils sont ramenés à une seule ligne : le nom sert à
+ * l'affichage et à la recherche trigramme, où un saut de ligne fausse tout.
+ */
+function cleanLabel(raw: string | undefined): string {
+  return (raw ?? '').replace(/\s+/g, ' ').trim();
+}
+
+/** Le séparateur majoritaire sur la première ligne, hors champs entre guillemets. */
+function detectDelimiter(content: Buffer): ';' | ',' {
+  const header = content.toString('utf8').split(/\r?\n/)[0] ?? '';
+  let inQuotes = false;
+  let semicolons = 0;
+  let commas = 0;
+  for (const char of header) {
+    if (char === '"') {
+      inQuotes = !inQuotes;
+    } else if (!inQuotes && char === ';') {
+      semicolons += 1;
+    } else if (!inQuotes && char === ',') {
+      commas += 1;
+    }
+  }
+  return commas > semicolons ? ',' : ';';
+}
+
 async function main(): Promise<void> {
   const path = process.argv[2] ?? DEFAULT_PATH;
 
@@ -42,10 +69,16 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Le CSV de l'ANSES est publié en séparateur point-virgule.
-  const rows = parse(readFileSync(path), {
+  // Le CSV de l'ANSES est publié en séparateur point-virgule, mais un export
+  // retraité peut arriver en virgule. Le séparateur est déduit de l'en-tête
+  // plutôt qu'accepté au choix : les libellés de l'ANSES contiennent des
+  // virgules (« Lait, demi-écrémé ») qui découperaient les lignes à tort.
+  const content = readFileSync(path);
+  const delimiter = detectDelimiter(content);
+
+  const rows = parse(content, {
     columns: true,
-    delimiter: [';', ','],
+    delimiter,
     skip_empty_lines: true,
     trim: true,
     bom: true,
@@ -73,7 +106,7 @@ async function main(): Promise<void> {
 
   for (const row of rows) {
     const code = row[columns.code]?.trim();
-    const name = row[columns.name]?.trim();
+    const name = cleanLabel(row[columns.name]);
     if (!code || !name) {
       continue;
     }

@@ -28,14 +28,20 @@ export const COLUMN_ALIASES = {
 
 export type ColumnKey = keyof typeof COLUMN_ALIASES;
 
-/** Minuscules, sans accents, espaces normalisés. */
+/**
+ * Minuscules, sans accents, espaces normalisés.
+ *
+ * La barre oblique compte pour un séparateur au même titre qu'un espace :
+ * le millésime 2025 coupe ses en-têtes par un retour à la ligne là où 2020
+ * écrivait « Glucides (g/100 g) ». Les deux se ramènent ainsi à la même clé.
+ */
 export function normalizeHeader(header: string): string {
   return header
     .trim()
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, ' ');
+    .replace(/[\s/]+/g, ' ');
 }
 
 /**

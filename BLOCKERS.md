@@ -3,7 +3,7 @@
 Consigné pendant le sprint BMAD. Chaque entrée dit ce qui manque, ce qui a été
 fait pour continuer malgré tout, et ce qui reste à faire côté humain.
 
-## B-1 — Push GitHub impossible
+## B-1 — Push GitHub impossible — **levé le 11/09/2026**
 
 **Constat.** `ssh -T git@github.com` répond `Permission denied (publickey)`.
 Aucune clé dans `~/.ssh`, et `gh` n'est pas installé.
@@ -12,12 +12,12 @@ Aucune clé dans `~/.ssh`, et `gh` n'est pas installé.
 commits. Le remote `origin` est configuré sur
 `git@github.com:giantprolu/nutri-perso.git` mais n'a jamais été joint.
 
-**À faire côté humain.** Générer une clé (`ssh-keygen -t ed25519`), l'ajouter au
-compte GitHub, créer le dépôt s'il n'existe pas, puis
-`git push -u origin main && git push -u origin bmad/dev`. Ou installer `gh` et
-lancer `gh auth login`.
+**Résolution.** Le remote pointait sur `giantprolu/nutri-perso`, qui n'existe
+pas. Le dépôt réel est `giantprolu/nutri`. `origin` est repassé en HTTPS, où
+Git Credential Manager fournit déjà les identifiants : aucune clé SSH n'est
+nécessaire. `main` est poussée et suivie.
 
-## B-2 — Aucune base de données
+## B-2 — Aucune base de données — **levé le 11/09/2026**
 
 **Constat.** `DATABASE_URL` n'est pas fournie. Aucune base Neon n'est
 provisionnée.
@@ -29,8 +29,9 @@ données factices. Les critères d'acceptation vérifiables sans base (build,
 lint, structure) sont tenus ; ceux qui exigent une exécution en base ne le sont
 pas.
 
-**À faire côté humain.** Créer une base sur Neon, renseigner `DATABASE_URL`
-dans `.env.local` et sur Vercel, puis `npm run db:migrate`.
+**Résolution.** Base Neon provisionnée, les quatre migrations sont appliquées,
+`pg_trgm` et `unaccent` sont installées. Reste à reporter `DATABASE_URL` dans
+`.env.local` et dans les variables d'environnement Vercel.
 
 ## B-3 — Aucune clé Mistral
 
@@ -44,7 +45,7 @@ indisponible.
 **À faire côté humain.** Créer une clé sur console.mistral.ai, la renseigner
 dans `.env.local` et sur Vercel.
 
-## B-4 — Fichier CSV CIQUAL absent
+## B-4 — Fichier CSV CIQUAL absent — **levé le 11/09/2026**
 
 **Constat.** `data/ciqual.csv` n'est pas dans le dépôt. Le fichier vient du site
 de l'ANSES et n'est pas récupérable sans intervention humaine (acceptation de
@@ -54,9 +55,17 @@ conditions, page de téléchargement).
 détecte les colonnes du CSV de l'ANSES. Il échoue avec un message explicite si
 le fichier est absent.
 
-**À faire côté humain.** Télécharger la table de composition CIQUAL depuis
-ciqual.anses.fr, la placer dans `data/ciqual.csv`, puis
-`npm run import:ciqual data/ciqual.csv`.
+**Résolution.** Le millésime 2025 est publié sur l'entrepôt Recherche Data Gouv
+(DOI 10.57745/RDMHWY), téléchargeable sans acceptation de conditions. Le
+classeur a été converti en CSV point-virgule dans `data/ciqual.csv`, hors
+versionnement. 3484 aliments importés, dont 161 incomplets exclus de la
+recherche. L'import a été rejoué deux fois : le total ne bouge pas,
+l'idempotence est vérifiée.
+
+Deux écarts du millésime 2025 ont demandé une correction du code d'import :
+ses en-têtes remplacent la barre oblique par un retour à la ligne
+(« Glucides (g/100 g) » devient « Glucides (g ¶ 100 g) »), et ses libellés
+d'aliments contiennent eux aussi des retours à la ligne. Voir B-7.
 
 ## B-5 — Identifiant du modèle de vision non vérifié
 
@@ -81,6 +90,39 @@ avertissement de dépréciation à l'installation.
 
 **À faire côté humain.** Rien pour l'instant. Le point se résoudra en passant
 à Next 16, dont la configuration ESLint suit la ligne 10.
+
+## B-7 — Import CIQUAL cassé par le millésime 2025 — **corrigé le 11/09/2026**
+
+**Constat.** Trois défauts, tous révélés au premier import réel.
+`normalizeHeader` ne reconnaissait plus la colonne énergie, l'ANSES ayant
+remplacé la barre oblique de ses en-têtes par un retour à la ligne.
+`csv-parse` était appelé avec `delimiter: [';', ',']`, ce qui découpait toute
+ligne dont le libellé contient une virgule (« Lait, demi-écrémé ») et faisait
+échouer l'import dès la ligne 216. Enfin les libellés importés gardaient les
+retours à la ligne du tableur.
+
+**Correction.** La barre oblique est traitée comme un séparateur dans
+`normalizeHeader`, de sorte que 2020 et 2025 se ramènent à la même clé. Le
+séparateur est déduit de l'en-tête au lieu d'être accepté au choix. Les
+libellés passent par `cleanLabel`, qui les ramène à une seule ligne.
+
+## B-8 — La recherche trigramme ignorait son index — **corrigé le 11/09/2026**
+
+**Constat.** C'est le balayage séquentiel annoncé en fin de sprint.
+`EXPLAIN ANALYZE` sur la recherche donnait un `Seq Scan` à 23 ms sur les 3484
+lignes, index GIN jamais retenu, même avec `enable_seqscan = off`. L'expression
+indexée n'était pourtant pas en cause : la requête écrivait
+`terme <% nutri_normalize(name)`, et GIN n'indexe que l'opérande de gauche.
+
+**Correction.** La clause est écrite `nutri_normalize(name) %> terme`, forme
+commutée strictement équivalente (mêmes 8 résultats sur « camembert »). Le
+plan passe en `Bitmap Index Scan` sur `ciqual_foods_name_trgm_idx`, à 0,2 ms.
+
+**Reste ouvert.** Une requête de plusieurs mots ne remonte rien si ces mots ne
+sont pas contigus dans le libellé : « yaourt » trouve, « yaourt nature » ne
+trouve pas, parce que `word_similarity` mesure un extrait continu et que le
+seuil est à 0,6. C'est le comportement de FR-18 tel qu'écrit, pas une
+régression, mais c'est un point à rejouer à l'usage.
 
 ---
 
