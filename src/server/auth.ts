@@ -111,11 +111,21 @@ export async function isValidSessionToken(
   return timingSafeEqual(signature, expected);
 }
 
-/** Attributs du cookie, identiques à la pose et à la suppression (FR-1). */
+/**
+ * Attributs du cookie, identiques à la pose et à la suppression (FR-1).
+ *
+ * `secure` est laissé tomber en développement. Chrome accepte un cookie
+ * `Secure` sur `localhost`, qu'il traite comme une origine de confiance, mais
+ * le jette sur toute autre origine en clair. Or l'application s'essaie depuis
+ * un téléphone, donc sur l'IP du poste : le cookie était alors refusé en
+ * silence, la session n'existait pas, et le déverrouillage renvoyait
+ * indéfiniment vers /unlock sans message d'erreur. En production le déploiement
+ * est en HTTPS et l'attribut reste posé.
+ */
 export function sessionCookieOptions(maxAge: number) {
   return {
     httpOnly: true,
-    secure: true,
+    secure: env.isProduction,
     sameSite: 'lax' as const,
     path: '/',
     maxAge,

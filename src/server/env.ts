@@ -19,6 +19,7 @@ const schema = z.object({
   // sur /v1/models. mistral-small-latest est le modèle de vision le moins
   // cher encore publié ; mistral-medium-latest en est la version capable.
   MISTRAL_MODEL: z.string().min(1).default('mistral-small-latest'),
+  NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   OFF_USER_AGENT: z
     .string()
     .min(1)
@@ -63,6 +64,10 @@ export const env = {
   },
   get offUserAgent(): string {
     return read().OFF_USER_AGENT;
+  },
+  /** Vrai sur Vercel, faux sous `next dev`. Sert aux attributs du cookie. */
+  get isProduction(): boolean {
+    return read().NODE_ENV === 'production';
   },
 };
 
