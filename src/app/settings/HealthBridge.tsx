@@ -52,9 +52,10 @@ export function HealthBridge({ hasToken }: { hasToken: boolean }) {
         </li>
         <li>Ajoute « Calculer les statistiques », opération Somme, sur les valeurs.</li>
         <li>
-          Ajoute « Obtenir le contenu de » sur l&apos;adresse ci-dessous, méthode POST,
-          corps JSON avec le champ nombre <code>activeKcal</code> valant la somme, et
-          l&apos;en-tête <code>x-ingest-token</code> valant le jeton.
+          Ajoute « Obtenir le contenu de l&apos;URL », et non « de la page web », sur
+          l&apos;adresse ci-dessous. Touche « Afficher plus » pour déplier les réglages :
+          méthode POST, en-tête <code>x-ingest-token</code> valant le jeton, corps JSON
+          avec un champ Nombre <code>activeKcal</code> valant la somme.
         </li>
         <li>Dans Automatisation, déclenche-le chaque soir à 23 h 55.</li>
       </ol>
