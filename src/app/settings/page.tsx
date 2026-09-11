@@ -1,6 +1,7 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { LockButton } from './LockButton';
 import { APP_VERSION } from '@/lib/version';
+import Link from 'next/link';
 import { formatStampDate } from '@/lib/date';
 import { getCiqualStatus } from '@/server/db/queries/ciqual';
 
@@ -43,6 +44,16 @@ export default async function SettingsPage() {
           <li>Valide. L&apos;application s&apos;ouvrira sans barre d&apos;adresse.</li>
         </ol>
       </section>
+
+      <Link
+        href="/profile"
+        className="tap-target mt-4 block rounded-box border border-base-300 bg-base-200 p-4"
+      >
+        <h2 className="text-sm font-medium">Mon objectif</h2>
+        <p className="mt-1 text-sm text-ink-secondary">
+          Mesures, activité et objectif. Sert à calculer la cible quotidienne.
+        </p>
+      </Link>
 
       <section className="mt-4 rounded-box border border-base-300 bg-base-200 p-4">
         <h2 className="text-sm font-medium">Session</h2>

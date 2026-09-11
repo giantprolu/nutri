@@ -5,7 +5,12 @@
  */
 import assert from 'node:assert/strict';
 import { scaleMacros, isValidQuantity, isCompleteMacros, sumMacros } from '../src/lib/nutrition';
-import { todayInParis, isJournalDate, formatRelativeJournalDate } from '../src/lib/date';
+import {
+  todayInParis,
+  isJournalDate,
+  formatRelativeJournalDate,
+  ageInYears,
+} from '../src/lib/date';
 import { buildQuantityShortcuts } from '../src/lib/shortcuts';
 import { isValidBarcode } from '../src/lib/client/scanner';
 import { mapColumns, parseNutrient, isCompleteRow, normalizeHeader } from './ciqual-parse';
@@ -235,5 +240,14 @@ assert.equal(
   false,
   'taux de masse grasse invraisemblable',
 );
+
+// L'age se compte sur la date civile : la veille d'un anniversaire ne compte pas.
+assert.equal(ageInYears('1996-05-20', '2026-05-19'), 29, 'la veille');
+assert.equal(ageInYears('1996-05-20', '2026-05-20'), 30, 'le jour meme');
+assert.equal(ageInYears('1996-05-20', '2026-05-21'), 30, 'le lendemain');
+assert.equal(ageInYears('1996-12-31', '2026-01-01'), 29, 'anniversaire en fin d annee');
+// Un 29 fevrier tombe le 1er mars les annees non bissextiles.
+assert.equal(ageInYears('2000-02-29', '2026-02-28'), 25, '29 fevrier, avant le 1er mars');
+assert.equal(ageInYears('2000-02-29', '2026-03-01'), 26, '29 fevrier, apres le 1er mars');
 
 console.log('Toutes les verifications pures passent.');

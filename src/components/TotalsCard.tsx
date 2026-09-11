@@ -3,8 +3,11 @@ import { formatGrams, formatKcal } from '@/lib/nutrition';
 
 /**
  * Carte de totaux (DESIGN.md, Composants).
- * Aucun objectif, aucune barre de progression : l'application affiche des
- * chiffres et n'a pas d'opinion à leur sujet.
+ *
+ * Sans profil, la carte reste muette : des chiffres, aucune opinion, comme le
+ * voulait la conception d'origine. Avec un profil, elle affiche le reste à
+ * consommer, parce que l'utilisateur a explicitement demandé une cible.
+ * Le dépassement est indiqué sans jugement : un nombre, pas une alerte.
  */
 
 const MACROS: { key: keyof Omit<Macros, 'kcal'>; label: string; dot: string }[] = [
@@ -13,7 +16,15 @@ const MACROS: { key: keyof Omit<Macros, 'kcal'>; label: string; dot: string }[] 
   { key: 'fatG', label: 'Lipides', dot: 'bg-macro-fat' },
 ];
 
-export function TotalsCard({ macros }: { macros: Macros }) {
+export function TotalsCard({
+  macros,
+  targetKcal,
+}: {
+  macros: Macros;
+  targetKcal?: number;
+}) {
+  const remaining = targetKcal === undefined ? null : targetKcal - macros.kcal;
+
   return (
     <section
       aria-label="Totaux du jour"
@@ -21,8 +32,18 @@ export function TotalsCard({ macros }: { macros: Macros }) {
     >
       <p className="tabular text-3xl font-semibold leading-none">
         {formatKcal(macros.kcal)}
-        <span className="ml-1.5 text-base font-normal text-ink-secondary">kcal</span>
+        <span className="ml-1.5 text-base font-normal text-ink-secondary">
+          {targetKcal === undefined ? 'kcal' : `/ ${targetKcal} kcal`}
+        </span>
       </p>
+
+      {remaining === null ? null : (
+        <p className="tabular mt-2 text-sm text-ink-secondary">
+          {remaining >= 0
+            ? `${formatKcal(remaining)} kcal restantes`
+            : `${formatKcal(-remaining)} kcal au-dessus`}
+        </p>
+      )}
 
       <dl className="mt-4 flex justify-between gap-2">
         {MACROS.map((macro) => (

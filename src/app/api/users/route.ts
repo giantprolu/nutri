@@ -23,7 +23,8 @@ export const runtime = 'nodejs';
 const registerSchema = z.object({
   // Volontairement permissif : sans vérification par courriel, une validation
   // stricte n'apporte qu'un faux sentiment de contrôle.
-  email: z.email().trim().max(254),
+  // Le rognage est fait par normalizeEmail, seule autorite sur la forme stockee.
+  email: z.email().max(254),
   password: z.string().min(MIN_PASSWORD_LENGTH).max(512),
 });
 

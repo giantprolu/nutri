@@ -71,3 +71,17 @@ const stampFormatter = new Intl.DateTimeFormat('fr-FR', {
 export function formatStampDate(value: Date): string {
   return stampFormatter.format(value);
 }
+
+/**
+ * Âge en années révolues à partir d'une date de naissance `YYYY-MM-DD`.
+ *
+ * Comparé sur la date civile et non sur un nombre de millisecondes : diviser
+ * un écart par la durée d'une année moyenne se trompe d'un jour autour des
+ * anniversaires, et le métabolisme de base dépend de l'âge.
+ */
+export function ageInYears(birthDate: string, today: string = todayInParis()): number {
+  const [by, bm, bd] = birthDate.split('-').map(Number) as [number, number, number];
+  const [ty, tm, td] = today.split('-').map(Number) as [number, number, number];
+  const beforeBirthday = tm < bm || (tm === bm && td < bd);
+  return ty - by - (beforeBirthday ? 1 : 0);
+}
