@@ -15,7 +15,10 @@ const schema = z.object({
   APP_PASSWORD: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(16).optional(),
   MISTRAL_API_KEY: z.string().min(1).optional(),
-  MISTRAL_MODEL: z.string().min(1).default('pixtral-12b-2409'),
+  // pixtral-12b-2409 a disparu du catalogue Mistral, vérifié le 11/09/2026
+  // sur /v1/models. mistral-small-latest est le modèle de vision le moins
+  // cher encore publié ; mistral-medium-latest en est la version capable.
+  MISTRAL_MODEL: z.string().min(1).default('mistral-small-latest'),
   OFF_USER_AGENT: z
     .string()
     .min(1)

@@ -33,7 +33,7 @@ pas.
 `pg_trgm` et `unaccent` sont installées. Reste à reporter `DATABASE_URL` dans
 `.env.local` et dans les variables d'environnement Vercel.
 
-## B-3 — Aucune clé Mistral
+## B-3 — Aucune clé Mistral — **partiellement levé le 11/09/2026**
 
 **Constat.** `MISTRAL_API_KEY` n'est pas fournie.
 
@@ -42,8 +42,15 @@ derrière une interface. En l'absence de clé, la route répond 503 avec le code
 `model_unavailable`, ce que l'interface traite déjà comme une reconnaissance
 indisponible.
 
-**À faire côté humain.** Créer une clé sur console.mistral.ai, la renseigner
-dans `.env.local` et sur Vercel.
+**Résolution partielle.** La clé est créée et renseignée dans `.env.local`.
+`GET /v1/models` répond 200 et liste 46 modèles, la clé est donc valide. Mais
+`POST /v1/chat/completions` renvoie 429 « Rate limit exceeded » à chaque appel,
+sur quatre tentatives espacées d'une minute. Aucune reconnaissance photo n'est
+donc possible pour l'instant.
+
+**À faire côté humain.** Activer l'espace de travail sur console.mistral.ai,
+ce qui demande une vérification de numéro de téléphone, puis rejouer l'appel.
+Reporter enfin la clé dans les variables d'environnement Vercel.
 
 ## B-4 — Fichier CSV CIQUAL absent — **levé le 11/09/2026**
 
@@ -67,7 +74,7 @@ ses en-têtes remplacent la barre oblique par un retour à la ligne
 (« Glucides (g/100 g) » devient « Glucides (g ¶ 100 g) »), et ses libellés
 d'aliments contiennent eux aussi des retours à la ligne. Voir B-7.
 
-## B-5 — Identifiant du modèle de vision non vérifié
+## B-5 — Identifiant du modèle de vision non vérifié — **levé le 11/09/2026**
 
 **Constat.** `pixtral-12b-2409` est la valeur par défaut de `MISTRAL_MODEL`.
 Sa disponibilité sur le niveau gratuit n'a pas pu être confirmée sans clé
@@ -76,8 +83,15 @@ d'API. Question ouverte 4 du PRD.
 **Contournement.** Le modèle est une variable d'environnement, pas une
 constante. En changer ne demande aucune modification de code.
 
-**À faire côté humain.** Lister les modèles disponibles une fois la clé créée,
-et ajuster `MISTRAL_MODEL` si nécessaire.
+**Résolution.** La liste a été obtenue : `pixtral-12b-2409` n'existe plus, et
+aucun modèle `pixtral` ne figure au catalogue. Les modèles de vision encore
+publiés sont `mistral-small-latest`, `mistral-medium-latest`, la famille
+`ministral` et les modèles OCR. Le défaut du code passe à
+`mistral-small-latest`, le moins cher des trois. `mistral-medium-latest` est
+la relève si la reconnaissance se révèle trop approximative à l'usage.
+
+La qualité de reconnaissance reste non mesurée : le premier appel réel se
+heurte au 429 de B-3.
 
 ## B-6 — ESLint figé sur la ligne 9
 
