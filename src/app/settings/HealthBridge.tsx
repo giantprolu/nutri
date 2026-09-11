@@ -17,6 +17,9 @@ import { useState } from 'react';
 export function HealthBridge({ hasToken }: { hasToken: boolean }) {
   const [token, setToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  // Lue au rendu client : l'adresse dépend de l'origine d'où la page est
+  // ouverte, et c'est celle-là qu'il faut recopier dans le raccourci.
+  const endpoint = typeof window === 'undefined' ? '/api/activity' : `${window.location.origin}/api/activity`;
 
   async function generate() {
     setPending(true);
@@ -43,19 +46,20 @@ export function HealthBridge({ hasToken }: { hasToken: boolean }) {
 
       <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm text-ink-secondary">
         <li>Fabrique un jeton ci-dessous et copie-le.</li>
-        <li>Dans Raccourcis, crée un raccourci avec « Obtenir des échantillons de santé ».</li>
-        <li>Choisis Énergie active, sur aujourd&apos;hui, et calcule la somme.</li>
         <li>
-          Ajoute « Obtenir le contenu de » avec l&apos;adresse ci-dessous, en POST, corps
-          JSON <code>activeKcal</code>, et l&apos;en-tête <code>Authorization</code> valant{' '}
-          <code>Bearer</code> suivi du jeton.
+          Dans Raccourcis, ajoute « Rechercher des échantillons de l&apos;app Santé »,
+          type Énergie active, sur aujourd&apos;hui.
         </li>
-        <li>Programme-le chaque soir dans Automatisation.</li>
+        <li>Ajoute « Calculer les statistiques », opération Somme, sur les valeurs.</li>
+        <li>
+          Ajoute « Obtenir le contenu de » sur l&apos;adresse ci-dessous, méthode POST,
+          corps JSON avec le champ nombre <code>activeKcal</code> valant la somme, et
+          l&apos;en-tête <code>x-ingest-token</code> valant le jeton.
+        </li>
+        <li>Dans Automatisation, déclenche-le chaque soir à 23 h 55.</li>
       </ol>
 
-      <p className="tabular mt-3 break-all rounded-field bg-base-300 p-3 text-xs">
-        POST /api/activity
-      </p>
+      <p className="tabular mt-3 break-all rounded-field bg-base-300 p-3 text-xs">{endpoint}</p>
 
       {token ? (
         <>
