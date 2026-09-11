@@ -38,7 +38,7 @@ export function HealthBridge({ hasToken }: { hasToken: boolean }) {
       <p className="mt-1 text-sm text-ink-secondary">
         Un raccourci iOS envoie ton énergie active du jour. La cible passe alors sur ta
         dépense réelle, moyennée sur quatorze jours, au lieu du niveau d&apos;activité
-        déclaré.
+        déclaré. Il faut au moins trois journées envoyées pour que la bascule se fasse.
       </p>
 
       <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm text-ink-secondary">

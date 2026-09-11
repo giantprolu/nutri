@@ -138,6 +138,42 @@ trouve pas, parce que `word_similarity` mesure un extrait continu et que le
 seuil est à 0,6. C'est le comportement de FR-18 tel qu'écrit, pas une
 régression, mais c'est un point à rejouer à l'usage.
 
+## B-9 — Strava écarté, abonnement payant exigé — **tranché le 11/09/2026**
+
+**Constat.** La documentation développeur de Strava pose la condition sans
+ambiguïté : « A Strava subscription is a prerequisite for creating an app ».
+Depuis la restructuration de juin 2026, aucune clé d'API n'est délivrée sans
+abonnement payant. Deux limites s'y ajoutent : une application nouvelle
+n'autorise que le compte de son créateur, et le passage au palier supérieur
+plafonne à dix athlètes, ce qui cadre mal avec une inscription libre. Les
+calories ne figurent pas non plus dans la liste des activités, seulement sur
+le détail de chacune, donc un appel par sortie.
+
+**Décision.** Abandonné. Santé d'Apple reste la seule source d'activité, et
+elle couvre déjà les sorties enregistrées sur la montre, Strava compris.
+
+**Trace dans le code.** La colonne `source` de `daily_activity` subsiste, mais
+n'accepte plus qu'une valeur. La règle qui interdit de sommer deux sources sur
+une même journée est conservée en commentaire : elle redeviendrait nécessaire
+si une autre source arrivait un jour.
+
+## B-10 — Santé d'Apple inaccessible depuis le web — **contourné le 11/09/2026**
+
+**Constat.** HealthKit est une interface réservée aux applications natives iOS.
+Safari ne l'expose à aucune page, et il n'existe pas d'API web équivalente.
+Une PWA n'y a donc structurellement pas accès. Passer natif supposerait un
+compte développeur Apple, un Mac pour compiler et une distribution par l'App
+Store, exclue par les consignes du projet.
+
+**Contournement.** L'app Raccourcis sait lire un échantillon de santé et
+appeler une adresse web. `POST /api/activity` reçoit l'énergie active du jour,
+authentifiée par un jeton propre à l'utilisateur, puisqu'un raccourci ne porte
+pas de cookie de session. Une automatisation le déclenche chaque soir.
+
+**À faire côté humain.** Fabriquer le jeton depuis les réglages, créer le
+raccourci, le programmer. Trois journées envoyées suffisent à basculer la
+cible sur la dépense mesurée.
+
 ---
 
 ## Bilan de fin de sprint

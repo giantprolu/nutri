@@ -23,7 +23,7 @@ const bodySchema = z.object({
   day: z.string().refine(isJournalDate, 'Date invalide.').optional(),
   /** Énergie active du jour, hors métabolisme de base. */
   activeKcal: z.number().min(0).max(20000),
-  source: z.enum(['health', 'strava']).default('health'),
+  source: z.enum(['health']).default('health'),
 });
 
 /** `Authorization: Bearer <jeton>`, ou l'en-tête abrégé que pose un raccourci. */

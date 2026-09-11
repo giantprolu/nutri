@@ -5,14 +5,18 @@ import { db, schema } from '../client';
 /**
  * Dépense d'activité mesurée.
  *
- * Deux sources peuvent décrire la même journée. Santé d'Apple voit tout ce que
- * porte le téléphone ou la montre ; Strava ne voit que les séances
- * enregistrées, et ces séances figurent déjà dans Santé quand la montre les a
- * vues. Les additionner compterait deux fois la même dépense. Santé prime
- * donc, et Strava ne sert que les jours où Santé n'a rien remonté.
+ * Santé d'Apple est la seule source. Strava a été écarté : son interface exige
+ * un abonnement payant depuis juin 2026 (voir B-9 de BLOCKERS.md). La colonne
+ * `source` reste en base, au cas où une autre source arriverait, mais une
+ * seule valeur est acceptée aujourd'hui.
+ *
+ * Si une deuxième source apparaît un jour, ne pas sommer les lignes d'une
+ * même journée : deux capteurs qui voient la même sortie compteraient deux
+ * fois la même dépense. Il faudra en élire une, comme le fait la requête
+ * ci-dessous avec son `max` par journée.
  */
 
-export type ActivitySource = 'health' | 'strava';
+export type ActivitySource = 'health';
 
 /**
  * Écrit la dépense d'un jour pour une source. Le même jour renvoyé deux fois
@@ -68,11 +72,7 @@ export async function activityBaseline(
   const result = await db().execute<{ average: string | null; days: string }>(sql`
     SELECT avg(kcal) AS average, count(*) AS days
     FROM (
-      SELECT
-        coalesce(
-          max(active_kcal) FILTER (WHERE source = 'health'),
-          max(active_kcal) FILTER (WHERE source = 'strava')
-        ) AS kcal
+      SELECT max(active_kcal) AS kcal
       FROM daily_activity
       WHERE user_id = ${userId}
         AND day < ${today}
