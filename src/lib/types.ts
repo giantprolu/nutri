@@ -62,6 +62,7 @@ export type ApiErrorCode =
   | 'not_found'
   | 'payload_too_large'
   | 'model_unavailable'
+  | 'model_quota_exceeded'
   | 'model_bad_format'
   | 'upstream_unavailable'
   | 'internal';

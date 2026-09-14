@@ -2,6 +2,7 @@ export type RecognizeOutcome =
   | { kind: 'names'; names: string[] }
   | { kind: 'too_large' }
   | { kind: 'bad_format' }
+  | { kind: 'quota_exceeded' }
   | { kind: 'unavailable' };
 
 /**
@@ -26,6 +27,9 @@ export async function recognizePhoto(dataUrl: string): Promise<RecognizeOutcome>
   }
   if (response.status === 422) {
     return { kind: 'bad_format' };
+  }
+  if (response.status === 429) {
+    return { kind: 'quota_exceeded' };
   }
   if (!response.ok) {
     return { kind: 'unavailable' };

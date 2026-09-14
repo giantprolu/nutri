@@ -52,6 +52,8 @@ export async function POST(request: Request): Promise<Response> {
       return Response.json({ names: result.names });
     case 'bad_format':
       return apiError('model_bad_format');
+    case 'quota_exceeded':
+      return apiError('model_quota_exceeded');
     case 'unavailable':
       return apiError('model_unavailable');
   }
