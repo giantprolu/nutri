@@ -2,6 +2,7 @@ import 'server-only';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { db, schema } from '../client';
 import type { DayTotals, Entry, Macros, SourceKind } from '@/lib/types';
+import { type Meal, isMeal } from '@/lib/meal';
 
 /**
  * Accès aux données du journal.
@@ -25,6 +26,9 @@ function toEntry(row: typeof schema.entries.$inferSelect): Entry {
   return {
     id: row.id,
     entryDate: row.entryDate,
+    // La contrainte en base garantit déjà la valeur ; le repli couvre une
+    // ligne écrite avant la migration par une version antérieure du code.
+    meal: isMeal(row.meal) ? row.meal : 'lunch',
     foodLabel: row.foodLabel,
     quantityG: toNumber(row.quantityG),
     macros: {
@@ -111,6 +115,7 @@ export async function listDayTotals(
 export interface InsertEntryInput {
   userId: number;
   entryDate: string;
+  meal: Meal;
   foodLabel: string;
   quantityG: number;
   macros: Macros;
@@ -125,6 +130,7 @@ export async function insertEntry(input: InsertEntryInput): Promise<Entry> {
     .values({
       userId: input.userId,
       entryDate: input.entryDate,
+      meal: input.meal,
       foodLabel: input.foodLabel,
       quantityG: String(input.quantityG),
       kcal: String(input.macros.kcal),

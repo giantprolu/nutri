@@ -1,7 +1,12 @@
 /**
  * Types partagés entre le navigateur et le serveur.
- * Ce module ne dépend de rien (spine, tableau des couches).
+ *
+ * Ce module ne dépend que de `./meal`, qui ne dépend lui-même de rien : la
+ * liste des repas contraint la colonne, le corps des requêtes et le sélecteur,
+ * et devait donc vivre en un seul endroit (spine, tableau des couches).
  */
+
+import type { Meal } from './meal';
 
 /** Le quadruplet suivi par le produit, glossaire du PRD. */
 export interface Macros {
@@ -18,6 +23,8 @@ export type SourceKind = 'ciqual' | 'product' | 'manual';
 export interface Entry {
   id: number;
   entryDate: string;
+  /** Repas de rattachement, choisi à l'enregistrement. */
+  meal: Meal;
   foodLabel: string;
   quantityG: number;
   macros: Macros;

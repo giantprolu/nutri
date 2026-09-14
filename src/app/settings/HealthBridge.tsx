@@ -26,6 +26,26 @@ export interface BridgeStatus {
   requiredDays: number;
 }
 
+const STEPS = [
+  'Fabrique un jeton ci-dessous et copie-le.',
+  'Dans Raccourcis, ajoute « Rechercher des échantillons de l’app Santé », type Énergie active, sur aujourd’hui.',
+  'Ajoute « Calculer les statistiques », opération Somme, sur les valeurs.',
+  'Ajoute « Obtenir le contenu de l’URL », et non « de la page web », sur l’adresse ci-dessous. Touche « Afficher plus » pour déplier les réglages : méthode POST, en-tête x-ingest-token valant le jeton, corps JSON avec un champ Nombre activeKcal valant la somme.',
+  'Dans Automatisation, déclenche-le chaque soir à 23 h 55.',
+];
+
+function Line({ label, value }: { label: string; value: string }) {
+  return (
+    <div
+      className="flex items-baseline justify-between gap-3 py-[13px]"
+      style={{ borderBottom: '1px solid var(--color-divider)' }}
+    >
+      <dt className="text-[15px] opacity-70">{label}</dt>
+      <dd className="tabular text-[15px]">{value}</dd>
+    </div>
+  );
+}
+
 export function HealthBridge({
   hasToken,
   status,
@@ -37,7 +57,8 @@ export function HealthBridge({
   const [pending, setPending] = useState(false);
   // Lue au rendu client : l'adresse dépend de l'origine d'où la page est
   // ouverte, et c'est celle-là qu'il faut recopier dans le raccourci.
-  const endpoint = typeof window === 'undefined' ? '/api/activity' : `${window.location.origin}/api/activity`;
+  const endpoint =
+    typeof window === 'undefined' ? '/api/activity' : `${window.location.origin}/api/activity`;
 
   async function generate() {
     setPending(true);
@@ -53,73 +74,64 @@ export function HealthBridge({
     }
   }
 
+  const missing = status.requiredDays - status.dayCount;
+
   return (
-    <section className="mt-4 rounded-box border border-base-300 bg-base-200 p-4">
-      <h2 className="text-sm font-medium">Activité depuis Santé</h2>
-      <p className="mt-1 text-sm text-ink-secondary">
-        Un raccourci iOS envoie ton énergie active du jour. La cible passe alors sur ta
-        dépense réelle, moyennée sur quatorze jours, au lieu du niveau d&apos;activité
-        déclaré. Il faut au moins trois journées envoyées pour que la bascule se fasse.
+    <>
+      <p className="note mt-2">
+        Un raccourci iOS envoie ton énergie active du jour. La cible passe alors sur ta dépense
+        réelle, moyennée sur quatorze jours, au lieu du niveau d&apos;activité déclaré. Il faut
+        au moins trois journées envoyées pour que la bascule se fasse.
       </p>
 
-      <ol className="mt-3 flex list-decimal flex-col gap-2 pl-5 text-sm text-ink-secondary">
-        <li>Fabrique un jeton ci-dessous et copie-le.</li>
-        <li>
-          Dans Raccourcis, ajoute « Rechercher des échantillons de l&apos;app Santé »,
-          type Énergie active, sur aujourd&apos;hui.
-        </li>
-        <li>Ajoute « Calculer les statistiques », opération Somme, sur les valeurs.</li>
-        <li>
-          Ajoute « Obtenir le contenu de l&apos;URL », et non « de la page web », sur
-          l&apos;adresse ci-dessous. Touche « Afficher plus » pour déplier les réglages :
-          méthode POST, en-tête <code>x-ingest-token</code> valant le jeton, corps JSON
-          avec un champ Nombre <code>activeKcal</code> valant la somme.
-        </li>
-        <li>Dans Automatisation, déclenche-le chaque soir à 23 h 55.</li>
+      <hr className="rule mt-4" />
+
+      <p className="kicker kicker-quiet mt-4 mb-2 block">État</p>
+      <dl>
+        <Line
+          label="Dernière journée reçue"
+          value={
+            status.lastDay === null
+              ? '—'
+              : `${formatRelativeJournalDate(status.lastDay)}${
+                  status.lastKcal === null ? '' : ` · ${Math.round(status.lastKcal)} kcal`
+                }`
+          }
+        />
+        <Line
+          label="Moyenne retenue"
+          value={
+            status.dayCount === 0
+              ? '—'
+              : `${Math.round(status.averageKcal)} kcal sur ${status.dayCount} j`
+          }
+        />
+      </dl>
+      <p className="note mt-2">
+        {status.dayCount >= status.requiredDays
+          ? 'La cible suit ta dépense mesurée.'
+          : `Encore ${missing} journée${missing > 1 ? 's' : ''} avant que la cible bascule sur la mesure.`}
+      </p>
+
+      <p className="kicker kicker-quiet mt-6 mb-2 block">Mode d&apos;emploi</p>
+      <hr className="rule" />
+      <ol>
+        {STEPS.map((step, index) => (
+          <li key={step} className="mode-row items-baseline">
+            <span className="kicker flex-none">{index + 1}</span>
+            <span className="flex-1 text-[15px] leading-relaxed">{step}</span>
+          </li>
+        ))}
       </ol>
 
-      <p className="tabular mt-3 break-all rounded-field bg-base-300 p-3 text-xs">{endpoint}</p>
-
-      <div className="mt-4 border-t border-base-300 pt-3">
-        <h3 className="text-sm font-medium">État</h3>
-        {status.lastDay === null ? (
-          <p className="mt-1 text-sm text-ink-secondary">
-            Aucune journée reçue pour l&apos;instant.
-          </p>
-        ) : (
-          <dl className="mt-2 flex flex-col gap-2 text-sm">
-            <div className="flex items-baseline justify-between">
-              <dt className="text-ink-secondary">Dernière journée reçue</dt>
-              <dd className="tabular">
-                {formatRelativeJournalDate(status.lastDay)}
-                {status.lastKcal === null ? '' : ` · ${Math.round(status.lastKcal)} kcal`}
-              </dd>
-            </div>
-            <div className="flex items-baseline justify-between">
-              <dt className="text-ink-secondary">Moyenne retenue</dt>
-              <dd className="tabular">
-                {status.dayCount === 0
-                  ? '—'
-                  : `${Math.round(status.averageKcal)} kcal sur ${status.dayCount} j`}
-              </dd>
-            </div>
-          </dl>
-        )}
-
-        <p className="mt-2 text-xs text-ink-secondary">
-          {status.dayCount >= status.requiredDays
-            ? 'La cible suit ta dépense mesurée.'
-            : `Encore ${status.requiredDays - status.dayCount} journée${
-                status.requiredDays - status.dayCount > 1 ? 's' : ''
-              } avant que la cible bascule sur la mesure.`}
-        </p>
-      </div>
+      <p className="label mt-6 block">Adresse à appeler</p>
+      <p className="tabular field mt-2 h-auto break-all py-2 text-[13px]">{endpoint}</p>
 
       {token ? (
         <>
-          <p className="mt-3 text-sm">Ton jeton, à copier maintenant :</p>
-          <p className="tabular mt-1 break-all rounded-field bg-base-300 p-3 text-xs">{token}</p>
-          <p className="mt-2 text-xs text-ink-secondary">
+          <p className="label mt-6 block">Ton jeton, à copier maintenant</p>
+          <p className="tabular field mt-2 h-auto break-all py-2 text-[13px]">{token}</p>
+          <p className="note mt-2">
             Il ne sera plus affiché. En refabriquer un annule celui-ci.
           </p>
         </>
@@ -129,7 +141,7 @@ export function HealthBridge({
         type="button"
         onClick={generate}
         disabled={pending}
-        className="tap-target mt-3 w-full rounded-field border border-base-300 py-3 text-sm disabled:opacity-40"
+        className="action action-quiet mt-6"
       >
         {pending
           ? 'Fabrication…'
@@ -137,6 +149,6 @@ export function HealthBridge({
             ? 'Fabriquer un nouveau jeton'
             : 'Fabriquer un jeton'}
       </button>
-    </section>
+    </>
   );
 }

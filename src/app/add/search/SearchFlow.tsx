@@ -1,12 +1,16 @@
 'use client';
 
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { NavHeader } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
+import { SearchIcon } from '@/components/icons';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { MIN_QUERY_LENGTH, SEARCH_DEBOUNCE_MS, searchFoods } from '@/lib/client/search';
-import { formatKcal } from '@/lib/nutrition';
+import { formatGrams, formatKcal } from '@/lib/nutrition';
+import type { Meal } from '@/lib/meal';
 import type { SearchHit } from '@/lib/types';
 
 /**
@@ -22,7 +26,7 @@ type Step =
   | { name: 'quantity'; hit: SearchHit; shortcuts: QuantityShortcut[] };
 
 const SOURCE_LABEL: Record<SearchHit['kind'], string> = {
-  ciqual: 'CIQUAL',
+  ciqual: 'Ciqual',
   product: 'Scanné',
 };
 
@@ -81,7 +85,7 @@ export function SearchFlow() {
     });
   }
 
-  async function save(quantityG: number) {
+  async function save(quantityG: number, meal: Meal) {
     if (step.name !== 'quantity') {
       return;
     }
@@ -94,6 +98,7 @@ export function SearchFlow() {
       quantityG,
       sourceKind: step.hit.kind,
       sourceRef: step.hit.ref,
+      meal,
     });
 
     if (result.kind === 'created') {
@@ -109,15 +114,24 @@ export function SearchFlow() {
   if (step.name === 'quantity') {
     return (
       <>
+        <NavHeader
+          label="Quantité"
+          mode="back"
+          onDismiss={() => {
+            setError(null);
+            setStep({ name: 'search' });
+          }}
+        />
         <QuantityPad
           foodLabel={step.hit.name}
+          sourceLabel={SOURCE_LABEL[step.hit.kind]}
           per100g={step.hit.per100g}
           shortcuts={step.shortcuts}
           submitting={submitting}
           onSubmit={save}
         />
         {error ? (
-          <p role="alert" className="mt-4 text-sm text-error">
+          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
             {error}
           </p>
         ) : null}
@@ -126,57 +140,76 @@ export function SearchFlow() {
   }
 
   return (
-    <div className="flex flex-col gap-4">
-      <div>
-        <label htmlFor="search" className="text-sm text-ink-secondary">
-          Nom de l&apos;aliment
-        </label>
+    <>
+      <NavHeader label="Rechercher" href="/" />
+
+      <div className="field field-accent">
+        <SearchIcon className="h-[18px] w-[18px] flex-none" />
         <input
-          id="search"
           ref={inputRef}
           type="search"
           autoComplete="off"
+          aria-label="Nom de l'aliment"
+          placeholder="riz blanc"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          className="tap-target mt-2 w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 outline-none focus:border-primary"
+          className="w-full min-w-0 border-0 bg-transparent p-0 text-[19px] outline-none"
         />
       </div>
 
       {error ? (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
           {error}
         </p>
       ) : null}
 
-      {searching ? <p className="text-sm text-ink-secondary">Recherche…</p> : null}
+      {searching ? <p className="kicker kicker-quiet mt-6">Recherche…</p> : null}
 
       {hits !== null && hits.length === 0 && !searching ? (
-        <p className="text-sm text-ink-secondary">Aucun aliment trouvé.</p>
+        <p className="note mt-6">Aucun aliment trouvé.</p>
       ) : null}
 
       {hits !== null && hits.length > 0 ? (
-        <ul className="divide-y divide-base-300">
-          {hits.map((hit) => (
-            <li key={`${hit.kind}-${hit.ref}`}>
-              <button
-                type="button"
-                onClick={() => void pick(hit)}
-                className="tap-target flex w-full items-baseline justify-between gap-3 py-3 text-left"
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm">{hit.name}</span>
-                  <span className="tabular mt-0.5 block text-xs text-ink-secondary">
-                    {formatKcal(hit.per100g.kcal)} kcal / 100 g
+        <>
+          <p className="kicker kicker-quiet mt-6 mb-2">
+            {hits.length === 1 ? '1 résultat' : `${hits.length} résultats`}
+          </p>
+          <hr className="rule" />
+          <ul>
+            {hits.map((hit) => (
+              <li key={`${hit.kind}-${hit.ref}`}>
+                <button
+                  type="button"
+                  onClick={() => void pick(hit)}
+                  className="entry-row items-center"
+                >
+                  <span className="min-w-0 flex-1">
+                    <span className="entry-name block">{hit.name}</span>
+                    <span className="entry-meta mt-0.5 block">
+                      {formatKcal(hit.per100g.kcal)} kcal · {formatGrams(hit.per100g.proteinG)} P ·{' '}
+                      {formatGrams(hit.per100g.carbsG)} G · {formatGrams(hit.per100g.fatG)} L
+                    </span>
                   </span>
-                </span>
-                <span className="shrink-0 text-xs text-ink-secondary">
-                  {SOURCE_LABEL[hit.kind]}
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
+                  <span
+                    className={`kicker flex-none ${hit.kind === 'ciqual' ? 'kicker-quiet' : ''}`}
+                  >
+                    {SOURCE_LABEL[hit.kind]}
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
-    </div>
+
+      {hits !== null && !searching ? (
+        <p className="note mt-6 text-center">
+          Rien ne correspond ?{' '}
+          <Link href="/add/manual" className="link-accent">
+            Saisis les valeurs à la main
+          </Link>
+        </p>
+      ) : null}
+    </>
   );
 }

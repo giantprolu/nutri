@@ -9,10 +9,12 @@ export const metadata: Metadata = { title: 'NutriPerso' };
  */
 export default function UnlockPage() {
   return (
-    <div className="flex min-h-[70dvh] flex-col justify-center">
-      <h1 className="text-2xl font-semibold tracking-tight">NutriPerso</h1>
-      <p className="mt-1 mb-8 text-sm text-ink-secondary">
-        Connecte-toi, ou crée un compte.
+    <div className="flex min-h-[88dvh] flex-col justify-center pb-16">
+      <p className="kicker">Registre alimentaire</p>
+      <h1 className="figure mt-2 text-[46px]">NutriPerso</h1>
+      <hr className="rule mt-4 mb-3" />
+      <p className="note mb-8">
+        Chacun son compte, son journal et sa cible. Connecte-toi, ou crée le tien.
       </p>
       <UnlockForm />
     </div>

@@ -1,6 +1,30 @@
 import type { Metadata, Viewport } from 'next';
+import { cookies } from 'next/headers';
+import { Source_Sans_3 } from 'next/font/google';
 import { TabBar } from '@/components/TabBar';
+import {
+  THEME_COLORS,
+  THEME_COOKIE,
+  readAppearance,
+  themeAttribute,
+} from '@/lib/theme';
 import './globals.css';
+
+/**
+ * Source Sans 3, en deux coupes : la normale pour le texte courant, la demi-
+ * grasse pour les titres, les intitulés et les chiffres mis en scène.
+ *
+ * `next/font` la sert depuis notre propre domaine plutôt que depuis Google :
+ * aucune requête vers un tiers au chargement, donc pas de fuite d'adresse IP,
+ * et la substitution de police est calculée à la compilation, ce qui évite le
+ * décalage de mise en page à l'affichage.
+ */
+const sourceSans = Source_Sans_3({
+  subsets: ['latin'],
+  weight: ['400', '600'],
+  variable: '--font-source-sans',
+  display: 'swap',
+});
 
 export const metadata: Metadata = {
   title: 'NutriPerso',
@@ -15,22 +39,50 @@ export const metadata: Metadata = {
   formatDetection: { telephone: false },
 };
 
-export const viewport: Viewport = {
-  themeColor: '#12151A',
-  colorScheme: 'dark',
-  width: 'device-width',
-  initialScale: 1,
-  viewportFit: 'cover',
-};
+/**
+ * La barre d'état suit le thème rendu, et non un thème figé.
+ *
+ * En mode auto, deux déclarations sous condition de média laissent le système
+ * trancher. Avec un choix explicite, une seule couleur est émise : sans cela,
+ * une personne ayant forcé le thème clair sur un téléphone en mode sombre
+ * verrait une barre d'état noire au-dessus d'une page claire.
+ */
+export async function generateViewport(): Promise<Viewport> {
+  const store = await cookies();
+  const appearance = readAppearance(store.get(THEME_COOKIE)?.value);
 
-export default function RootLayout({
+  const themeColor =
+    appearance === 'auto'
+      ? [
+          { media: '(prefers-color-scheme: light)', color: THEME_COLORS.light },
+          { media: '(prefers-color-scheme: dark)', color: THEME_COLORS.dark },
+        ]
+      : THEME_COLORS[appearance];
+
+  return {
+    themeColor,
+    colorScheme: appearance === 'auto' ? 'light dark' : appearance,
+    width: 'device-width',
+    initialScale: 1,
+    viewportFit: 'cover',
+  };
+}
+
+export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
+  const store = await cookies();
+  const theme = themeAttribute(readAppearance(store.get(THEME_COOKIE)?.value));
+
   return (
-    <html lang="fr" data-theme="nutriperso">
-      <body className="min-h-dvh bg-base-100 text-base-content">
-        {/* pb-24 réserve la hauteur de la barre d'onglets fixe. */}
-        <main className="safe-top mx-auto w-full max-w-lg px-4 pb-24">{children}</main>
+    <html
+      lang="fr"
+      // Rien en mode auto : l'absence d'attribut rend la main au système.
+      {...(theme === undefined ? {} : { 'data-theme': theme })}
+      className={sourceSans.variable}
+    >
+      <body className="min-h-dvh">
+        <main className="safe-top mx-auto w-full max-w-lg px-4">{children}</main>
         <TabBar />
       </body>
     </html>

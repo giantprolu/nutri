@@ -2,14 +2,20 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ChevronDownIcon } from '@/components/icons';
+import { formatKcal } from '@/lib/nutrition';
 
 /**
  * Questionnaire corporel (FR-26).
  *
- * Le résultat s'affiche sur place, avec ses étapes intermédiaires. Montrer le
- * métabolisme de base et la dépense avant la cible n'est pas de la décoration :
- * un chiffre unique et sans provenance ne se conteste pas, or ces équations
- * sont des estimations de population qu'il faut corriger à l'usage.
+ * La cible passe en tête et non plus en pied : c'est la réponse à la question
+ * que l'utilisateur se pose, et elle doit être lisible sans faire défiler.
+ * Les mesures qui l'ont produite viennent ensuite, pour la corriger.
+ *
+ * Les étapes intermédiaires restent affichées. Montrer le métabolisme de base
+ * et la dépense avant la cible n'est pas de la décoration : un chiffre unique
+ * et sans provenance ne se conteste pas, or ces équations sont des estimations
+ * de population qu'il faut corriger à l'usage.
  */
 
 interface Target {
@@ -19,6 +25,7 @@ interface Target {
   targetKcal: number;
   floored: boolean;
   equation: string;
+  basis?: string;
   proteinG: number;
   carbsG: number;
   fatG: number;
@@ -49,9 +56,164 @@ const GOAL_LABELS: Record<string, string> = {
   gain: 'Prendre de la masse',
 };
 
-const FIELD =
-  'tap-target w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 text-base outline-none focus:border-primary';
-const LABEL = 'text-sm text-ink-secondary';
+/** Un champ numérique avec son unité, sur le filet du système. */
+function NumberField({
+  id,
+  label,
+  unit,
+  value,
+  onChange,
+  ...rest
+}: {
+  id: string;
+  label: string;
+  unit: string;
+  value: string;
+  onChange: (value: string) => void;
+  min?: number;
+  max?: number;
+  step?: string;
+  required?: boolean;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      <div className="field mt-1.5 items-baseline">
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="tabular w-full min-w-0 border-0 bg-transparent p-0 outline-none"
+          {...rest}
+        />
+        <span aria-hidden className="flex-none text-[14px] opacity-45">
+          {unit}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** Une liste déroulante, habillée du même filet que les champs. */
+function SelectField({
+  id,
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Record<string, string>;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="label">
+        {label}
+      </label>
+      <div className="field mt-1.5 relative">
+        <select
+          id={id}
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full min-w-0 appearance-none border-0 bg-transparent p-0 pr-6 text-[16px] outline-none"
+        >
+          {Object.entries(options).map(([key, text]) => (
+            <option key={key} value={key}>
+              {text}
+            </option>
+          ))}
+        </select>
+        <ChevronDownIcon className="pointer-events-none absolute right-0 h-4 w-4 opacity-40" />
+      </div>
+    </div>
+  );
+}
+
+function TargetBlock({ target }: { target: Target }) {
+  const sign = target.adjustmentKcal > 0 ? '+' : target.adjustmentKcal < 0 ? '−' : '';
+
+  return (
+    <>
+      <div className="aside-accent">
+        <p className="kicker kicker-quiet">Cible quotidienne</p>
+        <p className="figure mt-0.5 text-[54px]">
+          {formatKcal(target.targetKcal)}{' '}
+          <span className="text-[20px] opacity-50">kcal</span>
+        </p>
+        <p className="tabular note mt-1">
+          {target.proteinG} g P · {target.carbsG} g G · {target.fatG} g L
+        </p>
+      </div>
+
+      {target.floored ? (
+        <p role="alert" className="note mt-3" style={{ color: 'var(--color-danger)', opacity: 1 }}>
+          Le rythme demandé passerait sous ton métabolisme de base ou sous le minimum
+          acceptable. La cible a été relevée. Vise un rythme plus lent, ou bouge davantage.
+        </p>
+      ) : null}
+
+      <dl className="mt-4">
+        <Line label="Métabolisme de base" value={`${formatKcal(target.bmrKcal)} kcal`} />
+        <Line
+          label={
+            target.basis === 'measured' ? 'Dépense mesurée, 14 j' : "Dépense avec l'activité"
+          }
+          value={`${formatKcal(target.maintenanceKcal)} kcal`}
+        />
+        <Line
+          label="Écart pour l'objectif"
+          value={`${sign} ${formatKcal(Math.abs(target.adjustmentKcal))} kcal`}
+          accent
+          last
+        />
+      </dl>
+
+      <p className="note mt-3">
+        Calcul par{' '}
+        {target.equation === 'katch-mcardle'
+          ? 'Katch-McArdle, sur ta masse maigre'
+          : 'Mifflin-St Jeor'}
+        . Une estimation de population, pas une mesure : corrige-la après trois semaines selon
+        ton poids réel.
+      </p>
+    </>
+  );
+}
+
+function Line({
+  label,
+  value,
+  accent = false,
+  last = false,
+}: {
+  label: string;
+  value: string;
+  accent?: boolean;
+  last?: boolean;
+}) {
+  return (
+    <div
+      className="flex items-baseline justify-between gap-3 py-[11px]"
+      style={last ? undefined : { borderBottom: '1px solid var(--color-divider)' }}
+    >
+      <dt className="text-[15px] opacity-70">{label}</dt>
+      <dd
+        className="tabular text-[15px]"
+        style={accent ? { color: 'var(--color-accent-ink)' } : undefined}
+      >
+        {value}
+      </dd>
+    </div>
+  );
+}
 
 export function ProfileForm({
   initial,
@@ -119,160 +281,137 @@ export function ProfileForm({
 
   return (
     <>
-      <form onSubmit={submit} className="flex flex-col gap-4">
-        <fieldset className="flex flex-col gap-2">
-          <legend className={LABEL}>Sexe</legend>
-          <div className="flex gap-2">
-            {(['male', 'female'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => set('sex', value)}
-                aria-pressed={values.sex === value}
-                className={`tap-target flex-1 rounded-field border px-4 py-3 ${
-                  values.sex === value
-                    ? 'border-primary bg-primary text-primary-content'
-                    : 'border-base-300 bg-base-200'
-                }`}
-              >
-                {value === 'male' ? 'Homme' : 'Femme'}
-              </button>
-            ))}
-          </div>
-        </fieldset>
+      {target ? <TargetBlock target={target} /> : null}
 
-        <label htmlFor="birthDate" className={LABEL}>
-          Date de naissance
-        </label>
-        <input
-          id="birthDate"
-          type="date"
-          required
-          value={values.birthDate}
-          onChange={(event) => set('birthDate', event.target.value)}
-          className={FIELD}
-        />
+      <hr className="rule my-4" />
+      <p className="kicker kicker-quiet mb-3 block">Tes mesures</p>
 
-        <label htmlFor="heightCm" className={LABEL}>
-          Taille, en centimètres
-        </label>
-        <input
-          id="heightCm"
-          type="number"
-          inputMode="numeric"
-          min={120}
-          max={250}
-          required
-          value={values.heightCm}
-          onChange={(event) => set('heightCm', Number(event.target.value))}
-          className={FIELD}
-        />
-
-        <label htmlFor="weightKg" className={LABEL}>
-          Poids, en kilogrammes
-        </label>
-        <input
-          id="weightKg"
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          min={30}
-          max={300}
-          required
-          value={values.weightKg}
-          onChange={(event) => set('weightKg', Number(event.target.value))}
-          className={FIELD}
-        />
-
-        <label htmlFor="bodyFat" className={LABEL}>
-          Masse grasse en pourcentage, si connue
-        </label>
-        <input
-          id="bodyFat"
-          type="number"
-          inputMode="decimal"
-          step="0.1"
-          min={3}
-          max={70}
-          placeholder="Laisser vide si inconnue"
-          value={values.bodyFatPercent ?? ''}
-          onChange={(event) =>
-            set('bodyFatPercent', event.target.value === '' ? null : Number(event.target.value))
-          }
-          className={FIELD}
-        />
-        <p className="-mt-2 text-xs text-ink-secondary">
-          Renseignée, elle fait passer le calcul sur la masse maigre, plus fidèle si tu es
-          très musclé ou très gras.
-        </p>
-
-        <label htmlFor="activity" className={LABEL}>
-          Activité
-        </label>
-        <select
-          id="activity"
-          value={values.activity}
-          onChange={(event) => set('activity', event.target.value)}
-          className={FIELD}
-        >
-          {Object.entries(ACTIVITY_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
+      <form onSubmit={submit}>
+        <div className="segmented mb-4" role="group" aria-label="Sexe">
+          {(['male', 'female'] as const).map((value) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => set('sex', value)}
+              aria-pressed={values.sex === value}
+            >
+              {value === 'male' ? 'Homme' : 'Femme'}
+            </button>
           ))}
-        </select>
+        </div>
 
-        <label htmlFor="goal" className={LABEL}>
-          Objectif
-        </label>
-        <select
-          id="goal"
-          value={values.goal}
-          onChange={(event) => {
-            const goal = event.target.value as ProfileFormValues['goal'];
-            set('goal', goal);
-            // Le rythme précédent peut dépasser le plafond du nouvel objectif.
-            const cap = goal === 'lose' ? 1 : 0.5;
-            set('ratePercentPerWeek', goal === 'maintain' ? 0 : Math.min(values.ratePercentPerWeek || 0.5, cap));
-          }}
-          className={FIELD}
-        >
-          {Object.entries(GOAL_LABELS).map(([value, label]) => (
-            <option key={value} value={value}>
-              {label}
-            </option>
-          ))}
-        </select>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+          <NumberField
+            id="heightCm"
+            label="Taille"
+            unit="cm"
+            min={120}
+            max={250}
+            required
+            value={String(values.heightCm)}
+            onChange={(value) => set('heightCm', Number(value))}
+          />
+          <NumberField
+            id="weightKg"
+            label="Poids"
+            unit="kg"
+            step="0.1"
+            min={30}
+            max={300}
+            required
+            value={String(values.weightKg)}
+            onChange={(value) => set('weightKg', Number(value))}
+          />
+        </div>
+
+        <div className="mt-4">
+          <label htmlFor="birthDate" className="label">
+            Date de naissance
+          </label>
+          <input
+            id="birthDate"
+            type="date"
+            required
+            value={values.birthDate}
+            onChange={(event) => set('birthDate', event.target.value)}
+            className="tabular field mt-1.5"
+          />
+        </div>
+
+        <div className="mt-4">
+          <NumberField
+            id="bodyFat"
+            label="Masse grasse, si connue"
+            unit="%"
+            step="0.1"
+            min={3}
+            max={70}
+            placeholder="Laisser vide"
+            value={values.bodyFatPercent === null ? '' : String(values.bodyFatPercent)}
+            onChange={(value) =>
+              set('bodyFatPercent', value === '' ? null : Number(value))
+            }
+          />
+          <p className="note mt-1.5">
+            Renseignée, elle fait passer le calcul sur la masse maigre, plus fidèle si tu es
+            très musclé ou très gras.
+          </p>
+        </div>
+
+        <div className="mt-4">
+          <SelectField
+            id="activity"
+            label="Activité"
+            value={values.activity}
+            onChange={(value) => set('activity', value)}
+            options={ACTIVITY_LABELS}
+          />
+        </div>
+
+        <div className="mt-4">
+          <SelectField
+            id="goal"
+            label="Objectif"
+            value={values.goal}
+            onChange={(value) => {
+              const goal = value as ProfileFormValues['goal'];
+              set('goal', goal);
+              // Le rythme précédent peut dépasser le plafond du nouvel objectif.
+              const cap = goal === 'lose' ? 1 : 0.5;
+              set(
+                'ratePercentPerWeek',
+                goal === 'maintain' ? 0 : Math.min(values.ratePercentPerWeek || 0.5, cap),
+              );
+            }}
+            options={GOAL_LABELS}
+          />
+        </div>
 
         {rateDisabled ? null : (
-          <>
-            <label htmlFor="rate" className={LABEL}>
-              Rythme visé, en pourcentage du poids par semaine
-            </label>
-            <input
+          <div className="mt-4">
+            <NumberField
               id="rate"
-              type="number"
-              inputMode="decimal"
+              label="Rythme visé, par semaine"
+              unit="%"
               step="0.05"
               min={0.05}
               max={maxRate}
               required
-              value={values.ratePercentPerWeek}
-              onChange={(event) => set('ratePercentPerWeek', Number(event.target.value))}
-              className={FIELD}
+              value={String(values.ratePercentPerWeek)}
+              onChange={(value) => set('ratePercentPerWeek', Number(value))}
             />
-            <p className="-mt-2 text-xs text-ink-secondary">
+            <p className="note mt-1.5">
               Soit {Math.round(values.weightKg * values.ratePercentPerWeek * 10) / 1000} kg par
               semaine. Plafond de {maxRate} % :{' '}
               {values.goal === 'lose'
                 ? 'au-delà, la masse maigre part avec la graisse.'
                 : 'au-delà, le surplus se stocke sans servir.'}
             </p>
-          </>
+          </div>
         )}
 
         {error ? (
-          <p role="alert" className="text-sm text-error">
+          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
             {error}
           </p>
         ) : null}
@@ -280,59 +419,11 @@ export function ProfileForm({
         <button
           type="submit"
           disabled={pending || values.birthDate === ''}
-          className="tap-target mt-2 w-full rounded-field bg-primary py-3 font-medium text-primary-content disabled:opacity-40"
+          className="action mt-6"
         >
-          {pending ? 'Calcul…' : 'Calculer ma cible'}
+          {pending ? 'Calcul…' : target ? 'Recalculer ma cible' : 'Calculer ma cible'}
         </button>
       </form>
-
-      {target ? <TargetCard target={target} /> : null}
     </>
-  );
-}
-
-function TargetCard({ target }: { target: Target }) {
-  return (
-    <section className="mt-6 rounded-box border border-base-300 bg-base-200 p-4">
-      <h2 className="text-sm font-medium">Ta cible quotidienne</h2>
-      <p className="tabular mt-2 text-4xl font-semibold">{target.targetKcal} kcal</p>
-
-      {target.floored ? (
-        <p role="alert" className="mt-2 text-sm text-error">
-          Le rythme demandé passerait sous ton métabolisme de base ou sous le minimum
-          acceptable. La cible a été relevée. Vise un rythme plus lent, ou bouge davantage.
-        </p>
-      ) : null}
-
-      <dl className="mt-4 flex flex-col gap-2 text-sm">
-        <Row label="Métabolisme de base" value={`${target.bmrKcal} kcal`} />
-        <Row label="Dépense avec l'activité" value={`${target.maintenanceKcal} kcal`} />
-        <Row
-          label="Écart pour l'objectif"
-          value={`${target.adjustmentKcal > 0 ? '+' : ''}${target.adjustmentKcal} kcal`}
-        />
-        <Row label="Protéines" value={`${target.proteinG} g`} />
-        <Row label="Glucides" value={`${target.carbsG} g`} />
-        <Row label="Lipides" value={`${target.fatG} g`} />
-      </dl>
-
-      <p className="mt-4 text-xs text-ink-secondary">
-        Calcul par{' '}
-        {target.equation === 'katch-mcardle'
-          ? 'Katch-McArdle, sur ta masse maigre'
-          : 'Mifflin-St Jeor'}
-        . C&apos;est une estimation de population, pas une mesure. Corrige-la après trois
-        semaines selon l&apos;évolution réelle de ton poids.
-      </p>
-    </section>
-  );
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between">
-      <dt className="text-ink-secondary">{label}</dt>
-      <dd className="tabular">{value}</dd>
-    </div>
   );
 }

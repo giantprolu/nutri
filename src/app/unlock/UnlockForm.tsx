@@ -61,10 +61,11 @@ export function UnlockForm() {
 
   const isRegister = mode === 'register';
   const tooShort = isRegister && password.length > 0 && password.length < MIN_PASSWORD_LENGTH;
+  const remaining = MIN_PASSWORD_LENGTH - password.length;
 
   return (
-    <form onSubmit={submit} className="flex flex-col gap-4">
-      <label htmlFor="email" className="text-sm text-ink-secondary">
+    <form onSubmit={submit}>
+      <label htmlFor="email" className="label">
         Adresse
       </label>
       <input
@@ -77,10 +78,10 @@ export function UnlockForm() {
         required
         value={email}
         onChange={(event) => setEmail(event.target.value)}
-        className="tap-target w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 text-base outline-none focus:border-primary"
+        className="field mt-2 mb-6"
       />
 
-      <label htmlFor="password" className="text-sm text-ink-secondary">
+      <label htmlFor="password" className="label">
         Mot de passe
       </label>
       <input
@@ -94,21 +95,24 @@ export function UnlockForm() {
         onChange={(event) => setPassword(event.target.value)}
         aria-invalid={error !== null}
         aria-describedby={error ? 'password-error' : undefined}
-        className="tap-target w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 text-base outline-none focus:border-primary"
+        className="field field-accent mt-2 tracking-[0.3em]"
       />
 
       {isRegister ? (
-        <p className="text-sm text-ink-secondary">
+        <p className="note mt-2">
           {tooShort
-            ? `Encore ${MIN_PASSWORD_LENGTH - password.length} caractère${
-                MIN_PASSWORD_LENGTH - password.length > 1 ? 's' : ''
-              }.`
-            : `${MIN_PASSWORD_LENGTH} caractères minimum. Aucune récupération n'est possible : notez-le.`}
+            ? `Encore ${remaining} caractère${remaining > 1 ? 's' : ''}.`
+            : `${MIN_PASSWORD_LENGTH} caractères minimum. Aucune récupération n'est possible : note-le.`}
         </p>
       ) : null}
 
       {error ? (
-        <p id="password-error" role="alert" className="text-sm text-error">
+        <p
+          id="password-error"
+          role="alert"
+          className="mt-2 text-[15px]"
+          style={{ color: 'var(--color-danger)' }}
+        >
           {error}
         </p>
       ) : null}
@@ -116,18 +120,20 @@ export function UnlockForm() {
       <button
         type="submit"
         disabled={pending || email.length === 0 || password.length === 0 || tooShort}
-        className="tap-target mt-2 w-full rounded-field bg-primary py-3 font-medium text-primary-content disabled:opacity-40"
+        className="action mt-6"
       >
         {pending ? 'Vérification…' : isRegister ? 'Créer le compte' : 'Se connecter'}
       </button>
 
-      <button
-        type="button"
-        onClick={() => switchMode(isRegister ? 'login' : 'register')}
-        className="tap-target text-sm text-ink-secondary underline underline-offset-4"
-      >
-        {isRegister ? "J'ai déjà un compte" : 'Créer un compte'}
-      </button>
+      <div className="mt-2 flex min-h-12 items-center justify-center">
+        <button
+          type="button"
+          onClick={() => switchMode(isRegister ? 'login' : 'register')}
+          className="link-accent text-[15px]"
+        >
+          {isRegister ? "J'ai déjà un compte" : 'Créer un compte'}
+        </button>
+      </div>
     </form>
   );
 }

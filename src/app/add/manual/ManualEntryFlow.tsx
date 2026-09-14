@@ -2,10 +2,12 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { NavHeader } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { isValidNutrient } from '@/lib/nutrition';
+import type { Meal } from '@/lib/meal';
 import type { Macros } from '@/lib/types';
 
 /**
@@ -21,10 +23,10 @@ type Step =
   | { name: 'quantity'; foodLabel: string; per100g: Macros; shortcuts: QuantityShortcut[] };
 
 const FIELDS = [
-  { key: 'kcal', label: 'Énergie (kcal)' },
-  { key: 'proteinG', label: 'Protéines (g)' },
-  { key: 'carbsG', label: 'Glucides (g)' },
-  { key: 'fatG', label: 'Lipides (g)' },
+  { key: 'kcal', label: 'Énergie', unit: 'kcal' },
+  { key: 'proteinG', label: 'Protéines', unit: 'g' },
+  { key: 'carbsG', label: 'Glucides', unit: 'g' },
+  { key: 'fatG', label: 'Lipides', unit: 'g' },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]['key'];
@@ -72,7 +74,7 @@ export function ManualEntryFlow() {
     });
   }
 
-  async function save(quantityG: number) {
+  async function save(quantityG: number, meal: Meal) {
     if (step.name !== 'quantity') {
       return;
     }
@@ -85,6 +87,7 @@ export function ManualEntryFlow() {
       quantityG,
       sourceKind: 'manual',
       sourceRef: null,
+      meal,
     });
 
     if (result.kind === 'created') {
@@ -107,15 +110,24 @@ export function ManualEntryFlow() {
   if (step.name === 'quantity') {
     return (
       <>
+        <NavHeader
+          label="Quantité"
+          mode="back"
+          onDismiss={() => {
+            setError(null);
+            setStep({ name: 'food' });
+          }}
+        />
         <QuantityPad
           foodLabel={step.foodLabel}
+          sourceLabel="Saisie manuelle"
           per100g={step.per100g}
           shortcuts={step.shortcuts}
           submitting={submitting}
           onSubmit={save}
         />
         {error ? (
-          <p role="alert" className="mt-4 text-sm text-error">
+          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
             {error}
           </p>
         ) : null}
@@ -124,15 +136,22 @@ export function ManualEntryFlow() {
   }
 
   return (
-    <form
-      onSubmit={(event) => {
-        event.preventDefault();
-        void goToQuantity();
-      }}
-      className="flex flex-col gap-4"
-    >
-      <div>
-        <label htmlFor="foodLabel" className="text-sm text-ink-secondary">
+    <>
+      <NavHeader label="Saisie manuelle" href="/" />
+
+      <h1 className="display-sm mt-3">Une entrée ad hoc</h1>
+      <p className="note mt-2">
+        Rien n&apos;est ajouté aux tables de référence. Cette fiche ne vit que dans ton journal.
+      </p>
+      <hr className="rule mt-4 mb-6" />
+
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void goToQuantity();
+        }}
+      >
+        <label htmlFor="foodLabel" className="label">
           Désignation
         </label>
         <input
@@ -144,41 +163,44 @@ export function ManualEntryFlow() {
           autoComplete="off"
           value={foodLabel}
           onChange={(event) => setFoodLabel(event.target.value)}
-          className="tap-target mt-2 w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 outline-none focus:border-primary"
+          className="field mt-2 mb-6"
         />
-      </div>
 
-      <fieldset className="flex flex-col gap-4">
-        <legend className="text-sm text-ink-secondary">Valeurs pour 100 g</legend>
-        {FIELDS.map((field) => (
-          <div key={field.key}>
-            <label htmlFor={field.key} className="text-sm text-ink-secondary">
-              {field.label}
-            </label>
-            <input
-              id={field.key}
-              name={field.key}
-              type="text"
-              inputMode="decimal"
-              required
-              autoComplete="off"
-              value={values[field.key]}
-              onChange={(event) =>
-                setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
-              }
-              className="tabular tap-target mt-2 w-full rounded-field border border-base-300 bg-base-200 px-4 py-3 outline-none focus:border-primary"
-            />
+        <fieldset>
+          <legend className="kicker kicker-quiet">Valeurs pour 100 g</legend>
+          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4">
+            {FIELDS.map((field) => (
+              <div key={field.key}>
+                <label htmlFor={field.key} className="label">
+                  {field.label}
+                </label>
+                <div className="field mt-1.5 items-baseline">
+                  <input
+                    id={field.key}
+                    name={field.key}
+                    type="text"
+                    inputMode="decimal"
+                    required
+                    autoComplete="off"
+                    value={values[field.key]}
+                    onChange={(event) =>
+                      setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                    }
+                    className="tabular w-full min-w-0 border-0 bg-transparent p-0 outline-none"
+                  />
+                  <span aria-hidden className="flex-none text-[14px] opacity-45">
+                    {field.unit}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
-      </fieldset>
+        </fieldset>
 
-      <button
-        type="submit"
-        disabled={!foodReady}
-        className="tap-target mt-2 w-full rounded-field bg-primary py-3 font-medium text-primary-content disabled:opacity-40"
-      >
-        Continuer
-      </button>
-    </form>
+        <button type="submit" disabled={!foodReady} className="action mt-8">
+          Continuer vers la quantité
+        </button>
+      </form>
+    </>
   );
 }

@@ -1,11 +1,6 @@
-import { ScreenHeader } from '@/components/ScreenHeader';
 import { ScanFlow } from './ScanFlow';
 
+/** Le parcours porte ses propres en-têtes : ils changent à chaque étape. */
 export default function ScanPage() {
-  return (
-    <>
-      <ScreenHeader title="Scanner" subtitle="Présente le code-barres au cadre." />
-      <ScanFlow />
-    </>
-  );
+  return <ScanFlow />;
 }

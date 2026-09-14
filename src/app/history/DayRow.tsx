@@ -11,20 +11,18 @@ import { formatGrams, formatKcal } from '@/lib/nutrition';
 export function DayRow({ day }: { day: DayTotals }) {
   return (
     <li>
-      <Link
-        href={`/history/${day.entryDate}`}
-        className="tap-target flex items-baseline justify-between gap-3 py-3"
-      >
+      <Link href={`/history/${day.entryDate}`} className="entry-row items-center">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm capitalize">
+          <span className="block truncate text-[17px] font-semibold first-letter:uppercase">
             {formatRelativeJournalDate(day.entryDate)}
           </span>
-          <span className="tabular mt-0.5 block text-xs text-ink-secondary">
+          <span className="entry-meta mt-px block">
             {formatGrams(day.macros.proteinG)} P · {formatGrams(day.macros.carbsG)} G ·{' '}
             {formatGrams(day.macros.fatG)} L
           </span>
         </span>
-        <span className="tabular shrink-0 text-sm">{formatKcal(day.macros.kcal)} kcal</span>
+        <span className="figure flex-none text-[18px]">{formatKcal(day.macros.kcal)}</span>
+        <span className="entry-meta flex-none">kcal</span>
       </Link>
     </li>
   );

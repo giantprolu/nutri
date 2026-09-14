@@ -74,7 +74,11 @@ export function SwipeToDeleteRow({
           disabled={busy}
           aria-label={`Supprimer ${label}`}
           tabIndex={revealed ? 0 : -1}
-          className="tap-target w-[88px] bg-error text-sm font-medium text-error-content disabled:opacity-60"
+          className="tap-target w-[88px] text-[15px] font-semibold disabled:opacity-60"
+          style={{
+            background: 'var(--color-danger)',
+            color: 'var(--color-bg)',
+          }}
         >
           {busy ? '…' : 'Supprimer'}
         </button>
@@ -85,8 +89,13 @@ export function SwipeToDeleteRow({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        style={{ transform: `translateX(${offset}px)` }}
-        className="relative touch-pan-y bg-base-100 transition-transform duration-150 ease-out"
+        className="relative touch-pan-y transition-transform duration-150 ease-out"
+        style={{
+          transform: `translateX(${offset}px)`,
+          // Le fond est opaque : sans lui, le bouton de suppression resterait
+          // visible par transparence sous la ligne au repos.
+          background: 'var(--color-bg)',
+        }}
       >
         {children}
       </div>

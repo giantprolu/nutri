@@ -1,17 +1,23 @@
+import Link from 'next/link';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { EmptyState } from '@/components/EmptyState';
-import { TotalsCard } from '@/components/TotalsCard';
-import { EntryList } from '@/components/EntryList';
+import { DayDial } from '@/components/DayDial';
+import { MealJournal } from '@/components/MealJournal';
+import { PlusIcon } from '@/components/icons';
 import { journalForToday } from '@/server/services/entries';
 import { requireUserId } from '@/server/guard';
 import { targetFor } from '@/server/services/profile';
-import Link from 'next/link';
-import { formatRelativeJournalDate, todayInParis } from '@/lib/date';
+import { formatJournalDate, todayInParis } from '@/lib/date';
 
 // Le journal vient du serveur à chaque navigation : rien n'est mis en cache (AD-5).
 export const dynamic = 'force-dynamic';
 
-/** Journal du jour (FR-4). Composant serveur : aucun import client (AD-10). */
+/**
+ * Journal du jour (FR-4). Composant serveur : aucun import client (AD-10).
+ *
+ * Le surtitre porte la date en toutes lettres et non « Aujourd'hui » : cet
+ * écran ne montre jamais autre chose que le jour même, et le dire deux fois
+ * serait du remplissage. La date, elle, situe.
+ */
 export default async function JournalPage() {
   const today = todayInParis();
   const userId = await requireUserId();
@@ -22,29 +28,52 @@ export default async function JournalPage() {
 
   return (
     <>
-      <ScreenHeader title="Journal" subtitle={formatRelativeJournalDate(today)} />
-      <TotalsCard
+      <ScreenHeader title="Journal" kicker={formatJournalDate(today)} />
+
+      <DayDial
         macros={totals.macros}
-        {...(target === null ? {} : { targetKcal: target.targetKcal })}
+        target={
+          target === null
+            ? null
+            : {
+                targetKcal: target.targetKcal,
+                proteinG: target.proteinG,
+                carbsG: target.carbsG,
+                fatG: target.fatG,
+              }
+        }
       />
 
-      {target === null ? (
-        <Link
-          href="/profile"
-          className="tap-target mt-3 block rounded-box border border-base-300 bg-base-200 p-4 text-sm"
-        >
-          Calculer ma cible calorique
-          <span className="mt-1 block text-xs text-ink-secondary">
-            Quelques mesures, et le journal affichera ce qu&apos;il te reste.
-          </span>
-        </Link>
-      ) : null}
+      <hr className="rule" />
 
       {entries.length === 0 ? (
-        <EmptyState>Aucune entrée aujourd&apos;hui.</EmptyState>
+        <>
+          <div className="py-8 text-center">
+            <p className="mx-auto max-w-[24ch] text-[23px] leading-[1.35] font-semibold">
+              Le premier geste de la journée tient en trois touches.
+            </p>
+            <p className="note mx-auto mt-3 max-w-[30ch]">
+              Scanne un code-barres, cherche un nom, ou photographie l&apos;assiette.
+            </p>
+            <Link href="/add" className="action mx-auto mt-6 max-w-[220px]">
+              <PlusIcon className="h-4 w-4" />
+              Ajouter une entrée
+            </Link>
+          </div>
+          <hr className="rule" />
+        </>
       ) : (
-        <EntryList entries={entries} deletable className="mt-4" />
+        <MealJournal entries={entries} deletable />
       )}
+
+      {target === null ? (
+        <p className="note mt-4 text-center">
+          Pas de cible calorique définie.{' '}
+          <Link href="/profile" className="link-accent">
+            La calculer en une minute
+          </Link>
+        </p>
+      ) : null}
     </>
   );
 }

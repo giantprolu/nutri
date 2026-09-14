@@ -2,11 +2,18 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { useEffect, useState } from 'react';
+import { AddSheet } from './AddSheet';
+import { HistoryIcon, JournalIcon, PlusIcon, SettingsIcon } from './icons';
 
 /**
- * Barre d'onglets basse à quatre destinations (UX-DR-1).
- * Le bouton d'ajout est central, circulaire et déborde vers le haut : c'est le
- * seul élément de l'application qui porte une ombre (DESIGN.md, Élévation).
+ * Barre d'onglets basse, à trois destinations et une action.
+ *
+ * L'ajout n'est plus un bouton circulaire flottant mais une pilule inscrite
+ * dans la barre, entre l'historique et les réglages. Ce n'est pas seulement
+ * une autre forme : le bouton rond menait à un écran de choix, la pilule ouvre
+ * une feuille par-dessus le journal. Le choix du mode ne coûte plus une
+ * navigation, et l'application n'a plus d'ombre portée nulle part.
  */
 
 interface Destination {
@@ -15,107 +22,83 @@ interface Destination {
   icon: React.ReactNode;
 }
 
-function JournalIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <path d="M5 4h11a2 2 0 0 1 2 2v14H7a2 2 0 0 1-2-2V4Z" strokeLinejoin="round" />
-      <path d="M9 8h6M9 12h6M9 16h3" strokeLinecap="round" />
-    </svg>
-  );
-}
+const JOURNAL: Destination = {
+  href: '/',
+  label: 'Journal',
+  icon: <JournalIcon className="h-[21px] w-[21px]" />,
+};
 
-function HistoryIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <circle cx="12" cy="12" r="8" />
-      <path d="M12 8v4.5l3 1.8" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
+const HISTORY: Destination = {
+  href: '/history',
+  label: 'Historique',
+  icon: <HistoryIcon className="h-[21px] w-[21px]" />,
+};
 
-function SettingsIcon() {
-  return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} aria-hidden>
-      <circle cx="12" cy="12" r="3" />
-      <path
-        d="M12 3v2m0 14v2M4.2 7.5l1.7 1M18.1 15.5l1.7 1M4.2 16.5l1.7-1M18.1 8.5l1.7-1"
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
-
-const LEFT: Destination[] = [
-  { href: '/', label: 'Journal', icon: <JournalIcon /> },
-];
-
-const RIGHT: Destination[] = [
-  { href: '/history', label: 'Historique', icon: <HistoryIcon /> },
-  { href: '/settings', label: 'Réglages', icon: <SettingsIcon /> },
-];
+const SETTINGS: Destination = {
+  href: '/settings',
+  label: 'Réglages',
+  icon: <SettingsIcon className="h-[21px] w-[21px]" />,
+};
 
 function isActive(pathname: string, href: string): boolean {
   return href === '/' ? pathname === '/' : pathname.startsWith(href);
 }
 
 function TabLink({ destination, pathname }: { destination: Destination; pathname: string }) {
-  const active = isActive(pathname, destination.href);
   return (
     <Link
       href={destination.href}
-      aria-current={active ? 'page' : undefined}
-      className={`tap-target flex flex-1 flex-col items-center justify-center gap-1 py-2 ${
-        active ? 'text-base-content' : 'text-ink-secondary'
-      }`}
+      aria-current={isActive(pathname, destination.href) ? 'page' : undefined}
+      className="tab"
     >
-      <span className="h-6 w-6">{destination.icon}</span>
-      <span className="text-[11px] leading-none">{destination.label}</span>
+      <span aria-hidden>{destination.icon}</span>
+      <span>{destination.label}</span>
     </Link>
   );
 }
 
 export function TabBar() {
   const pathname = usePathname();
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // La feuille ne survit pas à la navigation qu'elle déclenche : sans cela,
+  // elle resterait ouverte par-dessus l'écran de scan.
+  useEffect(() => {
+    setSheetOpen(false);
+  }, [pathname]);
 
   // L'écran de déverrouillage n'a pas de navigation : rien n'est accessible.
-  if (pathname.startsWith('/unlock')) {
+  // Les chemins d'ajout non plus, qui portent leur propre sortie.
+  if (pathname.startsWith('/unlock') || pathname.startsWith('/add')) {
     return null;
   }
 
   return (
-    <nav
-      aria-label="Navigation principale"
-      className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-base-300 bg-base-200"
-    >
-      <div className="relative mx-auto flex h-16 max-w-lg items-stretch px-2">
-        {LEFT.map((destination) => (
-          <TabLink key={destination.href} destination={destination} pathname={pathname} />
-        ))}
+    <>
+      {/* Réserve la hauteur de la barre fixe, zone sûre comprise. */}
+      <div aria-hidden className="tabbar-spacer" />
 
-        <div className="flex w-20 shrink-0 items-start justify-center">
-          <Link
-            href="/add"
-            aria-label="Ajouter un aliment"
-            className="-mt-6 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-content shadow-lg shadow-black/40"
+      <nav aria-label="Navigation principale" className="tabbar">
+        <div className="mx-auto flex h-[62px] max-w-lg items-center gap-2 px-3">
+          <TabLink destination={JOURNAL} pathname={pathname} />
+          <TabLink destination={HISTORY} pathname={pathname} />
+
+          <button
+            type="button"
+            onClick={() => setSheetOpen(true)}
+            aria-haspopup="dialog"
+            aria-expanded={sheetOpen}
+            className="add-pill"
           >
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={2.4}
-              strokeLinecap="round"
-              className="h-7 w-7"
-              aria-hidden
-            >
-              <path d="M12 5v14M5 12h14" />
-            </svg>
-          </Link>
-        </div>
+            <PlusIcon className="h-4 w-4" />
+            Ajouter
+          </button>
 
-        {RIGHT.map((destination) => (
-          <TabLink key={destination.href} destination={destination} pathname={pathname} />
-        ))}
-      </div>
-    </nav>
+          <TabLink destination={SETTINGS} pathname={pathname} />
+        </div>
+      </nav>
+
+      <AddSheet open={sheetOpen} onClose={() => setSheetOpen(false)} />
+    </>
   );
 }

@@ -2,7 +2,9 @@ import { ScreenHeader } from '@/components/ScreenHeader';
 import { EmptyState } from '@/components/EmptyState';
 import { historyPage } from '@/server/services/entries';
 import { requireUserId } from '@/server/guard';
+import { formatMonthYear } from '@/lib/date';
 import { DayRow } from './DayRow';
+import { Sparkline } from './Sparkline';
 import { LoadMore } from './LoadMore';
 
 export const dynamic = 'force-dynamic';
@@ -27,10 +29,21 @@ export default async function HistoryPage() {
     );
   }
 
+  // Le surtitre porte le mois du jour le plus récent : c'est là que la liste
+  // commence, et non le mois courant, qui peut n'avoir aucune entrée.
+  const firstDay = days[0];
+
   return (
     <>
-      <ScreenHeader title="Historique" />
-      <ul className="divide-y divide-base-300">
+      <ScreenHeader
+        title="Historique"
+        {...(firstDay ? { kicker: formatMonthYear(firstDay.entryDate) } : {})}
+      />
+
+      <Sparkline days={days} />
+      <hr className="rule" />
+
+      <ul>
         {days.map((day) => (
           <DayRow key={day.entryDate} day={day} />
         ))}

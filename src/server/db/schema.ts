@@ -2,6 +2,7 @@ import {
   bigint,
   bigserial,
   boolean,
+  check,
   date,
   index,
   integer,
@@ -11,6 +12,7 @@ import {
   timestamp,
   unique,
 } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 /**
  * Schéma Drizzle. `snake_case` en base, `camelCase` en TypeScript
@@ -123,6 +125,16 @@ export const entries = pgTable(
       .references(() => users.id, { onDelete: 'cascade' }),
     /** Date du journal, déterminée en Europe/Paris (AD-11). */
     entryDate: date('entry_date').notNull(),
+    /**
+     * Repas auquel l'entrée est rattachée : `breakfast`, `lunch`, `dinner`
+     * ou `snack`. Le journal se lit par repas et non à plat (DESIGN.md).
+     *
+     * Choisi par l'utilisateur à l'enregistrement, avec pour proposition le
+     * repas correspondant à l'heure. C'est bien une colonne et non une
+     * déduction à l'affichage : une entrée saisie le soir pour le déjeuner
+     * oublié doit tomber au déjeuner, et l'heure de saisie ne le sait pas.
+     */
+    meal: text('meal').notNull().default('lunch'),
     /** Désignation figée au moment de l'enregistrement (AD-1). */
     foodLabel: text('food_label').notNull(),
     quantityG: nutrient('quantity_g').notNull(),
@@ -140,6 +152,16 @@ export const entries = pgTable(
     // L'utilisateur est en tête de chaque index : toute lecture du journal
     // commence par lui, aucune requête ne balaie les entrées des autres.
     index('entries_user_date_idx').on(table.userId, table.entryDate),
+    // Le journal d'une date se lit groupé par repas : l'index porte les trois
+    // colonnes pour que le tri ne repasse pas par un balayage.
+    index('entries_user_date_meal_idx').on(table.userId, table.entryDate, table.meal),
+    // Le repas est contraint en base et pas seulement à la frontière HTTP :
+    // les entrées sont des données de santé, et une valeur hors liste rendrait
+    // un repas entier invisible au regroupement du journal.
+    check(
+      'entries_meal_check',
+      sql`${table.meal} in ('breakfast', 'lunch', 'dinner', 'snack')`,
+    ),
     // Sert les raccourcis de quantité : dernières quantités pour un aliment (FR-9).
     index('entries_user_source_idx').on(
       table.userId,

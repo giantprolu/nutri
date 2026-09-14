@@ -6,8 +6,9 @@
 export default function OfflinePage() {
   return (
     <div className="flex min-h-[70dvh] flex-col justify-center text-center">
-      <h1 className="text-xl font-semibold">Hors ligne</h1>
-      <p className="mt-2 text-sm text-ink-secondary">
+      <p className="kicker">NutriPerso</p>
+      <h1 className="display mt-1">Hors ligne</h1>
+      <p className="note mx-auto mt-3 max-w-[28ch]">
         Le journal vient du serveur. Reconnecte-toi pour le consulter.
       </p>
     </div>

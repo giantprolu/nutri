@@ -1,14 +1,6 @@
-import { ScreenHeader } from '@/components/ScreenHeader';
 import { PhotoFlow } from './PhotoFlow';
 
+/** Le parcours porte ses propres en-têtes : ils changent à chaque étape. */
 export default function PhotoPage() {
-  return (
-    <>
-      <ScreenHeader
-        title="Photo"
-        subtitle="Le modèle nomme les aliments, il n’estime aucune quantité."
-      />
-      <PhotoFlow />
-    </>
-  );
+  return <PhotoFlow />;
 }

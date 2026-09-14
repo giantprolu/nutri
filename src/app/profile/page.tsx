@@ -1,4 +1,4 @@
-import { ScreenHeader } from '@/components/ScreenHeader';
+import { NavHeader } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
 import { profileFor, targetFor } from '@/server/services/profile';
 import { ProfileForm, type ProfileFormValues } from './ProfileForm';
@@ -29,10 +29,13 @@ export default async function ProfilePage() {
 
   return (
     <>
-      <ScreenHeader
-        title="Mon objectif"
-        subtitle={profile ? 'Mets à jour tes mesures' : 'Quelques mesures pour calculer ta cible'}
-      />
+      <NavHeader label="Réglages" href="/settings" mode="back" />
+      <h1 className="display-sm mt-3 mb-4">Mon objectif</h1>
+      {target === null ? (
+        <p className="note -mt-2 mb-4">
+          Quelques mesures, et le journal affichera ce qu&apos;il te reste.
+        </p>
+      ) : null}
       <ProfileForm initial={initial} initialTarget={target} />
     </>
   );

@@ -1,7 +1,8 @@
 import 'server-only';
 import type { DayTotals, Entry, Macros, SourceKind } from '@/lib/types';
 import { isValidQuantity, scaleMacros } from '@/lib/nutrition';
-import { todayInParis } from '@/lib/date';
+import { hourInParis, todayInParis } from '@/lib/date';
+import { type Meal, mealForHour } from '@/lib/meal';
 import {
   deleteEntry,
   insertEntry,
@@ -48,6 +49,12 @@ export interface RecordEntryInput {
   sourceKind: SourceKind;
   sourceRef: string | null;
   entryDate?: string;
+  /**
+   * Repas de rattachement. Absent, il est déduit de l'heure : le raccourci iOS
+   * et les anciens clients n'en envoient pas, et refuser leur écriture pour
+   * cette seule raison perdrait la mesure.
+   */
+  meal?: Meal;
 }
 
 export type RecordEntryResult =
@@ -63,6 +70,7 @@ export async function recordEntry(input: RecordEntryInput): Promise<RecordEntryR
   const entry = await insertEntry({
     userId: input.userId,
     entryDate: input.entryDate ?? todayInParis(),
+    meal: input.meal ?? mealForHour(hourInParis()),
     foodLabel: input.foodLabel,
     quantityG: input.quantityG,
     macros: scaleMacros(input.per100g, input.quantityG),

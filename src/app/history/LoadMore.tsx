@@ -37,7 +37,7 @@ export function LoadMore({ initialOffset }: { initialOffset: number }) {
   return (
     <>
       {days.length > 0 ? (
-        <ul className="divide-y divide-base-300 border-t border-base-300">
+        <ul>
           {days.map((day) => (
             <DayRow key={day.entryDate} day={day} />
           ))}
@@ -45,7 +45,7 @@ export function LoadMore({ initialOffset }: { initialOffset: number }) {
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-3 text-sm text-error">
+        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
           {error}
         </p>
       ) : null}
@@ -55,7 +55,7 @@ export function LoadMore({ initialOffset }: { initialOffset: number }) {
           type="button"
           onClick={() => void loadMore()}
           disabled={loading}
-          className="tap-target mt-4 w-full rounded-field border border-base-300 py-3 text-sm font-medium disabled:opacity-40"
+          className="action action-quiet mt-4"
         >
           {loading ? 'Chargement…' : 'Jours précédents'}
         </button>

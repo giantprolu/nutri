@@ -3,7 +3,9 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
+import { NavHeader } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
+import { CameraIcon, SearchIcon } from '@/components/icons';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { prepareImage } from '@/lib/client/image';
@@ -11,6 +13,7 @@ import { recognizePhoto } from '@/lib/client/recognize';
 import { MIN_QUERY_LENGTH, SEARCH_DEBOUNCE_MS, searchFoods } from '@/lib/client/search';
 import { fetchCandidates, rememberAlias, type CandidatesForName } from '@/lib/client/aliases';
 import { formatKcal } from '@/lib/nutrition';
+import type { Meal } from '@/lib/meal';
 import type { Candidate, SearchHit } from '@/lib/types';
 
 /**
@@ -23,9 +26,7 @@ import type { Candidate, SearchHit } from '@/lib/types';
  * Règle de conception de cet écran : l'utilisateur n'est jamais laissé sans
  * recours. Le modèle se trompe de nom, ne voit rien, ou n'est pas joignable —
  * dans les trois cas la photo reste affichée et la recherche manuelle est à
- * portée de doigt, sur place. La version précédente renvoyait vers /add/search,
- * ce qui perdait la photo, les autres aliments déjà reconnus, et obligeait à
- * tout recommencer pour un seul nom mal deviné.
+ * portée de doigt, sur place.
  */
 
 type Step =
@@ -44,6 +45,11 @@ type Step =
       origin: CandidatesForName;
       shortcuts: QuantityShortcut[];
     };
+
+const SOURCE_LABEL: Record<Candidate['kind'], string> = {
+  ciqual: 'Ciqual',
+  product: 'Scanné',
+};
 
 /**
  * Le modèle nomme parfois deux fois le même ingrédient, vu à deux endroits de
@@ -74,18 +80,12 @@ function CandidateRow({
 }) {
   return (
     <li>
-      <button
-        type="button"
-        onClick={onPick}
-        className="tap-target flex w-full items-baseline justify-between gap-3 py-3 text-left"
-      >
+      <button type="button" onClick={onPick} className="entry-row items-center">
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm">{name}</span>
-          <span className="tabular mt-0.5 block text-xs text-ink-secondary">
-            {formatKcal(kcal)} kcal / 100 g
-          </span>
+          <span className="entry-name block">{name}</span>
+          <span className="entry-meta mt-0.5 block">{formatKcal(kcal)} kcal / 100 g</span>
         </span>
-        {badge ? <span className="shrink-0 text-xs text-ink-secondary">{badge}</span> : null}
+        {badge ? <span className="kicker flex-none">{badge}</span> : null}
       </button>
     </li>
   );
@@ -142,21 +142,26 @@ function NameCard({
   }, [term, searching]);
 
   return (
-    <section className="rounded-box border border-base-300 bg-base-200 p-4">
-      <h2 className="text-sm font-medium">{entry.name}</h2>
+    <section className="pt-4">
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="display-sm text-[23px]">«&nbsp;{entry.name}&nbsp;»</h2>
+        <button type="button" onClick={onSkip} className="kicker kicker-quiet tap-target flex-none">
+          Ignorer
+        </button>
+      </div>
 
       {empty ? (
-        <p className="mt-1 text-xs text-ink-secondary">
+        <p className="note mt-2">
           Aucun aliment correspondant. Cherche-le sous un autre nom.
         </p>
       ) : (
-        <ul className="mt-2 divide-y divide-base-300">
+        <ul className="mt-2">
           {entry.candidates.map((candidate) => (
             <CandidateRow
               key={`${candidate.kind}-${candidate.ref}`}
               name={candidate.name}
               kcal={candidate.per100g.kcal}
-              {...(candidate.fromAlias ? { badge: 'déjà choisi' } : {})}
+              {...(candidate.fromAlias ? { badge: 'Déjà choisi' } : {})}
               onPick={() => onPick(entry.name, candidate)}
             />
           ))}
@@ -165,33 +170,36 @@ function NameCard({
 
       {searching ? (
         <div className="mt-3">
-          <label htmlFor={fieldId} className="text-xs text-ink-secondary">
+          <label htmlFor={fieldId} className="label">
             Chercher un autre nom
           </label>
-          <input
-            id={fieldId}
-            type="search"
-            autoComplete="off"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-            placeholder="Ex. : riz, poulet, pain complet"
-            className="tap-target mt-1 w-full rounded-field border border-base-300 bg-base-100 px-3 py-2 text-sm outline-none focus:border-primary"
-          />
+          <div className="field field-accent mt-1.5 text-[17px]">
+            <SearchIcon className="h-[17px] w-[17px] flex-none" />
+            <input
+              id={fieldId}
+              type="search"
+              autoComplete="off"
+              value={term}
+              onChange={(event) => setTerm(event.target.value)}
+              placeholder="Ex. : riz, poulet, pain complet"
+              className="w-full min-w-0 border-0 bg-transparent p-0 text-[17px] outline-none"
+            />
+          </div>
 
-          {pendingSearch ? <p className="mt-2 text-xs text-ink-secondary">Recherche…</p> : null}
+          {pendingSearch ? <p className="kicker kicker-quiet mt-2">Recherche…</p> : null}
 
           {searchError ? (
-            <p role="alert" className="mt-2 text-xs text-error">
+            <p role="alert" className="note mt-2" style={{ color: 'var(--color-danger)' }}>
               Recherche indisponible.
             </p>
           ) : null}
 
           {hits !== null && hits.length === 0 && !pendingSearch && !searchError ? (
-            <p className="mt-2 text-xs text-ink-secondary">Aucun aliment trouvé.</p>
+            <p className="note mt-2">Aucun aliment trouvé.</p>
           ) : null}
 
           {hits !== null && hits.length > 0 ? (
-            <ul className="mt-1 divide-y divide-base-300">
+            <ul className="mt-1">
               {hits.map((hit) => (
                 <CandidateRow
                   key={`hit-${hit.kind}-${hit.ref}`}
@@ -204,22 +212,12 @@ function NameCard({
           ) : null}
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setSearching(true)}
-          className="tap-target mt-2 inline-flex items-center text-sm text-primary"
-        >
-          Aucun ne convient, chercher moi-même
-        </button>
+        <p className="note mt-3">
+          <button type="button" onClick={() => setSearching(true)} className="link-accent">
+            Aucun ne convient, chercher moi-même
+          </button>
+        </p>
       )}
-
-      <button
-        type="button"
-        onClick={onSkip}
-        className="tap-target mt-2 w-full rounded-field border border-base-300 py-3 text-sm"
-      >
-        Ignorer
-      </button>
     </section>
   );
 }
@@ -241,7 +239,7 @@ export function PhotoFlow() {
           : outcome.kind === 'bad_format'
             ? 'Réponse du modèle inexploitable.'
             : outcome.kind === 'quota_exceeded'
-              ? 'Le quota du modèle est épuisé. Rien à réessayer tant que le compte Mistral n’a pas de crédit.'
+              ? 'Le quota du modèle est épuisé. Rien à réessayer tant que le compte n’a pas de crédit.'
               : 'Reconnaissance indisponible.';
       setStep({
         name: 'failed',
@@ -331,11 +329,7 @@ export function PhotoFlow() {
     });
   }
 
-  function finishOrContinue(
-    pending: CandidatesForName[],
-    preview: string,
-    done: number,
-  ) {
+  function finishOrContinue(pending: CandidatesForName[], preview: string, done: number) {
     if (pending.length === 0) {
       // Tous les noms traités ou ignorés : retour au journal (UX-DR-7).
       router.replace('/');
@@ -345,7 +339,7 @@ export function PhotoFlow() {
     setStep({ name: 'resolving', preview, pending, done });
   }
 
-  async function save(quantityG: number) {
+  async function save(quantityG: number, meal: Meal) {
     if (step.name !== 'quantity') {
       return;
     }
@@ -358,6 +352,7 @@ export function PhotoFlow() {
       quantityG,
       sourceKind: step.candidate.kind,
       sourceRef: step.candidate.ref,
+      meal,
     });
 
     if (result.kind !== 'created') {
@@ -375,16 +370,18 @@ export function PhotoFlow() {
 
   if (step.name === 'capture') {
     return (
-      <div className="flex flex-col gap-4">
+      <>
+        <NavHeader label="Photo" href="/" />
         <label
           htmlFor="photo"
-          className="tap-target flex min-h-32 cursor-pointer flex-col items-center justify-center rounded-box border border-dashed border-base-300 bg-base-200 p-6 text-center"
+          className="action mt-6 min-h-32 cursor-pointer flex-col gap-2 py-6 text-center"
         >
-          <span className="text-sm font-medium">Prendre une photo du repas</span>
-          <span className="mt-1 text-xs text-ink-secondary">
-            Le modèle nomme les aliments. Tu choisis et tu pèses.
-          </span>
+          <CameraIcon className="h-6 w-6" />
+          Prendre une photo du repas
         </label>
+        <p className="note mt-3 text-center">
+          Le modèle nomme les aliments. Tu choisis et tu pèses.
+        </p>
         <input
           id="photo"
           type="file"
@@ -399,47 +396,65 @@ export function PhotoFlow() {
           }}
         />
         {error ? (
-          <p role="alert" className="text-sm text-error">
+          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
             {error}
           </p>
         ) : null}
-      </div>
+      </>
+    );
+  }
+
+  if (step.name === 'quantity') {
+    return (
+      <>
+        <NavHeader label="Quantité" mode="back" onDismiss={cancelQuantity} />
+        <QuantityPad
+          foodLabel={step.candidate.name}
+          sourceLabel={SOURCE_LABEL[step.candidate.kind]}
+          per100g={step.candidate.per100g}
+          shortcuts={step.shortcuts}
+          submitting={submitting}
+          onSubmit={save}
+        />
+        {error ? (
+          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
+            {error}
+          </p>
+        ) : null}
+      </>
     );
   }
 
   const remaining = step.name === 'resolving' ? step.pending.length : 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <>
+      <NavHeader label="Photo" href="/" />
+
       {/* La photo reste affichée pendant tout le parcours, y compris en échec. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={step.preview}
         alt="Photo du repas"
-        className="max-h-56 w-full max-w-full rounded-box object-cover"
+        className="plate mt-2 max-h-56 w-full object-cover"
       />
 
-      {step.name === 'working' ? (
-        <p className="text-sm text-ink-secondary">{step.label}</p>
-      ) : null}
+      {step.name === 'working' ? <p className="note mt-3">{step.label}</p> : null}
 
       {step.name === 'failed' ? (
-        <div role="alert" className="rounded-box border border-base-300 bg-base-200 p-4">
-          <p className="text-sm">{step.message}</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+        <div role="alert" className="pt-4">
+          <p className="text-[16px]">{step.message}</p>
+          <div className="mt-4 flex flex-col gap-2">
             {step.retryable ? (
               <button
                 type="button"
                 onClick={() => void analyze(step.preview)}
-                className="tap-target rounded-field border border-base-300 px-4 py-2 text-sm"
+                className="action action-quiet"
               >
                 Réessayer
               </button>
             ) : null}
-            <Link
-              href="/add/search"
-              className="tap-target rounded-field bg-primary px-4 py-2 text-sm text-primary-content"
-            >
+            <Link href="/add/search" className="action">
               Chercher par nom
             </Link>
           </div>
@@ -448,14 +463,18 @@ export function PhotoFlow() {
 
       {step.name === 'resolving' ? (
         <>
-          <p className="text-sm text-ink-secondary">
-            {remaining === 1 ? 'Un aliment à traiter.' : `${remaining} aliments à traiter.`}
-            {step.done > 0
-              ? step.done === 1
-                ? ' Un déjà enregistré.'
-                : ` ${step.done} déjà enregistrés.`
-              : null}
+          <p className="note mt-3">
+            <span className="tabular">{remaining}</span>
+            {remaining === 1 ? ' aliment à traiter' : ' aliments à traiter'}
+            {step.done > 0 ? (
+              <>
+                {' · '}
+                <span className="tabular">{step.done}</span>
+                {step.done === 1 ? ' déjà enregistré' : ' déjà enregistrés'}
+              </>
+            ) : null}
           </p>
+          <hr className="rule mt-4" />
           {step.pending.map((entry) => (
             <NameCard
               key={entry.name}
@@ -467,31 +486,11 @@ export function PhotoFlow() {
         </>
       ) : null}
 
-      {step.name === 'quantity' ? (
-        <>
-          <QuantityPad
-            foodLabel={step.candidate.name}
-            per100g={step.candidate.per100g}
-            shortcuts={step.shortcuts}
-            submitting={submitting}
-            onSubmit={save}
-          />
-          <button
-            type="button"
-            onClick={cancelQuantity}
-            disabled={submitting}
-            className="tap-target w-full rounded-field border border-base-300 py-3 text-sm disabled:opacity-40"
-          >
-            Changer d&apos;aliment
-          </button>
-        </>
-      ) : null}
-
       {error ? (
-        <p role="alert" className="text-sm text-error">
+        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
           {error}
         </p>
       ) : null}
-    </div>
+    </>
   );
 }

@@ -20,6 +20,23 @@ export function todayInParis(now: Date = new Date()): string {
   return dateFormatter.format(now);
 }
 
+const hourFormatter = new Intl.DateTimeFormat('en-GB', {
+  timeZone: JOURNAL_TIME_ZONE,
+  hour: '2-digit',
+  hour12: false,
+});
+
+/**
+ * L'heure courante dans le fuseau du journal, de 0 à 23.
+ *
+ * Elle vit ici et non dans `@/lib/meal` pour la même raison que la date : les
+ * fonctions Vercel tournent en UTC, et c'est le seul module autorisé à savoir
+ * dans quel fuseau se lit une journée (AD-11).
+ */
+export function hourInParis(now: Date = new Date()): number {
+  return Number(hourFormatter.format(now));
+}
+
 /** Vrai si la chaîne est une date `YYYY-MM-DD` réelle. */
 export function isJournalDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -55,6 +72,17 @@ export function formatRelativeJournalDate(
     return 'Hier';
   }
   return formatJournalDate(isoDate);
+}
+
+const monthFormatter = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'UTC',
+  month: 'long',
+  year: 'numeric',
+});
+
+/** « septembre 2026 », pour le surtitre de l'historique. */
+export function formatMonthYear(isoDate: string): string {
+  return monthFormatter.format(new Date(`${isoDate}T00:00:00Z`));
 }
 
 /**

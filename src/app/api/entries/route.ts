@@ -4,6 +4,7 @@ import { currentUserId } from '@/server/guard';
 import { recordEntry } from '@/server/services/entries';
 import { MAX_QUANTITY_G } from '@/lib/nutrition';
 import { isJournalDate } from '@/lib/date';
+import { MEALS } from '@/lib/meal';
 
 export const runtime = 'nodejs';
 
@@ -22,6 +23,9 @@ const createSchema = z.object({
   sourceKind: z.enum(['ciqual', 'product', 'manual']),
   sourceRef: z.string().trim().min(1).max(64).nullable(),
   entryDate: z.string().refine(isJournalDate).optional(),
+  // Facultatif : le service retombe sur l'heure quand le client n'en envoie
+  // pas, ce qui est le cas du raccourci iOS.
+  meal: z.enum(MEALS).optional(),
 });
 
 /** Enregistre une entrée avec ses macros figées (FR-10, FR-25). */

@@ -1,11 +1,6 @@
-import { ScreenHeader } from '@/components/ScreenHeader';
 import { SearchFlow } from './SearchFlow';
 
+/** Le parcours porte ses propres en-têtes : ils changent à chaque étape. */
 export default function SearchPage() {
-  return (
-    <>
-      <ScreenHeader title="Rechercher" subtitle="Les accents ne comptent pas." />
-      <SearchFlow />
-    </>
-  );
+  return <SearchFlow />;
 }
