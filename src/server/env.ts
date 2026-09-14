@@ -14,6 +14,14 @@ const schema = z.object({
   DATABASE_URL: z.string().min(1).optional(),
   SESSION_SECRET: z.string().min(16).optional(),
   MISTRAL_API_KEY: z.string().min(1).optional(),
+  // Fournisseur du modele de vision. Mistral par defaut, pour ne rien changer
+  // aux installations existantes ; « gemini » bascule sur l'API Google.
+  VISION_PROVIDER: z.enum(['mistral', 'gemini']).default('mistral'),
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  // gemini-2.5-flash repond 404 aux comptes crees recemment, Google renvoyant
+  // explicitement vers gemini-3.6-flash (verifie le 14/09/2026). Les modeles
+  // les plus recents, eux, repondent souvent 503 sur le palier gratuit.
+  GEMINI_MODEL: z.string().min(1).default('gemini-3.6-flash'),
   // pixtral-12b-2409 a disparu du catalogue Mistral, vérifié le 11/09/2026
   // sur /v1/models. mistral-small-latest reste le modèle de vision le moins
   // cher, mais il nomme grossièrement une assiette composée : le défaut est
@@ -77,6 +85,15 @@ export const env = {
   get mistralModel(): string {
     return read().MISTRAL_MODEL;
   },
+  get visionProvider(): 'mistral' | 'gemini' {
+    return read().VISION_PROVIDER;
+  },
+  get geminiApiKey(): string | undefined {
+    return read().GEMINI_API_KEY;
+  },
+  get geminiModel(): string {
+    return read().GEMINI_MODEL;
+  },
   get offUserAgent(): string {
     return read().OFF_USER_AGENT;
   },
@@ -91,7 +108,7 @@ export const env = {
  * (B-2, B-3 de BLOCKERS.md), la requête qui en a besoin échoue explicitement.
  */
 export function requireEnv(
-  name: 'DATABASE_URL' | 'SESSION_SECRET' | 'MISTRAL_API_KEY',
+  name: 'DATABASE_URL' | 'SESSION_SECRET' | 'MISTRAL_API_KEY' | 'GEMINI_API_KEY',
 ): string {
   const value = read()[name];
   if (!value) {

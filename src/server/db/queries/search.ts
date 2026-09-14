@@ -62,6 +62,12 @@ const DEFAULT_LIMIT = 20;
  * Mots outils écartés du score. Sans eux, « blanc de poulet » serait jugé sur
  * trois mots dont un que la base ne porte jamais, et le candidat parfait
  * plafonnerait aux deux tiers.
+ *
+ * La liste ne contient que des mots grammaticaux. Les qualificatifs de taille
+ * ou de forme n'y ont pas leur place, si vides de sens qu'ils paraissent : en
+ * cuisine ils nomment l'aliment. « petit » retiré, « petit pois » se réduisait
+ * à « pois » et remontait « Pois cassé, sec » ; « plat » retiré, « œuf au
+ * plat » perdait ce qui le distingue d'un œuf dur.
  */
 const STOP_WORDS = new Set([
   'avec',
@@ -73,11 +79,6 @@ const STOP_WORDS = new Set([
   'sur',
   'dans',
   'pour',
-  'plat',
-  'petit',
-  'petite',
-  'grand',
-  'grande',
   'mon',
   'son',
   'leur',
@@ -258,8 +259,12 @@ async function runSearch(
  * nomme avant de se qualifier : « saumon grillé » y survit, et c'est bien
  * « Saumon, grillé/poêlé » qui remonte. Trier ces mots par longueur plutôt que
  * par position remontait « Légumes farcis », le plus long des mots n'étant pas
- * celui qui désigne le plat. Cette passe ne coûte un aller-retour que dans le
- * cas déjà perdu.
+ * celui qui désigne le plat.
+ *
+ * Reste le cas du qualificatif que CIQUAL n'emploie pas : « grande crevette »
+ * ne couvre qu'un mot sur deux et se voit écarté. Une dernière passe garde le
+ * mot le plus long, meilleur indice de spécificité quand il n'en reste qu'un à
+ * choisir. Ces passes ne coûtent un aller-retour que dans le cas déjà perdu.
  */
 export async function searchReferenceFoods(
   term: string,
@@ -276,10 +281,23 @@ export async function searchReferenceFoods(
   }
 
   const hits = await runSearch(words, trimmed, limit);
-  if (hits.length > 0 || words.length < 3) {
+  if (hits.length > 0) {
     return hits;
   }
 
-  const narrowed = words.slice(0, 2);
-  return runSearch(narrowed, narrowed.join(' '), limit);
+  if (words.length >= 3) {
+    const narrowed = words.slice(0, 2);
+    const second = await runSearch(narrowed, narrowed.join(' '), limit);
+    if (second.length > 0) {
+      return second;
+    }
+  }
+
+  if (words.length < 2) {
+    return hits;
+  }
+
+  // Dernier recours : le mot le plus long, faute de mieux le plus spécifique.
+  const longest = [...words].sort((a, b) => b.length - a.length)[0]!;
+  return runSearch([longest], longest, limit);
 }

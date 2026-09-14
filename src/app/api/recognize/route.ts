@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
 import { hasSession } from '@/server/guard';
-import { recognizeFoods } from '@/server/clients/mistral';
+import { recognizeFoods } from '@/server/clients/vision';
 
 export const runtime = 'nodejs';
 
