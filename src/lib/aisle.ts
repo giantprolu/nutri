@@ -53,22 +53,28 @@ export function isAisle(value: unknown): value is Aisle {
  * Groupe alimentaire de l'ANSES vers rayon.
  *
  * Les codes sont ceux de la colonne `alim_grp_code` de la table CIQUAL, sur
- * deux caractères. Le groupe 01, « entrées et plats composés », tombe en
- * épicerie : un plat préparé de rayon frais y serait mal rangé, mais ce groupe
- * ne devrait quasiment jamais servir d'ingrédient à une recette.
+ * deux caractères, et le commentaire de chaque ligne porte l'aliment le plus
+ * court du groupe dans le millésime 2025. Ce n'est pas de la décoration : une
+ * première version avait interverti 08 et 09, et rangeait l'huile d'olive au
+ * rayon surgelé. Un numéro de groupe ne se vérifie pas à la lecture, un
+ * exemple si.
+ *
+ * Le groupe 01, « entrées et plats composés », tombe en épicerie : un plat
+ * préparé du rayon frais y serait mal rangé, mais ce groupe ne devrait
+ * quasiment jamais servir d'ingrédient à une recette.
  */
 const GROUP_AISLES: Record<string, Aisle> = {
-  '01': 'grocery',
-  '02': 'produce',
-  '03': 'grocery',
-  '04': 'butcher',
-  '05': 'dairy',
-  '06': 'drinks',
-  '07': 'grocery',
-  '08': 'grocery',
-  '09': 'frozen',
-  '10': 'grocery',
-  '11': 'other',
+  '01': 'grocery', // entrées et plats composés — « Gougère »
+  '02': 'produce', // fruits, légumes, légumineuses — « Coing, cru »
+  '03': 'grocery', // produits céréaliers — « Blinis »
+  '04': 'butcher', // viandes, œufs, poissons — « Coppa »
+  '05': 'dairy', //   produits laitiers — « Edam »
+  '06': 'drinks', //  eaux et boissons — « Gin »
+  '07': 'grocery', // produits sucrés — « Miel »
+  '08': 'frozen', //  glaces et sorbets — « Pêche melba »
+  '09': 'grocery', // matières grasses — « Saindoux »
+  '10': 'grocery', // aides culinaires — « Miso »
+  '11': 'other', //   aliments infantiles — « Biscuit pour bébé »
 };
 
 /**

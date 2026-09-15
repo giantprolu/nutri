@@ -3,7 +3,13 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ChevronLeftIcon, ChevronRightIcon, CloseIcon, PlusIcon } from '@/components/icons';
+import {
+  CartIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CloseIcon,
+  PlusIcon,
+} from '@/components/icons';
 import { journalMeal, planMeal, reopenMeal, unplanMeal } from '@/lib/client/plan';
 import { MEAL_LABELS, mealForHour, type Meal } from '@/lib/meal';
 import { formatDayMonth, formatWeekday, shiftDate } from '@/lib/date';
@@ -121,8 +127,9 @@ export function WeekPlanner({
         >
           <ChevronLeftIcon className="h-5 w-5" />
         </Link>
-        <Link href="/kitchen" className="kicker kicker-quiet">
-          Cette semaine
+        <Link href={`/kitchen/shopping?from=${startDate}`} className="chip">
+          <CartIcon className="mr-2 h-4 w-4" />
+          Courses
         </Link>
         <Link
           href={`/kitchen?from=${shiftDate(startDate, 7)}`}

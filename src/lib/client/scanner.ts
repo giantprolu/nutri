@@ -1,5 +1,6 @@
 import { prepareZXingModule, readBarcodes } from 'zxing-wasm/reader';
 import type { ScanOutcome } from '../types';
+import { isValidBarcode } from '../barcode';
 
 /**
  * Scanner de code-barres dans le navigateur (FR-11).
@@ -67,10 +68,14 @@ function prepareModule(): void {
   modulePrepared = true;
 }
 
-/** Un code-barres exploitable : 8, 12 ou 13 chiffres (FR-16). */
-export function isValidBarcode(value: string): boolean {
-  return /^\d{8}$|^\d{12}$|^\d{13}$/.test(value);
-}
+/**
+ * Réexporté pour les appelants qui l'employaient déjà d'ici.
+ *
+ * L'implémentation vit désormais dans `@/lib/barcode`, pur : la frontière HTTP
+ * doit pouvoir contrôler un code-barres sans embarquer le décodeur
+ * WebAssembly que ce fichier importe en tête.
+ */
+export { isValidBarcode };
 
 /**
  * Le zoom et la torche ne figurent pas dans les types standards du DOM : ce

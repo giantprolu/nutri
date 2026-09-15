@@ -8,6 +8,7 @@ import {
   integer,
   numeric,
   pgTable,
+  primaryKey,
   text,
   timestamp,
   unique,
@@ -408,3 +409,110 @@ export const mealPlanEntries = pgTable(
 
 export type MealPlanEntryRow = typeof mealPlanEntries.$inferSelect;
 export type NewMealPlanEntryRow = typeof mealPlanEntries.$inferInsert;
+
+/**
+ * Une liste de courses, engendrée depuis le plan d'une période.
+ *
+ * Elle est figée à la génération et ne suit plus le plan : ajouter un plat le
+ * mercredi ne doit pas réécrire la liste qu'on a sous les yeux au magasin.
+ * C'est l'inverse du plan, qui lui suit les recettes — mais une liste de
+ * courses est un instantané, pas une vue.
+ */
+export const shoppingLists = pgTable(
+  'shopping_lists',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    fromDate: date('from_date').notNull(),
+    toDate: date('to_date').notNull(),
+    /** Renseigné quand les courses sont faites. La liste reste consultable. */
+    closedAt: timestamp('closed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('shopping_lists_user_idx').on(table.userId, table.createdAt)],
+);
+
+export type ShoppingListRow = typeof shoppingLists.$inferSelect;
+
+/**
+ * Un article de la liste : un ingrédient, une quantité cumulée, un rayon.
+ *
+ * `userId` est porté ici en plus de la liste, comme `entries.user_id` : toute
+ * lecture d'article commence par l'utilisateur, et passer par une jointure
+ * pour l'établir serait à la fois plus lent et plus facile à oublier.
+ *
+ * `checkedBarcode` garde le code-barres du produit réellement acheté quand
+ * l'article a été coché au scanner. Il ne sert pas qu'à l'archive : c'est lui
+ * qui alimente `ingredient_products`, et donc les macros des prochains repas.
+ */
+export const shoppingItems = pgTable(
+  'shopping_items',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    listId: bigint('list_id', { mode: 'number' })
+      .notNull()
+      .references(() => shoppingLists.id, { onDelete: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    refKind: text('ref_kind').notNull(),
+    refValue: text('ref_value').notNull(),
+    label: text('label').notNull(),
+    quantityG: nutrient('quantity_g').notNull(),
+    /** Une des clés de AISLES, décidée à la génération et modifiable ensuite. */
+    aisle: text('aisle').notNull(),
+    unitName: text('unit_name'),
+    unitGrams: nutrient('unit_grams'),
+    checkedAt: timestamp('checked_at', { withTimezone: true }),
+    checkedBarcode: text('checked_barcode'),
+    /** Vrai pour un article ajouté à la main, qu'aucune recette ne réclamait. */
+    addedManually: boolean('added_manually').notNull().default(false),
+  },
+  (table) => [
+    index('shopping_items_list_idx').on(table.listId, table.aisle),
+    index('shopping_items_user_idx').on(table.userId),
+    check(
+      'shopping_items_ref_kind_check',
+      sql`${table.refKind} in ('ciqual', 'product')`,
+    ),
+  ],
+);
+
+export type ShoppingItemRow = typeof shoppingItems.$inferSelect;
+
+/**
+ * Le produit réellement acheté pour un ingrédient donné.
+ *
+ * Renseignée en scannant les articles au magasin. Elle sert ensuite à
+ * journaliser le steak haché de telle marque plutôt que la moyenne CIQUAL :
+ * c'est la différence entre un journal approximativement juste et un journal
+ * qui décrit ce qu'on a réellement mangé.
+ *
+ * `ingredientKey` est la référence de l'ingrédient, « ciqual:31047 », et non
+ * son nom normalisé. Deux recettes qui écrivent « Poulet » et « Cuisses de
+ * poulet » pour la même fiche doivent partager le même produit acheté.
+ *
+ * Distincte de `food_aliases`, qui lie un nom libre rendu par le modèle de
+ * vision à une fiche. Les deux tables associent un nom à une cible, mais un
+ * scan en caisse ne doit pas déplacer silencieusement ce que la reconnaissance
+ * photo propose : deux gestes, deux intentions, deux durées de vie.
+ */
+export const ingredientProducts = pgTable(
+  'ingredient_products',
+  {
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    ingredientKey: text('ingredient_key').notNull(),
+    /** Code-barres du produit acheté. Sa fiche vit dans `products`. */
+    barcode: text('barcode').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.ingredientKey] }),
+  ],
+);
+
+export type IngredientProductRow = typeof ingredientProducts.$inferSelect;

@@ -32,6 +32,8 @@ import {
 } from '../src/lib/recipe';
 import { aisleFor } from '../src/lib/aisle';
 import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
+import { aggregateNeeds, bestMatch, matchScore, ingredientKey } from '../src/lib/shopping';
+import type { ShoppingNeed } from '../src/lib/shopping';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -413,6 +415,11 @@ assert.equal(aisleFor('Brocoli, cuit', '02'), 'produce', 'legume au rayon frais'
 assert.equal(aisleFor('Poulet, cuisse', '04'), 'butcher', 'volaille a la boucherie');
 assert.equal(aisleFor('Lait demi-ecreme', '05'), 'dairy', 'lait a la cremerie');
 assert.equal(aisleFor('Riz blanc', '03'), 'grocery', 'cereales en epicerie');
+// Non-regression : 08 et 09 avaient ete intervertis, et l'huile d'olive se
+// rangeait au rayon surgele. Les deux groupes se ressemblent par leur numero
+// et par rien d'autre.
+assert.equal(aisleFor('Huile d olive vierge extra', '09'), 'grocery', 'matieres grasses');
+assert.equal(aisleFor('Peche melba', '08'), 'frozen', 'glaces et sorbets');
 // Le zero de tete mange par un tableur ne doit pas deplacer le rayon.
 assert.equal(aisleFor('Brocoli', '2'), 'produce', 'code sur un seul chiffre');
 // Un legume surgele reste un legume pour l'ANSES, mais pas pour le magasin.
@@ -450,5 +457,70 @@ assert.equal(
   'du 28 septembre au 4 octobre',
   'semaine a cheval sur deux mois',
 );
+
+// --- Liste de courses ---
+
+const besoin = (
+  refValue: string,
+  label: string,
+  quantityG: number,
+  unitName: string | null = null,
+  unitGrams: number | null = null,
+): ShoppingNeed => ({
+  refKind: 'ciqual', refValue, label, quantityG, unitName, unitGrams, aisle: 'grocery',
+});
+
+// L'agregation porte sur la reference, pas sur le nom : deux recettes qui
+// ecrivent « Poulet » et « Cuisses de poulet » designent le meme achat.
+const cumul = aggregateNeeds([
+  besoin('31047', 'Poulet', 300),
+  besoin('31047', 'Cuisses de poulet', 200),
+  besoin('9999', 'Riz', 150),
+]);
+assert.equal(cumul.length, 2, 'deux lignes pour trois besoins');
+const poulet = cumul.find((n) => n.refValue === '31047')!;
+assert.equal(poulet.quantityG, 500, 'les quantites s additionnent');
+assert.equal(poulet.label, 'Poulet', 'le premier libelle est retenu');
+assert.equal(poulet.sourceCount, 2, 'deux plats le reclament');
+
+// Deux produits differents ne se melangent jamais, meme sous le meme nom.
+const distincts = aggregateNeeds([
+  besoin('9999', 'Riz', 100),
+  { ...besoin('9999', 'Riz', 100), refKind: 'product' },
+]);
+assert.equal(distincts.length, 2, 'ciqual et produit restent deux lignes');
+assert.equal(ingredientKey('ciqual', '9999'), 'ciqual:9999', 'forme de la cle');
+
+// L'unite n'est gardee que si tous les besoins s'accordent : melanger
+// « 2 oeufs » et « 100 g d oeuf » donnerait un compte d unites faux.
+const memeUnite = aggregateNeeds([
+  besoin('8888', 'Oeufs', 100, 'oeuf', 50),
+  besoin('8888', 'Oeufs', 150, 'oeuf', 50),
+]);
+assert.equal(memeUnite[0]?.unitName, 'oeuf', 'unite conservee');
+assert.equal(memeUnite[0]?.quantityG, 250, 'quantites cumulees');
+const uniteMelangee = aggregateNeeds([
+  besoin('8888', 'Oeufs', 100, 'oeuf', 50),
+  besoin('8888', 'Oeufs', 150),
+]);
+assert.equal(uniteMelangee[0]?.unitName, null, 'unites incompatibles : retour aux grammes');
+
+// L'appariement mesure ce que le produit couvre de l'article, pas l'inverse :
+// un produit de marque porte des mots que l'article n a pas.
+assert.equal(matchScore('Steak hache 5% MG Charal', 'Steak hache 5 %'), 1, 'couverture totale');
+assert.ok(matchScore('Riz basmati Taureau Aile', 'Riz') >= 0.5, 'le riz se reconnait');
+assert.equal(matchScore('Yaourt nature', 'Steak hache'), 0, 'rien en commun');
+// Le pluriel ne doit pas faire manquer l article.
+assert.equal(matchScore('Tomates pelees', 'Tomate'), 1, 'pluriel accepte');
+
+const articles = [
+  { id: 1, label: 'Steak hache 5 %', checkedAt: null },
+  { id: 2, label: 'Riz', checkedAt: null },
+  { id: 3, label: 'Tomate', checkedAt: new Date() },
+];
+assert.equal(bestMatch('Steak hache 5% MG Charal', articles)?.item.id, 1, 'le bon article');
+assert.equal(bestMatch('Yaourt nature Danone', articles), null, 'sous le seuil : rien');
+// Un article deja coche ne doit pas etre propose : on ne scanne pas deux fois.
+assert.equal(bestMatch('Tomates pelees appertisees', articles), null, 'article coche ignore');
 
 console.log('Toutes les verifications pures passent.');

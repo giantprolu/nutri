@@ -2,7 +2,9 @@ import 'server-only';
 import { quantityForServings, type Recipe } from '@/lib/recipe';
 import { isValidQuantity } from '@/lib/nutrition';
 import { daysFrom, shiftDate } from '@/lib/date';
+import { ingredientKey } from '@/lib/shopping';
 import type { Meal } from '@/lib/meal';
+import { boughtProductsFor, type BoughtProduct } from '../db/queries/shopping';
 import {
   clearJournaled,
   deletePlannedMeal,
@@ -78,14 +80,30 @@ export type JournalPlannedResult =
   | { kind: 'not_found' };
 
 /**
- * Les ingrédients d'une recette, mis à l'échelle des parts réellement mangées.
+ * Les ingrédients d'une recette, mis à l'échelle des parts réellement mangées,
+ * et remplacés par les produits réellement achetés quand on les connaît.
+ *
+ * La substitution est le point où les courses rejoignent le journal. Un
+ * ingrédient scanné en rayon a fait retenir sa marque ; c'est elle qui compte
+ * désormais, et non la moyenne CIQUAL. Un steak haché 5 % de marque n'a pas
+ * les mêmes valeurs que la moyenne d'une table de composition, et sur un repas
+ * répété trois fois par semaine l'écart finit par se voir sur la balance.
+ *
+ * Le libellé reste celui de la recette, alors que les macros et la référence
+ * viennent du produit. Le journal doit rester lisible : « Steak haché 5 % »
+ * dit ce qu'on a mangé mieux que la désignation commerciale complète, qui peut
+ * tenir sur trois lignes.
  *
  * Un ingrédient sans fiche est écarté plutôt que journalisé à zéro : compter
  * zéro calorie pour un aliment qu'on a mangé est un mensonge, l'omettre et le
  * dire est une lacune. Les deux donnent un total trop bas, mais seul le second
  * se voit.
  */
-function scaledIngredients(recipe: Recipe, servings: number) {
+function scaledIngredients(
+  recipe: Recipe,
+  servings: number,
+  bought: Map<string, BoughtProduct>,
+) {
   const journaled: {
     label: string;
     quantityG: number;
@@ -97,16 +115,20 @@ function scaledIngredients(recipe: Recipe, servings: number) {
 
   for (const ingredient of recipe.ingredients) {
     const quantityG = quantityForServings(ingredient.quantityG, recipe.servings, servings);
-    if (ingredient.per100g === null || !isValidQuantity(quantityG)) {
+    const substitute = bought.get(ingredientKey(ingredient.refKind, ingredient.refValue));
+    const per100g = substitute?.per100g ?? ingredient.per100g;
+
+    if (per100g === null || per100g === undefined || !isValidQuantity(quantityG)) {
       skipped.push(ingredient.label);
       continue;
     }
+
     journaled.push({
       label: ingredient.label,
       quantityG,
-      per100g: ingredient.per100g,
-      refKind: ingredient.refKind,
-      refValue: ingredient.refValue,
+      per100g,
+      refKind: substitute === undefined ? ingredient.refKind : 'product',
+      refValue: substitute === undefined ? ingredient.refValue : substitute.barcode,
     });
   }
 
@@ -145,7 +167,15 @@ export async function journalPlannedMeal(
     return { kind: 'not_found' };
   }
 
-  const { journaled, skipped } = scaledIngredients(recipe, planned.servings);
+  // Les produits achetés sont chargés en une requête, pour toute la recette.
+  const bought = await boughtProductsFor(
+    userId,
+    recipe.ingredients.map((ingredient) =>
+      ingredientKey(ingredient.refKind, ingredient.refValue),
+    ),
+  );
+
+  const { journaled, skipped } = scaledIngredients(recipe, planned.servings, bought);
   if (journaled.length === 0) {
     // Rien d'inscriptible : ne pas marquer le plat mangé, sans quoi il serait
     // clos sans qu'une seule ligne ait rejoint le journal.
