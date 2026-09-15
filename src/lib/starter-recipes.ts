@@ -95,7 +95,7 @@ export const STARTER_RECIPES: readonly StarterRecipe[] = [
         unitName: 'boîte',
         unitGrams: 80,
       },
-      { label: 'Tomates', searchTerm: 'tomate crue', quantityG: 200 },
+      { label: 'Tomates', searchTerm: 'tomate ronde crue', quantityG: 200 },
       { label: 'Huile d’olive', searchTerm: 'huile d olive', quantityG: 10 },
     ],
   },
@@ -125,7 +125,7 @@ export const STARTER_RECIPES: readonly StarterRecipe[] = [
     ],
     ingredients: [
       { label: 'Pâtes complètes', searchTerm: 'pates completes cuites', quantityG: 400 },
-      { label: 'Sauce tomate', searchTerm: 'sauce tomate', quantityG: 200 },
+      { label: 'Coulis de tomate', searchTerm: 'coulis de tomate', quantityG: 200 },
       { label: 'Steak haché 5 %', searchTerm: 'steak hache 5%', quantityG: 250 },
     ],
   },

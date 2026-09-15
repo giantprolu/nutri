@@ -12,6 +12,7 @@
  * Voir B-4 de BLOCKERS.md : le fichier n'est pas versionné.
  */
 import { readFileSync, existsSync } from 'node:fs';
+import { config } from 'dotenv';
 import { parse } from 'csv-parse/sync';
 import { neon } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
@@ -26,6 +27,18 @@ import {
   parseGroupCode,
   GROUP_COLUMN_ALIASES,
 } from './ciqual-parse';
+
+/**
+ * Les variables sont chargées ici explicitement, comme dans `drizzle.config.ts`
+ * et pour la même raison : ce script tourne hors de Next, seul à lire
+ * `.env.local` de lui-même. Sans cela l'import échoue sur une URL vide alors
+ * que l'application, elle, démarre très bien.
+ *
+ * `.env.local` d'abord, `.env` ensuite : dotenv ne réécrit jamais une variable
+ * déjà posée, donc le fichier local l'emporte, comme chez Next.
+ */
+config({ path: '.env.local' });
+config({ path: '.env' });
 
 const DEFAULT_PATH = 'data/ciqual.csv';
 
