@@ -78,6 +78,13 @@
       "when": 1789502379677,
       "tag": "0010_shopping",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1789503044571,
+      "tag": "0011_workouts",
+      "breakpoints": true
     }
   ]
 }

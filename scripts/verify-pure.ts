@@ -34,6 +34,15 @@ import { aisleFor } from '../src/lib/aisle';
 import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
 import { aggregateNeeds, bestMatch, matchScore, ingredientKey } from '../src/lib/shopping';
 import type { ShoppingNeed } from '../src/lib/shopping';
+import {
+  bestSet,
+  formatPrescription,
+  formatSet,
+  groupBySuperset,
+  sessionVolume,
+  setVolume,
+  type TemplateExercise,
+} from '../src/lib/workout';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -522,5 +531,80 @@ assert.equal(bestMatch('Steak hache 5% MG Charal', articles)?.item.id, 1, 'le bo
 assert.equal(bestMatch('Yaourt nature Danone', articles), null, 'sous le seuil : rien');
 // Un article deja coche ne doit pas etre propose : on ne scanne pas deux fois.
 assert.equal(bestMatch('Tomates pelees appertisees', articles), null, 'article coche ignore');
+
+// --- Seances ---
+
+const exo = (
+  name: string,
+  kind: 'strength' | 'hold' | 'cardio',
+  targetSets: number,
+  min: number | null,
+  max: number | null,
+  seconds: number | null = null,
+  supersetGroup: number | null = null,
+): TemplateExercise => ({
+  id: 1, position: 0,
+  exercise: { id: 1, slug: 'x', name, kind, muscleGroup: null },
+  targetSets, targetRepsMin: min, targetRepsMax: max, targetSeconds: seconds,
+  supersetGroup, restSeconds: null, notes: null,
+});
+
+// La fourchette est conservee : c'est elle qui porte la consigne de progression.
+assert.equal(formatPrescription(exo('Couche', 'strength', 4, 8, 10)), '4×8-10', 'fourchette');
+assert.equal(formatPrescription(exo('Militaire', 'strength', 3, 10, 10)), '3×10', 'bornes egales');
+assert.equal(formatPrescription(exo('Planche', 'hold', 3, null, null, 45)), '3×45 s', 'gainage');
+// Un cardio n'a pas de series : « 1x20 min » se lirait comme une erreur.
+assert.equal(formatPrescription(exo('Velo', 'cardio', 1, null, null, 1200)), '20 min', 'cardio');
+
+assert.equal(formatSet({ weightKg: 60, reps: 10, seconds: null }), '60 kg × 10', 'charge et reps');
+assert.equal(formatSet({ weightKg: null, reps: 12, seconds: null }), '12 reps', 'poids du corps');
+assert.equal(formatSet({ weightKg: 0, reps: 12, seconds: null }), '12 reps', 'charge nulle');
+assert.equal(formatSet({ weightKg: null, reps: null, seconds: 45 }), '45 s', 'duree');
+
+// Le volume : le tonnage souleve, grossier mais comparable d'une semaine a l'autre.
+assert.equal(setVolume({ weightKg: 60, reps: 10 }), 600, 'volume d une serie');
+// Une serie au poids du corps compte zero : on ne connait pas le poids du
+// corps au moment de la serie, et l'inventer fausserait la comparaison.
+assert.equal(setVolume({ weightKg: null, reps: 12 }), 0, 'poids du corps non compte');
+assert.equal(
+  sessionVolume([
+    { weightKg: 60, reps: 10 },
+    { weightKg: 60, reps: 9 },
+    { weightKg: null, reps: 12 },
+  ]),
+  1140,
+  'volume d une seance',
+);
+
+// La charge prime sur les repetitions : monter de 60 a 62,5 kg pour une
+// repetition de moins est une progression, l'inverse ne l'est pas.
+assert.equal(
+  bestSet([
+    { weightKg: 60, reps: 10 },
+    { weightKg: 62.5, reps: 9 },
+  ])?.weightKg,
+  62.5,
+  'la charge prime',
+);
+assert.equal(
+  bestSet([
+    { weightKg: 60, reps: 9 },
+    { weightKg: 60, reps: 10 },
+  ])?.reps,
+  10,
+  'a charge egale, les repetitions departagent',
+);
+assert.equal(bestSet([]), null, 'aucune serie');
+assert.equal(bestSet([{ weightKg: null, reps: null }]), null, 'serie vide ignoree');
+
+// Deux exercices qui partagent un numero s'enchainent et se lisent ensemble.
+const blocs = groupBySuperset([
+  exo('Incline', 'strength', 4, 10, 10),
+  exo('Curl', 'strength', 3, 12, 12, null, 1),
+  exo('Extension', 'strength', 3, 12, 12, null, 1),
+]);
+assert.equal(blocs.length, 2, 'deux blocs pour trois exercices');
+assert.equal(blocs[0]?.length, 1, 'le premier est seul');
+assert.equal(blocs[1]?.length, 2, 'le superset en compte deux');
 
 console.log('Toutes les verifications pures passent.');

@@ -1,0 +1,525 @@
+import 'server-only';
+import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { db, schema } from '../client';
+import {
+  isExerciseKind,
+  type Exercise,
+  type TemplateExercise,
+  type WorkoutSession,
+  type WorkoutSet,
+  type WorkoutTemplate,
+} from '@/lib/workout';
+import type { SeedExercise } from '@/lib/workout-seed';
+
+/**
+ * Accès aux séances.
+ *
+ * Les exercices forment un référentiel commun, sans utilisateur, comme CIQUAL.
+ * Tout le reste — modèles, séances, séries — porte l'utilisateur en premier
+ * argument et ne le déduit jamais : un programme d'entraînement dit ce qu'on
+ * soulève et à quelle fréquence, c'est une donnée personnelle.
+ */
+
+function toNullableNumber(value: string | null): number | null {
+  return value === null ? null : Number(value);
+}
+
+function toExercise(row: typeof schema.exercises.$inferSelect): Exercise {
+  return {
+    id: row.id,
+    slug: row.slug,
+    name: row.name,
+    // La contrainte en base garantit déjà la valeur ; le repli évite un
+    // transtypage muet sur une ligne écrite par une version antérieure.
+    kind: isExerciseKind(row.kind) ? row.kind : 'strength',
+    muscleGroup: row.muscleGroup,
+  };
+}
+
+/**
+ * Insère les exercices du catalogue livré, sans toucher à ceux qui existent.
+ *
+ * Idempotent sur le `slug` : relancer n'écrase rien. C'est délibéré — un
+ * utilisateur a pu renommer un exercice du catalogue, et le seed n'a pas à
+ * défaire ce choix à la prochaine installation.
+ */
+export async function ensureSeedExercises(seed: readonly SeedExercise[]): Promise<void> {
+  if (seed.length === 0) {
+    return;
+  }
+  await db()
+    .insert(schema.exercises)
+    .values(seed.map((exercise) => ({ ...exercise, source: 'seed' })))
+    .onConflictDoNothing({ target: schema.exercises.slug });
+}
+
+export async function listExercises(): Promise<Exercise[]> {
+  const rows = await db().select().from(schema.exercises).orderBy(asc(schema.exercises.name));
+  return rows.map(toExercise);
+}
+
+/** Les exercices demandés, indexés par leur slug. */
+export async function exercisesBySlug(
+  slugs: readonly string[],
+): Promise<Map<string, Exercise>> {
+  const found = new Map<string, Exercise>();
+  if (slugs.length === 0) {
+    return found;
+  }
+  const rows = await db()
+    .select()
+    .from(schema.exercises)
+    .where(inArray(schema.exercises.slug, [...slugs]));
+  for (const row of rows) {
+    found.set(row.slug, toExercise(row));
+  }
+  return found;
+}
+
+/** Les exercices d'une série de modèles, prescriptions comprises. */
+async function templateExercisesFor(
+  templateIds: readonly number[],
+): Promise<Map<number, TemplateExercise[]>> {
+  const grouped = new Map<number, TemplateExercise[]>();
+  if (templateIds.length === 0) {
+    return grouped;
+  }
+
+  const rows = await db()
+    .select({
+      id: schema.workoutTemplateExercises.id,
+      templateId: schema.workoutTemplateExercises.templateId,
+      position: schema.workoutTemplateExercises.position,
+      targetSets: schema.workoutTemplateExercises.targetSets,
+      targetRepsMin: schema.workoutTemplateExercises.targetRepsMin,
+      targetRepsMax: schema.workoutTemplateExercises.targetRepsMax,
+      targetSeconds: schema.workoutTemplateExercises.targetSeconds,
+      supersetGroup: schema.workoutTemplateExercises.supersetGroup,
+      restSeconds: schema.workoutTemplateExercises.restSeconds,
+      notes: schema.workoutTemplateExercises.notes,
+      exercise: schema.exercises,
+    })
+    .from(schema.workoutTemplateExercises)
+    .innerJoin(
+      schema.exercises,
+      eq(schema.exercises.id, schema.workoutTemplateExercises.exerciseId),
+    )
+    .where(inArray(schema.workoutTemplateExercises.templateId, [...templateIds]))
+    .orderBy(
+      asc(schema.workoutTemplateExercises.templateId),
+      asc(schema.workoutTemplateExercises.position),
+    );
+
+  for (const row of rows) {
+    const list = grouped.get(row.templateId) ?? [];
+    list.push({
+      id: row.id,
+      position: row.position,
+      exercise: toExercise(row.exercise),
+      targetSets: row.targetSets,
+      targetRepsMin: row.targetRepsMin,
+      targetRepsMax: row.targetRepsMax,
+      targetSeconds: row.targetSeconds,
+      supersetGroup: row.supersetGroup,
+      restSeconds: row.restSeconds,
+      notes: row.notes,
+    });
+    grouped.set(row.templateId, list);
+  }
+
+  return grouped;
+}
+
+/** Les séances modèles actives d'un utilisateur, dans l'ordre du programme. */
+export async function listTemplates(userId: number): Promise<WorkoutTemplate[]> {
+  const rows = await db()
+    .select()
+    .from(schema.workoutTemplates)
+    .where(
+      and(
+        eq(schema.workoutTemplates.userId, userId),
+        isNull(schema.workoutTemplates.archivedAt),
+      ),
+    )
+    .orderBy(asc(schema.workoutTemplates.position), asc(schema.workoutTemplates.id));
+
+  const exercises = await templateExercisesFor(rows.map((row) => row.id));
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    position: row.position,
+    notes: row.notes,
+    exercises: exercises.get(row.id) ?? [],
+  }));
+}
+
+export async function findTemplate(
+  userId: number,
+  id: number,
+): Promise<WorkoutTemplate | null> {
+  const [row] = await db()
+    .select()
+    .from(schema.workoutTemplates)
+    .where(and(eq(schema.workoutTemplates.userId, userId), eq(schema.workoutTemplates.id, id)))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+  const exercises = await templateExercisesFor([row.id]);
+  return {
+    id: row.id,
+    name: row.name,
+    position: row.position,
+    notes: row.notes,
+    exercises: exercises.get(row.id) ?? [],
+  };
+}
+
+export interface NewTemplateExercise {
+  exerciseId: number;
+  targetSets: number;
+  targetRepsMin: number | null;
+  targetRepsMax: number | null;
+  targetSeconds: number | null;
+  supersetGroup: number | null;
+  restSeconds: number | null;
+  notes: string | null;
+}
+
+/** Crée une séance modèle et ses exercices. */
+export async function insertTemplate(
+  userId: number,
+  template: { name: string; position: number; notes: string | null },
+  exercises: readonly NewTemplateExercise[],
+): Promise<number> {
+  const [row] = await db()
+    .insert(schema.workoutTemplates)
+    .values({ userId, ...template })
+    .returning({ id: schema.workoutTemplates.id });
+
+  const templateId = row?.id;
+  if (templateId === undefined) {
+    throw new Error("La séance n'a pas pu être créée.");
+  }
+
+  if (exercises.length > 0) {
+    await db()
+      .insert(schema.workoutTemplateExercises)
+      .values(
+        exercises.map((exercise, index) => ({ templateId, position: index, ...exercise })),
+      );
+  }
+  return templateId;
+}
+
+/** Archive une séance modèle plutôt que de la supprimer (voir le schéma). */
+export async function archiveTemplate(userId: number, id: number): Promise<boolean> {
+  const updated = await db()
+    .update(schema.workoutTemplates)
+    .set({ archivedAt: new Date() })
+    .where(and(eq(schema.workoutTemplates.userId, userId), eq(schema.workoutTemplates.id, id)))
+    .returning({ id: schema.workoutTemplates.id });
+  return updated.length > 0;
+}
+
+export async function countTemplates(userId: number): Promise<number> {
+  const [row] = await db()
+    .select({ count: sql<string>`count(*)` })
+    .from(schema.workoutTemplates)
+    .where(
+      and(
+        eq(schema.workoutTemplates.userId, userId),
+        isNull(schema.workoutTemplates.archivedAt),
+      ),
+    );
+  return Number(row?.count ?? 0);
+}
+
+function toSet(row: typeof schema.workoutSets.$inferSelect): WorkoutSet {
+  return {
+    id: row.id,
+    exerciseId: row.exerciseId,
+    position: row.position,
+    setIndex: row.setIndex,
+    weightKg: toNullableNumber(row.weightKg),
+    reps: row.reps,
+    seconds: row.seconds,
+    doneAt: row.doneAt,
+  };
+}
+
+async function setsFor(sessionId: number): Promise<WorkoutSet[]> {
+  const rows = await db()
+    .select()
+    .from(schema.workoutSets)
+    .where(eq(schema.workoutSets.sessionId, sessionId))
+    .orderBy(asc(schema.workoutSets.position), asc(schema.workoutSets.setIndex));
+  return rows.map(toSet);
+}
+
+async function toSession(
+  row: typeof schema.workoutSessions.$inferSelect & { templateName: string | null },
+): Promise<WorkoutSession> {
+  return {
+    id: row.id,
+    templateId: row.templateId,
+    templateName: row.templateName,
+    sessionDate: String(row.sessionDate).slice(0, 10),
+    startedAt: row.startedAt,
+    finishedAt: row.finishedAt,
+    sets: await setsFor(row.id),
+  };
+}
+
+/** La séance ouverte, s'il y en a une. Une seule peut l'être à la fois. */
+export async function findOpenSession(userId: number): Promise<WorkoutSession | null> {
+  const [row] = await db()
+    .select({
+      session: schema.workoutSessions,
+      templateName: schema.workoutTemplates.name,
+    })
+    .from(schema.workoutSessions)
+    .leftJoin(
+      schema.workoutTemplates,
+      eq(schema.workoutTemplates.id, schema.workoutSessions.templateId),
+    )
+    .where(
+      and(
+        eq(schema.workoutSessions.userId, userId),
+        isNull(schema.workoutSessions.finishedAt),
+      ),
+    )
+    .orderBy(desc(schema.workoutSessions.startedAt))
+    .limit(1);
+
+  return row ? toSession({ ...row.session, templateName: row.templateName }) : null;
+}
+
+export async function findSession(
+  userId: number,
+  id: number,
+): Promise<WorkoutSession | null> {
+  const [row] = await db()
+    .select({
+      session: schema.workoutSessions,
+      templateName: schema.workoutTemplates.name,
+    })
+    .from(schema.workoutSessions)
+    .leftJoin(
+      schema.workoutTemplates,
+      eq(schema.workoutTemplates.id, schema.workoutSessions.templateId),
+    )
+    .where(and(eq(schema.workoutSessions.userId, userId), eq(schema.workoutSessions.id, id)))
+    .limit(1);
+
+  return row ? toSession({ ...row.session, templateName: row.templateName }) : null;
+}
+
+/** Les dernières séances terminées, pour l'historique. */
+export async function listSessions(
+  userId: number,
+  limit: number,
+): Promise<WorkoutSession[]> {
+  const rows = await db()
+    .select({
+      session: schema.workoutSessions,
+      templateName: schema.workoutTemplates.name,
+    })
+    .from(schema.workoutSessions)
+    .leftJoin(
+      schema.workoutTemplates,
+      eq(schema.workoutTemplates.id, schema.workoutSessions.templateId),
+    )
+    .where(eq(schema.workoutSessions.userId, userId))
+    .orderBy(desc(schema.workoutSessions.sessionDate), desc(schema.workoutSessions.id))
+    .limit(limit);
+
+  return Promise.all(
+    rows.map((row) => toSession({ ...row.session, templateName: row.templateName })),
+  );
+}
+
+export async function insertSession(
+  userId: number,
+  templateId: number | null,
+  sessionDate: string,
+): Promise<number> {
+  const [row] = await db()
+    .insert(schema.workoutSessions)
+    .values({ userId, templateId, sessionDate })
+    .returning({ id: schema.workoutSessions.id });
+
+  if (row?.id === undefined) {
+    throw new Error("La séance n'a pas pu être ouverte.");
+  }
+  return row.id;
+}
+
+export async function finishSession(userId: number, id: number): Promise<boolean> {
+  const updated = await db()
+    .update(schema.workoutSessions)
+    .set({ finishedAt: new Date() })
+    .where(
+      and(
+        eq(schema.workoutSessions.userId, userId),
+        eq(schema.workoutSessions.id, id),
+        isNull(schema.workoutSessions.finishedAt),
+      ),
+    )
+    .returning({ id: schema.workoutSessions.id });
+  return updated.length > 0;
+}
+
+export async function deleteSession(userId: number, id: number): Promise<boolean> {
+  const deleted = await db()
+    .delete(schema.workoutSessions)
+    .where(and(eq(schema.workoutSessions.userId, userId), eq(schema.workoutSessions.id, id)))
+    .returning({ id: schema.workoutSessions.id });
+  return deleted.length > 0;
+}
+
+export interface RecordSetInput {
+  sessionId: number;
+  exerciseId: number;
+  position: number;
+  setIndex: number;
+  weightKg: number | null;
+  reps: number | null;
+  seconds: number | null;
+}
+
+/**
+ * Écrit une série, ou réécrit celle qui occupe déjà ce rang.
+ *
+ * L'unicité porte sur le triplet séance, exercice, numéro de série : corriger
+ * une charge mal saisie doit remplacer la valeur, jamais ajouter une série
+ * fantôme au volume de la séance.
+ */
+export async function upsertSet(userId: number, input: RecordSetInput): Promise<boolean> {
+  // La séance doit être la sienne : l'identifiant vient du client.
+  const [session] = await db()
+    .select({ id: schema.workoutSessions.id })
+    .from(schema.workoutSessions)
+    .where(
+      and(
+        eq(schema.workoutSessions.userId, userId),
+        eq(schema.workoutSessions.id, input.sessionId),
+      ),
+    )
+    .limit(1);
+
+  if (!session) {
+    return false;
+  }
+
+  await db()
+    .insert(schema.workoutSets)
+    .values({
+      sessionId: input.sessionId,
+      userId,
+      exerciseId: input.exerciseId,
+      position: input.position,
+      setIndex: input.setIndex,
+      weightKg: input.weightKg === null ? null : String(input.weightKg),
+      reps: input.reps,
+      seconds: input.seconds,
+      doneAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: [
+        schema.workoutSets.sessionId,
+        schema.workoutSets.exerciseId,
+        schema.workoutSets.setIndex,
+      ],
+      set: {
+        weightKg: sql`excluded.weight_kg`,
+        reps: sql`excluded.reps`,
+        seconds: sql`excluded.seconds`,
+        doneAt: sql`now()`,
+      },
+    });
+  return true;
+}
+
+export async function deleteSet(userId: number, setId: number): Promise<boolean> {
+  const deleted = await db()
+    .delete(schema.workoutSets)
+    .where(and(eq(schema.workoutSets.userId, userId), eq(schema.workoutSets.id, setId)))
+    .returning({ id: schema.workoutSets.id });
+  return deleted.length > 0;
+}
+
+/**
+ * Les séries de la dernière séance où chaque exercice a été travaillé.
+ *
+ * C'est la requête qui justifie tout le module : sans elle, on refait chaque
+ * semaine la charge dont on se souvient, c'est-à-dire la plus confortable.
+ * La séance en cours est exclue, sans quoi la référence serait la série qu'on
+ * vient de faire.
+ */
+export async function lastPerformance(
+  userId: number,
+  exerciseIds: readonly number[],
+  excludeSessionId: number | null,
+): Promise<Map<number, WorkoutSet[]>> {
+  const byExercise = new Map<number, WorkoutSet[]>();
+  if (exerciseIds.length === 0) {
+    return byExercise;
+  }
+
+  // `DISTINCT ON` retient la séance la plus récente par exercice, puis la
+  // jointure ramène toutes ses séries : une seule requête là où une boucle en
+  // ferait une par exercice.
+  // Les `bigint` arrivent en chaîne sur une requête brute, là où le
+  // constructeur de requêtes les convertit grâce au mode `number` du schéma.
+  // Sans la conversion qui suit, la clé de la carte serait « 1 » et non 1, et
+  // aucun appelant ne retrouverait son exercice.
+  const result = await db().execute<{
+    exercise_id: string;
+    id: string;
+    position: number;
+    set_index: number;
+    weight_kg: string | null;
+    reps: number | null;
+    seconds: number | null;
+    done_at: string;
+  }>(sql`
+    WITH derniere AS (
+      SELECT DISTINCT ON (s.exercise_id) s.exercise_id, s.session_id
+      FROM workout_sets s
+      JOIN workout_sessions w ON w.id = s.session_id
+      WHERE s.user_id = ${userId}
+        AND s.exercise_id IN (${sql.join(
+          exerciseIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        ${excludeSessionId === null ? sql`` : sql`AND s.session_id <> ${excludeSessionId}`}
+      ORDER BY s.exercise_id, w.session_date DESC, s.done_at DESC
+    )
+    SELECT s.exercise_id, s.id, s.position, s.set_index, s.weight_kg, s.reps,
+           s.seconds, s.done_at
+    FROM workout_sets s
+    JOIN derniere d ON d.exercise_id = s.exercise_id AND d.session_id = s.session_id
+    WHERE s.user_id = ${userId}
+    ORDER BY s.exercise_id, s.set_index
+  `);
+
+  for (const row of result.rows) {
+    const exerciseId = Number(row.exercise_id);
+    const list = byExercise.get(exerciseId) ?? [];
+    list.push({
+      id: Number(row.id),
+      exerciseId,
+      position: row.position,
+      setIndex: row.set_index,
+      weightKg: toNullableNumber(row.weight_kg),
+      reps: row.reps,
+      seconds: row.seconds,
+      doneAt: new Date(row.done_at),
+    });
+    byExercise.set(exerciseId, list);
+  }
+
+  return byExercise;
+}

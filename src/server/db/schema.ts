@@ -516,3 +516,185 @@ export const ingredientProducts = pgTable(
 );
 
 export type IngredientProductRow = typeof ingredientProducts.$inferSelect;
+
+/**
+ * Le catalogue des exercices.
+ *
+ * Référentiel commun, sans utilisateur, comme CIQUAL et le cache produits : un
+ * développé couché n'appartient à personne. Un exercice ajouté à la main entre
+ * dans la même table avec `source = 'manual'`, exactement comme une fiche
+ * produit saisie à la main entre dans `products`.
+ *
+ * `kind` décide de ce qu'une série enregistre. Un développé couché retient une
+ * charge et des répétitions, un gainage une durée, un cardio une durée aussi
+ * mais sans notion de série. Sans cette colonne, l'écran d'exécution
+ * demanderait un poids pour une planche.
+ */
+export const exercises = pgTable(
+  'exercises',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    /** Identifiant stable et lisible, qui porte l'unicité et l'idempotence du seed. */
+    slug: text('slug').notNull().unique(),
+    name: text('name').notNull(),
+    /** `strength`, `hold` ou `cardio`. */
+    kind: text('kind').notNull(),
+    /** Groupe musculaire dominant, pour lire une séance d'un coup d'œil. */
+    muscleGroup: text('muscle_group'),
+    /** `seed` ou `manual` : d'où vient la ligne. */
+    source: text('source').notNull().default('seed'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check('exercises_kind_check', sql`${table.kind} in ('strength', 'hold', 'cardio')`),
+  ],
+);
+
+export type ExerciseRow = typeof exercises.$inferSelect;
+
+/**
+ * Une séance modèle : la séance A, B ou C du programme.
+ *
+ * Elle appartient à un utilisateur. Un programme d'entraînement est une donnée
+ * personnelle au même titre qu'un journal alimentaire — il dit ce qu'on peut
+ * soulever et à quelle fréquence on s'entraîne.
+ *
+ * `archivedAt` plutôt qu'une suppression : les séances déjà réalisées
+ * référencent leur modèle, et effacer celui-ci ferait perdre le nom de ce
+ * qu'on a fait pendant six mois.
+ */
+export const workoutTemplates = pgTable(
+  'workout_templates',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Rang dans le programme : la séance A avant la B. */
+    position: integer('position').notNull().default(0),
+    notes: text('notes'),
+    archivedAt: timestamp('archived_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index('workout_templates_user_idx').on(table.userId, table.position)],
+);
+
+export type WorkoutTemplateRow = typeof workoutTemplates.$inferSelect;
+
+/**
+ * Un exercice dans une séance modèle, avec ce qu'il prescrit.
+ *
+ * Les répétitions sont une fourchette et non un nombre : « 4x8-10 » est la
+ * forme dans laquelle un programme s'écrit réellement, et l'aplatir à 8 ou à
+ * 10 perdrait la marge de progression qui en est tout l'objet. Une valeur
+ * unique s'écrit avec les deux bornes égales.
+ *
+ * `targetSeconds` couvre le gainage et le cardio sans inventer un second
+ * modèle de séance. `supersetGroup` relie deux exercices enchaînés sans repos :
+ * le curl et l'extension triceps de la séance C portent le même numéro.
+ */
+export const workoutTemplateExercises = pgTable(
+  'workout_template_exercises',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    templateId: bigint('template_id', { mode: 'number' })
+      .notNull()
+      .references(() => workoutTemplates.id, { onDelete: 'cascade' }),
+    position: integer('position').notNull(),
+    exerciseId: bigint('exercise_id', { mode: 'number' })
+      .notNull()
+      .references(() => exercises.id),
+    targetSets: integer('target_sets').notNull().default(3),
+    targetRepsMin: integer('target_reps_min'),
+    targetRepsMax: integer('target_reps_max'),
+    targetSeconds: integer('target_seconds'),
+    supersetGroup: integer('superset_group'),
+    restSeconds: integer('rest_seconds'),
+    notes: text('notes'),
+  },
+  (table) => [index('workout_template_exercises_idx').on(table.templateId, table.position)],
+);
+
+export type WorkoutTemplateExerciseRow = typeof workoutTemplateExercises.$inferSelect;
+
+/**
+ * Une séance réalisée, ou en cours.
+ *
+ * `templateId` est nullable : une séance improvisée reste une séance, et
+ * refuser de l'enregistrer parce qu'elle ne suit aucun modèle ferait perdre la
+ * seule trace de ce qui a été soulevé ce jour-là.
+ *
+ * `finishedAt` nul signifie une séance ouverte. C'est ce qui permet de la
+ * retrouver telle qu'on l'a laissée en rouvrant l'application entre deux
+ * séries — ce qui est le cas nominal, pas l'exception.
+ */
+export const workoutSessions = pgTable(
+  'workout_sessions',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    templateId: bigint('template_id', { mode: 'number' }).references(
+      () => workoutTemplates.id,
+      { onDelete: 'set null' },
+    ),
+    /** Jour de la séance, en Europe/Paris comme le journal (AD-11). */
+    sessionDate: date('session_date').notNull(),
+    startedAt: timestamp('started_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+    notes: text('notes'),
+  },
+  (table) => [index('workout_sessions_user_date_idx').on(table.userId, table.sessionDate)],
+);
+
+export type WorkoutSessionRow = typeof workoutSessions.$inferSelect;
+
+/**
+ * Une série réalisée. C'est la donnée que le module existe pour retenir.
+ *
+ * `userId` est dénormalisé comme `entries.user_id`. « Qu'est-ce que j'ai
+ * soulevé la dernière fois » est la requête la plus fréquente du module, celle
+ * qui s'affiche sous chaque série avant qu'on la commence, et elle doit partir
+ * de l'utilisateur sans passer par une jointure sur la séance.
+ *
+ * Les trois mesures sont nullables parce qu'aucune n'est universelle : une
+ * série de développé couché porte une charge et des répétitions, une planche
+ * une durée, une traction au poids du corps des répétitions sans charge.
+ */
+export const workoutSets = pgTable(
+  'workout_sets',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    sessionId: bigint('session_id', { mode: 'number' })
+      .notNull()
+      .references(() => workoutSessions.id, { onDelete: 'cascade' }),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    exerciseId: bigint('exercise_id', { mode: 'number' })
+      .notNull()
+      .references(() => exercises.id),
+    /** Rang de l'exercice dans la séance, recopié du modèle. */
+    position: integer('position').notNull(),
+    /** Numéro de la série pour cet exercice, à partir de 1. */
+    setIndex: integer('set_index').notNull(),
+    weightKg: numeric('weight_kg', { precision: 6, scale: 2 }),
+    reps: integer('reps'),
+    seconds: integer('seconds'),
+    doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // L'historique par exercice : l'utilisateur d'abord, puis l'exercice, puis
+    // la date. C'est exactement l'ordre de la question posée.
+    index('workout_sets_user_exercise_idx').on(table.userId, table.exerciseId, table.doneAt),
+    unique('workout_sets_session_exercise_set_key').on(
+      table.sessionId,
+      table.exerciseId,
+      table.setIndex,
+    ),
+  ],
+);
+
+export type WorkoutSetRow = typeof workoutSets.$inferSelect;

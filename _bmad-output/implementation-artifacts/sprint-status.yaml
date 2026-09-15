@@ -78,7 +78,7 @@ development_status:
   8-4-mode-cuisine: backlog
   epic-8-retrospective: optional
 
-  epic-9: backlog
-  9-1-exercices-et-séances-modèles: backlog
-  9-2-exécution-et-progression: backlog
+  epic-9: in-progress
+  9-1-exercices-et-séances-modèles: done
+  9-2-exécution-et-progression: done
   epic-9-retrospective: optional

@@ -1,0 +1,63 @@
+import { z } from 'zod';
+import { apiError } from '@/server/errors';
+import { currentUserId } from '@/server/guard';
+import { installProgram, removeTemplate, templatesFor } from '@/server/services/workouts';
+
+export const runtime = 'nodejs';
+
+/** Les séances modèles de l'utilisateur. */
+export async function GET(): Promise<Response> {
+  const userId = await currentUserId();
+  if (userId === null) {
+    return apiError('unauthorized');
+  }
+  return Response.json({ templates: await templatesFor(userId) });
+}
+
+const postSchema = z.object({ action: z.literal('install') });
+
+/** Installe le programme de départ. Sans effet si le compte a déjà une séance. */
+export async function POST(request: Request): Promise<Response> {
+  const userId = await currentUserId();
+  if (userId === null) {
+    return apiError('unauthorized');
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return apiError('invalid_input');
+  }
+
+  if (!postSchema.safeParse(payload).success) {
+    return apiError('invalid_input');
+  }
+
+  return Response.json(await installProgram(userId), { status: 201 });
+}
+
+const deleteSchema = z.object({ templateId: z.number().int().positive() });
+
+/** Archive une séance modèle. Les séances déjà faites gardent leur nom. */
+export async function DELETE(request: Request): Promise<Response> {
+  const userId = await currentUserId();
+  if (userId === null) {
+    return apiError('unauthorized');
+  }
+
+  let payload: unknown;
+  try {
+    payload = await request.json();
+  } catch {
+    return apiError('invalid_input');
+  }
+
+  const parsed = deleteSchema.safeParse(payload);
+  if (!parsed.success) {
+    return apiError('invalid_input');
+  }
+
+  const archived = await removeTemplate(userId, parsed.data.templateId);
+  return archived ? new Response(null, { status: 204 }) : apiError('not_found');
+}
