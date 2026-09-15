@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: '2026-09-10'
-last_updated: '2026-09-10'
+last_updated: '2026-09-15'
 project: nutri-perso
 project_key: NOKEY
 tracking_system: file-system
@@ -70,3 +70,15 @@ development_status:
   7-1-envoi-d-une-photo-et-reconnaissance: done
   7-2-candidats-ciqual-et-alias-mémorisés: done
   epic-7-retrospective: optional
+
+  epic-8: in-progress
+  8-1-recettes: done
+  8-2-plan-de-la-semaine-et-journalisation: backlog
+  8-3-liste-de-courses-et-scan-en-magasin: backlog
+  8-4-mode-cuisine: backlog
+  epic-8-retrospective: optional
+
+  epic-9: backlog
+  9-1-exercices-et-séances-modèles: backlog
+  9-2-exécution-et-progression: backlog
+  epic-9-retrospective: optional

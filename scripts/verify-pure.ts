@@ -22,6 +22,15 @@ import {
   MAX_ACTIVE_KCAL_PER_BMR,
   type BodyProfile,
 } from '../src/lib/energy';
+import {
+  formatIngredientQuantity,
+  macrosPerServing,
+  quantityForServings,
+  recipeMacros,
+  shoppingUnitCount,
+  type RecipeIngredient,
+} from '../src/lib/recipe';
+import { aisleFor } from '../src/lib/aisle';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -328,5 +337,88 @@ assert.equal(ageInYears('1996-12-31', '2026-01-01'), 29, 'anniversaire en fin d 
 // Un 29 fevrier tombe le 1er mars les annees non bissextiles.
 assert.equal(ageInYears('2000-02-29', '2026-02-28'), 25, '29 fevrier, avant le 1er mars');
 assert.equal(ageInYears('2000-02-29', '2026-03-01'), 26, '29 fevrier, apres le 1er mars');
+
+// --- Recettes et liste de courses ---
+
+// Une recette de 4 parts a 600 kcal : la part en vaut 150.
+const riz: RecipeIngredient = {
+  id: 1,
+  position: 0,
+  refKind: 'ciqual',
+  refValue: '9999',
+  label: 'Riz',
+  quantityG: 200,
+  unitName: null,
+  unitGrams: null,
+  per100g: { kcal: 200, proteinG: 4, carbsG: 44, fatG: 0.4 },
+};
+const oeufs: RecipeIngredient = {
+  id: 2,
+  position: 1,
+  refKind: 'ciqual',
+  refValue: '8888',
+  label: 'Oeufs',
+  quantityG: 100,
+  unitName: 'oeuf',
+  unitGrams: 50,
+  per100g: { kcal: 200, proteinG: 13, carbsG: 0.7, fatG: 10 },
+};
+
+const totalRecette = recipeMacros([riz, oeufs]);
+assert.equal(totalRecette.macros.kcal, 600, 'total de la recette');
+assert.equal(totalRecette.unresolvedCount, 0, 'tout est resolu');
+
+const recette = {
+  id: 1,
+  name: 'Riz aux oeufs',
+  servings: 4,
+  steps: [],
+  prepMinutes: null,
+  notes: null,
+  ingredients: [riz, oeufs],
+};
+assert.equal(macrosPerServing(recette).macros.kcal, 150, 'kcal par part');
+
+// Un ingredient sans fiche est exclu du total, et compte a part : un total
+// silencieusement ampute serait pire qu'un total annonce comme incomplet.
+const inconnu: RecipeIngredient = { ...riz, id: 3, per100g: null };
+const partiel = recipeMacros([riz, inconnu]);
+assert.equal(partiel.macros.kcal, 400, 'l ingredient sans fiche ne compte pas');
+assert.equal(partiel.unresolvedCount, 1, 'l ingredient sans fiche est signale');
+
+// La mise a l'echelle rend des grammes entiers : isValidQuantity les exige.
+assert.equal(quantityForServings(200, 4, 1), 50, 'un quart de 200 g');
+assert.equal(quantityForServings(200, 3, 1), 67, 'un tiers de 200 g, arrondi');
+assert.equal(isValidQuantity(quantityForServings(200, 3, 1)), true, 'quantite journalisable');
+// Une epice pesee au gramme sur six parts ne doit pas disparaitre.
+assert.equal(quantityForServings(1, 6, 1), 1, 'plancher a 1 g');
+
+// L'unite usuelle s'affiche avec son poids : c'est lui qui explique les macros.
+assert.equal(formatIngredientQuantity(oeufs), '2 oeufs (100 g)', 'deux oeufs');
+assert.equal(formatIngredientQuantity(riz), '200 g', 'sans unite usuelle');
+assert.equal(
+  formatIngredientQuantity({ ...oeufs, quantityG: 50 }),
+  '1 oeuf (50 g)',
+  'un seul oeuf reste au singulier',
+);
+
+// On n'achete pas 2,4 oeufs : la liste de courses arrondit au-dessus.
+assert.equal(shoppingUnitCount(120, 'oeuf', 50), 3, 'arrondi au superieur');
+assert.equal(shoppingUnitCount(100, 'oeuf', 50), 2, 'compte juste');
+assert.equal(shoppingUnitCount(200, null, null), null, 'sans unite, rien a compter');
+
+// Le rayon vient du groupe de l'ANSES, sauf pour le froid que le groupe ignore.
+assert.equal(aisleFor('Brocoli, cuit', '02'), 'produce', 'legume au rayon frais');
+assert.equal(aisleFor('Poulet, cuisse', '04'), 'butcher', 'volaille a la boucherie');
+assert.equal(aisleFor('Lait demi-ecreme', '05'), 'dairy', 'lait a la cremerie');
+assert.equal(aisleFor('Riz blanc', '03'), 'grocery', 'cereales en epicerie');
+// Le zero de tete mange par un tableur ne doit pas deplacer le rayon.
+assert.equal(aisleFor('Brocoli', '2'), 'produce', 'code sur un seul chiffre');
+// Un legume surgele reste un legume pour l'ANSES, mais pas pour le magasin.
+assert.equal(aisleFor('Petits pois surgeles', '02'), 'frozen', 'le froid l emporte');
+assert.equal(aisleFor('Epinards surgele', '02'), 'frozen', 'sans accent aussi');
+// Un produit a code-barres ne porte aucun groupe : il finit en Divers, ou on
+// le retrouve, plutot qu'en epicerie ou on le chercherait longtemps.
+assert.equal(aisleFor('Barre proteinee', null), 'other', 'sans groupe connu');
 
 console.log('Toutes les verifications pures passent.');

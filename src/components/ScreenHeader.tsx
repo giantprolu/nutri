@@ -4,9 +4,14 @@ import { ChevronLeftIcon, CloseIcon } from './icons';
 /**
  * Les deux en-têtes de l'application.
  *
- * `ScreenHeader` coiffe les trois destinations de la barre d'onglets : un
- * surtitre, un titre au corps d'affichage, un filet. Rien n'y est cliquable,
- * le tiers supérieur de l'écran ne portant aucune cible tactile (UX-DR-3).
+ * `ScreenHeader` coiffe les destinations de la barre d'onglets : un surtitre,
+ * un titre au corps d'affichage, un filet.
+ *
+ * Il accepte une destination secondaire, et une seule. UX-DR-3 écarte du tiers
+ * supérieur les contrôles *fréquents*, pas toute cible : ce qu'on touche
+ * plusieurs fois par jour appartient à la barre basse, ce qu'on ouvre une fois
+ * par semaine n'y a pas sa place et prendrait un onglet à un geste quotidien.
+ * L'historique est exactement de ce second genre. La cible garde ses 44 px.
  *
  * `NavHeader` coiffe les écrans qu'on ouvre puis qu'on quitte. Il ne porte que
  * la sortie, à gauche, et le nom de l'écran au centre — jamais de titre au
@@ -16,15 +21,30 @@ import { ChevronLeftIcon, CloseIcon } from './icons';
 export function ScreenHeader({
   title,
   kicker,
+  action,
 }: {
   title: string;
   kicker?: string;
+  /** Destination secondaire, posée en regard du titre. Jamais un geste fréquent. */
+  action?: { href: string; label: string; icon: React.ReactNode };
 }) {
   return (
     <header>
-      <div className="pt-4 pb-3">
-        {kicker ? <p className="kicker first-letter:uppercase">{kicker}</p> : null}
-        <h1 className="display">{title}</h1>
+      <div className="flex items-end justify-between gap-3 pt-4 pb-3">
+        <div className="min-w-0">
+          {kicker ? <p className="kicker first-letter:uppercase">{kicker}</p> : null}
+          <h1 className="display">{title}</h1>
+        </div>
+
+        {action ? (
+          <Link
+            href={action.href}
+            aria-label={action.label}
+            className="tap-target -mr-3 flex flex-none items-center justify-center"
+          >
+            <span aria-hidden>{action.icon}</span>
+          </Link>
+        ) : null}
       </div>
       <hr className="rule" />
     </header>

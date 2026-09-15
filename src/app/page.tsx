@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { DayDial } from '@/components/DayDial';
 import { MealJournal } from '@/components/MealJournal';
-import { PlusIcon } from '@/components/icons';
+import { HistoryIcon, PlusIcon } from '@/components/icons';
 import { journalForToday } from '@/server/services/entries';
 import { requireUserId } from '@/server/guard';
 import { targetFor } from '@/server/services/profile';
@@ -28,7 +28,20 @@ export default async function JournalPage() {
 
   return (
     <>
-      <ScreenHeader title="Journal" kicker={formatJournalDate(today)} />
+      {/*
+        L'historique se rejoint d'ici depuis que la barre basse porte la
+        Cuisine et le Sport. Il n'y perd rien : on le consulte une fois de
+        temps en temps, et toujours depuis le journal du jour.
+      */}
+      <ScreenHeader
+        title="Journal"
+        kicker={formatJournalDate(today)}
+        action={{
+          href: '/history',
+          label: 'Voir les journaux passés',
+          icon: <HistoryIcon className="h-[22px] w-[22px]" />,
+        }}
+      />
 
       <DayDial
         macros={totals.macros}

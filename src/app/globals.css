@@ -680,4 +680,22 @@ body {
     letter-spacing: 0.01em;
     cursor: pointer;
   }
+
+  /*
+   * Sous 360 px, la pilule ne garde que son signe.
+   *
+   * Quatre onglets et une pilule tiennent leurs 44 px de large dès 375 px, la
+   * largeur du plus petit iPhone encore à jour. En deçà, il faut rendre de la
+   * place à quelqu'un : la retirer au libellé d'un bouton que son signe suffit
+   * à désigner coûte moins que de rétrécir cinq cibles tactiles.
+   */
+  @media (max-width: 359px) {
+    .add-pill-label {
+      display: none;
+    }
+
+    .add-pill {
+      flex: 1;
+    }
+  }
 }

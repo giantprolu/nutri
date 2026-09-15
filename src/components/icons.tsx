@@ -144,3 +144,37 @@ export function LockIcon(props: IconProps) {
     </Glyph>
   );
 }
+
+/** Une casserole vue de côté : la Cuisine, recettes et plan de la semaine. */
+export function KitchenIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M3 9h18v5a6 6 0 0 1-6 6H9a6 6 0 0 1-6-6z" />
+      <path d="M21 10h1.5a1.5 1.5 0 0 1 0 3H21" />
+      <path d="M8 6V4M12 6V3M16 6V4" />
+    </Glyph>
+  );
+}
+
+/** Un chariot : la liste de courses. */
+export function CartIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M2 3h2.2l2.3 11.3a2 2 0 0 0 2 1.7h8.4a2 2 0 0 0 2-1.6L20.5 7H5.3" />
+      <circle cx="9.5" cy="20" r="1.3" />
+      <circle cx="17.5" cy="20" r="1.3" />
+    </Glyph>
+  );
+}
+
+/** Un haltère : le Sport, séances et progression. */
+export function DumbbellIcon(props: IconProps) {
+  return (
+    <Glyph {...props}>
+      <path d="M2 12h2M20 12h2" />
+      <rect x="4" y="8" width="4" height="8" rx="1" />
+      <rect x="16" y="8" width="4" height="8" rx="1" />
+      <path d="M8 12h8" />
+    </Glyph>
+  );
+}

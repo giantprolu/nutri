@@ -120,3 +120,47 @@ export function isCompleteRow(values: {
     values.fat !== null
   );
 }
+
+/**
+ * En-têtes portant le groupe alimentaire, d'où est déduit le rayon de la
+ * liste de courses (`src/lib/aisle.ts`).
+ */
+export const GROUP_COLUMN_ALIASES = ['alim_grp_code', 'groupe'] as const;
+
+/**
+ * Cherche une colonne facultative, et rend `null` si le millésime ne la
+ * publie pas.
+ *
+ * Volontairement séparée de `mapColumns`, qui échoue sur une colonne
+ * manquante : le groupe alimentaire ne sert qu'à ranger une liste de courses.
+ * Faire échouer l'import de trois mille aliments parce qu'un export retraité a
+ * perdu cette colonne serait une punition sans rapport avec la faute.
+ */
+export function findOptionalColumn(
+  headers: readonly string[],
+  aliases: readonly string[],
+): string | null {
+  const normalized = new Map(headers.map((header) => [normalizeHeader(header), header]));
+  for (const alias of aliases) {
+    const found = normalized.get(normalizeHeader(alias));
+    if (found !== undefined) {
+      return found;
+    }
+  }
+  return null;
+}
+
+/**
+ * Normalise un code de groupe alimentaire sur deux caractères.
+ *
+ * Le CSV de l'ANSES publie « 02 », mais un fichier repassé par un tableur rend
+ * « 2 », le zéro de tête ayant été traité comme une décoration numérique. Les
+ * deux désignent le même groupe et doivent se ranger au même rayon.
+ */
+export function parseGroupCode(raw: string | undefined): string | null {
+  const value = (raw ?? '').trim();
+  if (value === '' || value === '-') {
+    return null;
+  }
+  return value.padStart(2, '0').slice(0, 2);
+}

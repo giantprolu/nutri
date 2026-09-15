@@ -18,7 +18,14 @@ import { drizzle } from 'drizzle-orm/neon-http';
 import { sql } from 'drizzle-orm';
 import * as schema from '../src/server/db/schema';
 
-import { mapColumns, parseNutrient, isCompleteRow } from './ciqual-parse';
+import {
+  mapColumns,
+  parseNutrient,
+  isCompleteRow,
+  findOptionalColumn,
+  parseGroupCode,
+  GROUP_COLUMN_ALIASES,
+} from './ciqual-parse';
 
 const DEFAULT_PATH = 'data/ciqual.csv';
 
@@ -99,6 +106,16 @@ async function main(): Promise<void> {
   }
   const columns = mapping.columns;
 
+  // Facultative : elle ne sert qu'au rangement de la liste de courses, et son
+  // absence ne doit pas faire échouer l'import de la table entière.
+  const groupColumn = findOptionalColumn(Object.keys(first), GROUP_COLUMN_ALIASES);
+  if (groupColumn === null) {
+    console.warn(
+      'Colonne de groupe alimentaire absente : les ingredients seront ranges ' +
+        'au rayon « Divers » de la liste de courses.',
+    );
+  }
+
   const db = drizzle(neon(databaseUrl), { schema });
   let imported = 0;
   let incomplete = 0;
@@ -124,6 +141,7 @@ async function main(): Promise<void> {
     batch.push({
       ciqualCode: code,
       name,
+      groupCode: groupColumn === null ? null : parseGroupCode(row[groupColumn]),
       kcal100g: kcal === null ? null : String(kcal),
       protein100g: protein === null ? null : String(protein),
       carbs100g: carbs === null ? null : String(carbs),
@@ -144,6 +162,7 @@ async function main(): Promise<void> {
         target: schema.ciqualFoods.ciqualCode,
         set: {
           name: sql`excluded.name`,
+          groupCode: sql`excluded.group_code`,
           kcal100g: sql`excluded.kcal_100g`,
           protein100g: sql`excluded.protein_100g`,
           carbs100g: sql`excluded.carbs_100g`,

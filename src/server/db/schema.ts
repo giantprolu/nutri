@@ -227,6 +227,17 @@ export const ciqualFoods = pgTable('ciqual_foods', {
   protein100g: nutrient('protein_100g'),
   carbs100g: nutrient('carbs_100g'),
   fat100g: nutrient('fat_100g'),
+  /**
+   * Groupe alimentaire de l'ANSES (`alim_grp_code`), sur deux caractères.
+   *
+   * Importé pour une seule raison : ranger un ingrédient au bon rayon de la
+   * liste de courses. Le classement de l'ANSES vaut mieux qu'une liste de
+   * mots-clés écrite à la main, et il est déjà dans le CSV.
+   *
+   * Nullable : les lignes importées avant l'ajout de la colonne ne l'ont pas,
+   * et un réimport suffit à les remplir.
+   */
+  groupCode: text('group_code'),
   isComplete: boolean('is_complete').notNull().default(false),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
@@ -259,3 +270,92 @@ export const foodAliases = pgTable(
 );
 
 export type FoodAliasRow = typeof foodAliases.$inferSelect;
+
+/**
+ * Une recette. Elle appartient à un utilisateur, comme le journal : ce qu'on
+ * mange et ce qu'on prévoit de manger sont la même donnée de santé.
+ *
+ * Contrairement à une entrée, elle ne porte aucune valeur nutritionnelle. Ses
+ * macros sont recalculées depuis les références de ses ingrédients à chaque
+ * lecture. AD-1 fige le passé, pas les intentions : corriger un ingrédient mal
+ * saisi doit corriger les repas à venir, et ne toucher à aucun repas déjà
+ * journalisé.
+ */
+export const recipes = pgTable(
+  'recipes',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** Nombre de parts que produit la recette telle qu'elle est écrite. */
+    servings: numeric('servings', { precision: 4, scale: 1 }).notNull().default('1'),
+    /**
+     * Les étapes, dans l'ordre. Un tableau de texte plutôt qu'une table :
+     * une étape n'a ni identité ni existence hors de sa recette, et rien ne
+     * la référencera jamais.
+     */
+    steps: text('steps').array().notNull().default(sql`'{}'::text[]`),
+    prepMinutes: integer('prep_minutes'),
+    notes: text('notes'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // L'utilisateur est en tête, comme partout ailleurs : aucune lecture ne
+    // balaie les recettes des autres.
+    index('recipes_user_name_idx').on(table.userId, table.name),
+  ],
+);
+
+export type RecipeRow = typeof recipes.$inferSelect;
+export type NewRecipeRow = typeof recipes.$inferInsert;
+
+/**
+ * Un ingrédient de recette : une référence, une quantité, et de quoi
+ * l'afficher.
+ *
+ * `refKind` et `refValue` désignent la même chose que `sourceKind` et
+ * `sourceRef` d'une entrée, à une valeur près : `manual` n'est pas admis. Un
+ * ingrédient sans référence porterait ses propres macros et ouvrirait un
+ * second chemin de calcul pour un gain nul — la table CIQUAL couvre les
+ * aliments de base, et une fiche manuelle a sa place dans `products`.
+ *
+ * Aucune clé étrangère vers `ciqual_foods` ni `products` : la référence est
+ * résolue à la lecture, et une fiche devenue introuvable doit rendre un
+ * ingrédient signalé, pas une écriture impossible.
+ */
+export const recipeIngredients = pgTable(
+  'recipe_ingredients',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    recipeId: bigint('recipe_id', { mode: 'number' })
+      .notNull()
+      .references(() => recipes.id, { onDelete: 'cascade' }),
+    /** Rang dans la liste, tel que l'utilisateur l'a ordonné. */
+    position: integer('position').notNull(),
+    refKind: text('ref_kind').notNull(),
+    refValue: text('ref_value').notNull(),
+    /** Désignation affichée, recopiée à la création puis librement modifiable. */
+    label: text('label').notNull(),
+    quantityG: nutrient('quantity_g').notNull(),
+    /**
+     * Unité usuelle, quand l'ingrédient se compte plutôt qu'il ne se pèse.
+     * « Œufs — 300 g » n'est pas une ligne de liste de courses ; « 6 œufs »
+     * en est une. Les grammes restent la source de vérité des macros, l'unité
+     * n'est qu'une lecture.
+     */
+    unitName: text('unit_name'),
+    unitGrams: nutrient('unit_grams'),
+  },
+  (table) => [
+    index('recipe_ingredients_recipe_idx').on(table.recipeId, table.position),
+    // Contrainte en base et pas seulement à la frontière HTTP : une valeur
+    // hors liste rendrait l'ingrédient irrésolvable et le total muet.
+    check('recipe_ingredients_ref_kind_check', sql`${table.refKind} in ('ciqual', 'product')`),
+  ],
+);
+
+export type RecipeIngredientRow = typeof recipeIngredients.$inferSelect;
+export type NewRecipeIngredientRow = typeof recipeIngredients.$inferInsert;
