@@ -21,10 +21,14 @@ const ACTIVITY_WINDOW_DAYS = 14;
 
 /**
  * Nombre de journées mesurées en dessous duquel on garde le facteur déclaré.
- * Une ou deux journées ne disent rien d'une habitude, et une seule sortie
- * exceptionnelle ferait alors bondir la cible pour deux semaines.
+ *
+ * Sept, soit une semaine entière : la dépense suit un rythme hebdomadaire, et
+ * une fenêtre plus courte tombe sur des jours ouvrés ou sur un week-end sans
+ * qu'on sache lequel. Le seuil valait trois, ce qui était trop peu pour la
+ * médiane qui décide désormais : sur trois points, deux mesures fausses
+ * suffisent à l'emporter, sur sept il en faut quatre.
  */
-const MIN_MEASURED_DAYS = 3;
+const MIN_MEASURED_DAYS = 7;
 
 export type { Profile };
 
@@ -39,6 +43,9 @@ function toBodyProfile(profile: Profile) {
     goal: profile.goal,
     ratePercentPerWeek: profile.ratePercentPerWeek,
     ...(profile.bodyFatPercent === null ? {} : { bodyFatPercent: profile.bodyFatPercent }),
+    ...(profile.manualTargetKcal === null
+      ? {}
+      : { manualTargetKcal: profile.manualTargetKcal }),
   };
 }
 
@@ -57,9 +64,15 @@ export async function targetFor(userId: number): Promise<EnergyTarget | null> {
     return null;
   }
 
+  // La cible fixée à la main n'a besoin d'aucune mesure : inutile d'aller
+  // chercher une dépense que le calcul n'utilisera pas.
+  if (profile.manualTargetKcal !== null) {
+    return computeEnergyTarget(body);
+  }
+
   const baseline = await activityBaseline(userId, todayInParis(), ACTIVITY_WINDOW_DAYS);
   return baseline.dayCount >= MIN_MEASURED_DAYS
-    ? computeEnergyTarget(body, baseline.averageActiveKcal)
+    ? computeEnergyTarget(body, baseline.typicalActiveKcal)
     : computeEnergyTarget(body);
 }
 
@@ -78,7 +91,8 @@ export async function bridgeStatus(userId: number) {
     lastDay: last?.day ?? null,
     lastKcal: last?.activeKcal ?? null,
     dayCount: baseline.dayCount,
-    averageKcal: baseline.averageActiveKcal,
+    typicalKcal: baseline.typicalActiveKcal,
+    peakKcal: baseline.maxActiveKcal,
     requiredDays: MIN_MEASURED_DAYS,
   };
 }
@@ -105,5 +119,11 @@ export async function recordProfile(
     return { kind: 'invalid' };
   }
   await saveProfile(userId, profile);
-  return { kind: 'saved', target: computeEnergyTarget(body) };
+
+  // La cible est relue plutôt que recalculée sur place : `targetFor` tient
+  // compte de la dépense mesurée, ce que ne faisait pas l'ancien appel direct.
+  // Le formulaire affichait donc une cible qui n'était pas celle du journal.
+  const target = await targetFor(userId);
+  // Le profil vient d'être écrit après validation : ce cas ne se produit pas.
+  return target === null ? { kind: 'invalid' } : { kind: 'saved', target };
 }

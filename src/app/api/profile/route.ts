@@ -23,6 +23,8 @@ const profileSchema = z.object({
   activity: z.enum(Object.keys(ACTIVITY_FACTORS) as [string, ...string[]]),
   goal: z.enum(['lose', 'maintain', 'gain']),
   ratePercentPerWeek: z.number(),
+  /** Cible fixée à la main. `null` rend la main au calcul. */
+  manualTargetKcal: z.number().int().nullable(),
 });
 
 export async function GET(): Promise<Response> {

@@ -71,6 +71,34 @@ export const MAX_GAIN_RATE_PERCENT = 0.5;
  */
 const ABSOLUTE_FLOOR_KCAL = { male: 1500, female: 1200 } as const;
 
+/**
+ * Plafond de la dépense d'activité mesurée, en multiples du métabolisme de base.
+ *
+ * Il existe une limite haute à ce qu'un corps humain dépense durablement :
+ * environ 2,5 fois le métabolisme de base, mesurée par Thurber et coll.
+ * (Science Advances, 2019) sur des coureurs d'ultrafond et des cyclistes du
+ * Tour de France. Le repos comptant pour un, il reste au plus une fois et
+ * demie le métabolisme de base pour l'activité.
+ *
+ * Ce plafond n'est pas une précaution théorique. Le pont Santé a déjà remonté
+ * une journée à 10 773 kcal actives — un raccourci qui envoie un cumul au lieu
+ * d'un jour, ou une dépense sommée sur plusieurs semaines. Sans plafond, une
+ * seule journée de ce genre porte la cible à plus de quatre mille kilocalories
+ * et l'application conseille exactement l'inverse de ce qu'elle devrait.
+ *
+ * Le plafond s'applique ici, au calcul, et non à l'ingestion : la table
+ * d'activité enregistre ce que le capteur a dit, le calcul décide ce qu'il en
+ * croit. Corriger à l'écriture effacerait la trace du raccourci défaillant.
+ */
+export const MAX_ACTIVE_KCAL_PER_BMR = 1.5;
+
+/**
+ * Bornes d'une cible fixée à la main. Le plancher reste celui du calcul, par
+ * sexe : choisir sa cible n'autorise pas à descendre sous le minimum clinique.
+ * Le plafond écarte la faute de frappe, pas l'appétit.
+ */
+export const MANUAL_TARGET_MAX_KCAL = 6000;
+
 /** Densité énergétique des macronutriments, en kilocalories par gramme. */
 const KCAL_PER_G = { protein: 4, carbs: 4, fat: 9 } as const;
 
@@ -124,6 +152,12 @@ export interface BodyProfile {
    * métabolisme de base sur Katch-McArdle et les protéines sur la masse maigre.
    */
   bodyFatPercent?: number;
+  /**
+   * Cible fixée à la main. Renseignée, elle remplace le résultat du calcul :
+   * l'utilisateur qui a pesé trois semaines en sait plus que l'équation.
+   * Les macronutriments continuent d'être répartis, sur ce chiffre-là.
+   */
+  manualTargetKcal?: number;
 }
 
 /** Résultat complet, chaque étape restant lisible séparément. */
@@ -144,13 +178,35 @@ export interface EnergyTarget {
   /** Équation employée pour le métabolisme de base. */
   equation: 'mifflin-st-jeor' | 'katch-mcardle';
   /**
-   * Origine de la dépense d'activité : `measured` quand elle vient d'un
-   * capteur, `declared` quand elle vient du niveau choisi au questionnaire.
+   * D'où vient la cible : `manual` quand l'utilisateur l'a fixée lui-même,
+   * `measured` quand la dépense vient d'un capteur, `declared` quand elle vient
+   * du niveau d'activité choisi au questionnaire.
    */
-  basis: 'measured' | 'declared';
+  basis: 'measured' | 'declared' | 'manual';
+  /**
+   * Vrai quand la dépense mesurée dépassait le plafond physiologique et a été
+   * ramenée à celui-ci. L'écran doit alors dire que le pont Santé envoie des
+   * valeurs fausses, sans quoi l'utilisateur croit à un calcul cassé.
+   */
+  activityCapped: boolean;
   proteinG: number;
   carbsG: number;
   fatG: number;
+}
+
+/**
+ * L'écart entre la cible retenue et la dépense, arrondi.
+ *
+ * C'est l'écart obtenu et non l'écart demandé : quand un plancher a relevé la
+ * cible, ou quand l'utilisateur l'a fixée lui-même, le second ne décrit plus
+ * rien. Seul le premier dit à l'écran ce que la journee creuse ou comble.
+ *
+ * L'addition de zéro n'est pas décorative. En maintien, la cible arrondie tombe
+ * un peu sous la dépense, `Math.round` rend -0, et l'écran affichait « − 0 kcal ».
+ * La somme d'un zéro négatif et d'un zéro positif vaut zero positif.
+ */
+function reportedAdjustment(targetKcal: number, maintenanceKcal: number): number {
+  return Math.round(targetKcal - maintenanceKcal) + 0;
 }
 
 function roundTo(value: number, decimals: number): number {
@@ -205,7 +261,11 @@ export function isValidBodyProfile(profile: BodyProfile): boolean {
     (profile.bodyFatPercent === undefined ||
       (Number.isFinite(profile.bodyFatPercent) &&
         profile.bodyFatPercent >= 3 &&
-        profile.bodyFatPercent <= 70))
+        profile.bodyFatPercent <= 70)) &&
+    (profile.manualTargetKcal === undefined ||
+      (Number.isFinite(profile.manualTargetKcal) &&
+        profile.manualTargetKcal >= ABSOLUTE_FLOOR_KCAL[profile.sex] &&
+        profile.manualTargetKcal <= MANUAL_TARGET_MAX_KCAL))
   );
 }
 
@@ -273,26 +333,42 @@ export function computeEnergyTarget(
   // Modèle additif quand la dépense est mesurée : Santé compte l'énergie
   // active en plus du repos, les deux s'ajoutent donc sans se recouvrir.
   // Modèle multiplicatif sinon, faute de mieux.
+  //
+  // La mesure est plafonnée avant d'être crue. Un capteur se trompe de
+  // plusieurs ordres de grandeur quand il se trompe, et une dépense qu'aucun
+  // corps humain ne soutient n'est pas une dépense : c'est une panne.
   const measured = measuredActiveKcal !== undefined && Number.isFinite(measuredActiveKcal);
+  const ceiling = bmr * MAX_ACTIVE_KCAL_PER_BMR;
+  const active = measured ? Math.max(0, measuredActiveKcal as number) : 0;
+  const activityCapped = measured && active > ceiling;
   const maintenance = measured
-    ? bmr + Math.max(0, measuredActiveKcal as number)
+    ? bmr + Math.min(active, ceiling)
     : bmr * ACTIVITY_FACTORS[profile.activity];
+
   const adjustment = dailyAdjustment(profile);
   const raw = maintenance + adjustment;
 
   // Deux planchers, le plus haut l'emporte : jamais sous le métabolisme de
   // base, jamais sous le minimum clinique. Ils ne mordent qu'en perte.
   const floor = Math.max(bmr, ABSOLUTE_FLOOR_KCAL[profile.sex]);
-  const target = Math.round(Math.max(raw, floor));
+  const computed = Math.round(Math.max(raw, floor));
+
+  // La cible fixée à la main court-circuite les planchers comme l'objectif :
+  // ils protègent une estimation, or ce chiffre-ci n'en est pas une. Les bornes
+  // de `isValidBodyProfile` l'ont déjà gardé dans le raisonnable en amont.
+  const manual = profile.manualTargetKcal;
+  const manualUsed = manual !== undefined && Number.isFinite(manual);
+  const target = manualUsed ? Math.round(manual as number) : computed;
 
   return {
     bmrKcal: Math.round(bmr),
     maintenanceKcal: Math.round(maintenance),
-    adjustmentKcal: Math.round(adjustment),
+    adjustmentKcal: reportedAdjustment(target, maintenance),
     targetKcal: target,
-    floored: target > Math.round(raw),
+    floored: !manualUsed && computed > Math.round(raw),
     equation: useKatch ? 'katch-mcardle' : 'mifflin-st-jeor',
-    basis: measured ? 'measured' : 'declared',
+    basis: manualUsed ? 'manual' : measured ? 'measured' : 'declared',
+    activityCapped,
     ...splitMacros(target, profile),
   };
 }

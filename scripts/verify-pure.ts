@@ -19,6 +19,7 @@ import {
   mifflinStJeor,
   katchMcArdle,
   isValidBodyProfile,
+  MAX_ACTIVE_KCAL_PER_BMR,
   type BodyProfile,
 } from '../src/lib/energy';
 
@@ -233,6 +234,70 @@ assert.equal(cut.basis, 'declared', 'origine declaree sans mesure');
 const still = computeEnergyTarget(baseProfile, 0);
 assert.equal(still.maintenanceKcal, 1780, 'depense nulle prise au mot');
 assert.equal(still.basis, 'measured');
+
+// Dépense mesurée aberrante : le pont Santé a déjà remonté une journée à
+// 10 773 kcal actives. Sans plafond, la cible d'un homme de 90 kg qui veut
+// maigrir montait à plus de quatre mille kilocalories.
+const absurd = computeEnergyTarget(
+  { ...baseProfile, weightKg: 90.4, heightCm: 179, ageYears: 21, ratePercentPerWeek: 1 },
+  10773,
+);
+assert.equal(absurd.activityCapped, true, 'la mesure aberrante est signalee');
+// Le plafond porte sur le metabolisme non arrondi : la comparaison tolere donc
+// le kilocalorie d'ecart que l'arrondi du rendu introduit.
+assert.ok(
+  Math.abs(absurd.maintenanceKcal - absurd.bmrKcal * (1 + MAX_ACTIVE_KCAL_PER_BMR)) <= 1,
+  'la depense est ramenee au plafond physiologique',
+);
+assert.ok(absurd.targetKcal < 4000, 'la cible ne depasse plus le raisonnable');
+
+// Sous le plafond, rien ne change : la mesure est prise telle quelle.
+assert.equal(measured.activityCapped, false, 'une mesure plausible n est pas plafonnee');
+
+// Le plafond suit le metabolisme de base et non une constante : il vaut 1,5 fois
+// celui-ci, soit 2670 kcal actives pour le profil de reference.
+const atCeiling = computeEnergyTarget(baseProfile, 1780 * MAX_ACTIVE_KCAL_PER_BMR);
+assert.equal(atCeiling.activityCapped, false, 'le plafond lui-meme reste accepte');
+assert.equal(atCeiling.maintenanceKcal, 4450, 'depense au plafond');
+
+// Cible fixee a la main : elle remplace le calcul, planchers et objectif compris.
+const manual = computeEnergyTarget({ ...baseProfile, manualTargetKcal: 2200 });
+assert.equal(manual.targetKcal, 2200, 'la cible manuelle est rendue telle quelle');
+assert.equal(manual.basis, 'manual', 'origine manuelle');
+assert.equal(manual.floored, false, 'aucun plancher sur une cible choisie');
+assert.equal(manual.adjustmentKcal, 2200 - manual.maintenanceKcal, 'ecart obtenu, non demande');
+
+// Les macronutriments sont repartis sur la cible manuelle, pas sur la calculee.
+const manualRecomposed = manual.proteinG * 4 + manual.carbsG * 4 + manual.fatG * 9;
+assert.ok(Math.abs(manualRecomposed - 2200) < 2, 'les macros somment a la cible manuelle');
+
+// La mesure reste affichee sous une cible manuelle : l'utilisateur doit voir
+// l'ecart qu'il se donne, meme s'il ne decide plus rien.
+const manualMeasured = computeEnergyTarget({ ...baseProfile, manualTargetKcal: 2200 }, 900);
+assert.equal(manualMeasured.maintenanceKcal, 2680, 'la depense mesuree reste calculee');
+assert.equal(manualMeasured.adjustmentKcal, -480, 'deficit reel sous cible manuelle');
+
+// Bornes de la cible manuelle : le minimum clinique du sexe declare tient encore.
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, manualTargetKcal: 1499 }),
+  false,
+  'sous le plancher masculin refusee',
+);
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, manualTargetKcal: 1500 }),
+  true,
+  'le plancher masculin lui-meme accepte',
+);
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, sex: 'female', manualTargetKcal: 1200 }),
+  true,
+  'plancher feminin plus bas',
+);
+assert.equal(
+  isValidBodyProfile({ ...baseProfile, manualTargetKcal: 6001 }),
+  false,
+  'faute de frappe au-dela du plafond refusee',
+);
 
 // Bornes du questionnaire.
 assert.equal(isValidBodyProfile(baseProfile), true, 'profil plausible accepte');

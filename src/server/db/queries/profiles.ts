@@ -20,6 +20,8 @@ export interface Profile {
   activity: ActivityLevel;
   goal: Goal;
   ratePercentPerWeek: number;
+  /** Cible fixée à la main, ou `null` quand le calcul décide. */
+  manualTargetKcal: number | null;
 }
 
 function toProfile(row: typeof schema.profiles.$inferSelect): Profile {
@@ -32,6 +34,7 @@ function toProfile(row: typeof schema.profiles.$inferSelect): Profile {
     activity: row.activity as ActivityLevel,
     goal: row.goal as Goal,
     ratePercentPerWeek: Number(row.ratePercentPerWeek),
+    manualTargetKcal: row.manualTargetKcal,
   };
 }
 
@@ -61,6 +64,7 @@ export async function saveProfile(userId: number, profile: Profile): Promise<voi
     activity: profile.activity,
     goal: profile.goal,
     ratePercentPerWeek: String(profile.ratePercentPerWeek),
+    manualTargetKcal: profile.manualTargetKcal,
     updatedAt: new Date(),
   };
 
@@ -78,6 +82,7 @@ export async function saveProfile(userId: number, profile: Profile): Promise<voi
         activity: sql`excluded.activity`,
         goal: sql`excluded.goal`,
         ratePercentPerWeek: sql`excluded.rate_percent_per_week`,
+        manualTargetKcal: sql`excluded.manual_target_kcal`,
         updatedAt: sql`now()`,
       },
     });

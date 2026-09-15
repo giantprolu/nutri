@@ -24,6 +24,7 @@ export default async function ProfilePage() {
         activity: profile.activity,
         goal: profile.goal,
         ratePercentPerWeek: profile.ratePercentPerWeek,
+        manualTargetKcal: profile.manualTargetKcal,
       }
     : null;
 

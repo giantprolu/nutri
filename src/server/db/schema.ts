@@ -106,6 +106,16 @@ export const profiles = pgTable('profiles', {
   goal: text('goal').notNull(),
   /** Rythme visé, en pourcentage du poids par semaine. */
   ratePercentPerWeek: numeric('rate_percent_per_week', { precision: 3, scale: 2 }).notNull(),
+  /**
+   * Cible fixée à la main, en kilocalories. `null` tant que l'utilisateur
+   * laisse le calcul décider.
+   *
+   * Elle existe parce qu'aucune équation ne bat trois semaines de pesée. Celui
+   * qui a constaté que sa cible calculée le fait grossir doit pouvoir la
+   * corriger sans mentir sur son poids ou son niveau d'activité pour obtenir le
+   * chiffre qu'il sait juste. Renseignée, elle l'emporte sur tout le reste.
+   */
+  manualTargetKcal: integer('manual_target_kcal'),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 });
 export type ProfileRow = typeof profiles.$inferSelect;

@@ -49,9 +49,21 @@ export interface ReferenceFood {
   servingSizeG: number | null;
 }
 
+/**
+ * Où un résultat a été trouvé, ce que `kind` ne dit pas.
+ *
+ * `kind` est la nature de la fiche et décide de la colonne `source_kind` d'une
+ * entrée. `origin` est le chemin par lequel elle est arrivée, et décide de deux
+ * choses que `kind` ne saurait porter : l'étiquette affichée, et le fait qu'un
+ * produit venu d'Open Food Facts doit être mis en cache avant d'être journalisé,
+ * sans quoi sa référence ne pointerait vers rien.
+ */
+export type HitOrigin = 'ciqual' | 'cache' | 'off';
+
 /** Un résultat de recherche, avec sa source affichable. */
 export interface SearchHit extends ReferenceFood {
   similarity: number;
+  origin: HitOrigin;
 }
 
 /** Forme d'erreur unique des routes serveur (spine, conventions). */

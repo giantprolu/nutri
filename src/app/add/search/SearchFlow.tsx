@@ -7,6 +7,7 @@ import { NavHeader } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
 import { SearchIcon } from '@/components/icons';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
+import { cacheProduct } from '@/lib/client/products';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { MIN_QUERY_LENGTH, SEARCH_DEBOUNCE_MS, searchFoods } from '@/lib/client/search';
 import { formatGrams, formatKcal } from '@/lib/nutrition';
@@ -25,9 +26,16 @@ type Step =
   | { name: 'search' }
   | { name: 'quantity'; hit: SearchHit; shortcuts: QuantityShortcut[] };
 
-const SOURCE_LABEL: Record<SearchHit['kind'], string> = {
+/**
+ * D'où vient la fiche. Trois étiquettes et non deux : un produit déjà scanné
+ * est une fiche vérifiée une fois par son propriétaire, un produit venu de la
+ * recherche Open Food Facts est une fiche saisie par un inconnu. L'utilisateur
+ * n'accorde pas le même crédit aux deux, encore faut-il les distinguer.
+ */
+const SOURCE_LABEL: Record<SearchHit['origin'], string> = {
   ciqual: 'Ciqual',
-  product: 'Scanné',
+  cache: 'Scanné',
+  off: 'Open Food Facts',
 };
 
 export function SearchFlow() {
@@ -92,6 +100,21 @@ export function SearchFlow() {
     setSubmitting(true);
     setError(null);
 
+    // Un produit venu de la recherche Open Food Facts n'est pas encore en base.
+    // Sans cette mise en cache, l'entrée porterait une référence vers un produit
+    // que rien ne connaît : les raccourcis de quantité (FR-9) et les alias
+    // (FR-19) ne la retrouveraient plus. L'entrée, elle, porte ses propres
+    // macros (AD-1) et reste juste même si cette écriture échoue.
+    if (step.hit.origin === 'off') {
+      await cacheProduct({
+        barcode: step.hit.ref,
+        name: step.hit.name,
+        per100g: step.hit.per100g,
+        servingSizeG: step.hit.servingSizeG,
+        source: 'off',
+      });
+    }
+
     const result = await createEntry({
       foodLabel: step.hit.name,
       per100g: step.hit.per100g,
@@ -124,7 +147,7 @@ export function SearchFlow() {
         />
         <QuantityPad
           foodLabel={step.hit.name}
-          sourceLabel={SOURCE_LABEL[step.hit.kind]}
+          sourceLabel={SOURCE_LABEL[step.hit.origin]}
           per100g={step.hit.per100g}
           shortcuts={step.shortcuts}
           submitting={submitting}
@@ -191,9 +214,9 @@ export function SearchFlow() {
                     </span>
                   </span>
                   <span
-                    className={`kicker flex-none ${hit.kind === 'ciqual' ? 'kicker-quiet' : ''}`}
+                    className={`kicker flex-none ${hit.origin === 'ciqual' ? 'kicker-quiet' : ''}`}
                   >
-                    {SOURCE_LABEL[hit.kind]}
+                    {SOURCE_LABEL[hit.origin]}
                   </span>
                 </button>
               </li>

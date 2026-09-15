@@ -19,7 +19,8 @@ const EMPTY_STATUS = {
   lastDay: null,
   lastKcal: null,
   dayCount: 0,
-  averageKcal: 0,
+  typicalKcal: 0,
+  peakKcal: 0,
   requiredDays: 3,
 };
 

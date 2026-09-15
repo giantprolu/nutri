@@ -43,20 +43,34 @@ export async function upsertDailyActivity(
 }
 
 export interface ActivityBaseline {
-  /** Moyenne journalière retenue, en kilocalories. */
-  averageActiveKcal: number;
-  /** Nombre de journées complètes ayant servi à la moyenne. */
+  /** Dépense journalière retenue, en kilocalories. */
+  typicalActiveKcal: number;
+  /** Plus forte journée de la fenêtre, pour diagnostiquer une mesure aberrante. */
+  maxActiveKcal: number;
+  /** Nombre de journées complètes ayant servi au calcul. */
   dayCount: number;
 }
 
 /**
- * Moyenne des dépenses sur la fenêtre précédant `today`, jour courant exclu.
+ * Dépense habituelle sur la fenêtre précédant `today`, jour courant exclu.
  *
- * Une moyenne plutôt que la valeur du jour, et c'est le point important : au
- * réveil, la dépense du jour vaut zéro, et une cible qui en dépendrait
- * s'effondrerait chaque matin pour remonter le soir. La moyenne récente
+ * Une valeur de fenêtre plutôt que celle du jour, et c'est le premier point :
+ * au réveil, la dépense du jour vaut zéro, et une cible qui en dépendrait
+ * s'effondrerait chaque matin pour remonter le soir. La fenêtre récente
  * remplace le multiplicateur deviné par un multiplicateur constaté, sans
  * introduire cette instabilité.
+ *
+ * La médiane et non la moyenne, et c'est le second point, appris à nos dépens.
+ * Le pont Santé a remonté une journée à 10 773 kcal actives ; moyennée avec
+ * deux journées normales de 49 et 203 kcal, elle donnait 3 675 kcal par jour et
+ * portait la cible d'un homme de 90 kg qui veut maigrir à plus de quatre mille
+ * kilocalories. La médiane de ces trois journées vaut 203. Une seule mesure
+ * fausse ne peut pas déplacer une médiane, alors qu'elle emporte une moyenne :
+ * sur une fenêtre de quatorze jours alimentée par un capteur grand public, ce
+ * n'est pas un raffinement, c'est la seule statistique tenable.
+ *
+ * Le maximum est rendu à côté, sans servir au calcul : c'est lui qui permet à
+ * l'écran de réglages de dire que le raccourci envoie n'importe quoi.
  */
 export async function activityBaseline(
   userId: number,
@@ -69,8 +83,15 @@ export async function activityBaseline(
   start.setUTCDate(start.getUTCDate() - windowDays);
   const from = start.toISOString().slice(0, 10);
 
-  const result = await db().execute<{ average: string | null; days: string }>(sql`
-    SELECT avg(kcal) AS average, count(*) AS days
+  const result = await db().execute<{
+    median: string | null;
+    peak: string | null;
+    days: string;
+  }>(sql`
+    SELECT
+      percentile_cont(0.5) WITHIN GROUP (ORDER BY kcal) AS median,
+      max(kcal) AS peak,
+      count(*) AS days
     FROM (
       SELECT max(active_kcal) AS kcal
       FROM daily_activity
@@ -83,7 +104,8 @@ export async function activityBaseline(
 
   const row = result.rows[0];
   return {
-    averageActiveKcal: row?.average == null ? 0 : Number(row.average),
+    typicalActiveKcal: row?.median == null ? 0 : Number(row.median),
+    maxActiveKcal: row?.peak == null ? 0 : Number(row.peak),
     dayCount: Number(row?.days ?? 0),
   };
 }

@@ -121,7 +121,17 @@ export async function candidatesFor(userId: number, name: string): Promise<Candi
     (candidate) => !(candidate.kind === target.kind && candidate.ref === target.ref),
   );
 
-  return [{ ...target, similarity: 1, fromAlias: true }, ...rest].slice(0, MAX_CANDIDATES);
+  return [
+    {
+      ...target,
+      // L'alias pointe toujours vers une fiche déjà en base : jamais vers un
+      // produit que seule la recherche Open Food Facts connaîtrait.
+      origin: target.kind === 'ciqual' ? ('ciqual' as const) : ('cache' as const),
+      similarity: 1,
+      fromAlias: true,
+    },
+    ...rest,
+  ].slice(0, MAX_CANDIDATES);
 }
 
 /** Crée ou met à jour l'alias d'un nom (FR-19). Un nouveau choix remplace l'ancien. */

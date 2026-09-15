@@ -19,9 +19,11 @@ export interface BridgeStatus {
   /** Dernière journée reçue, formatée pour l'affichage. */
   lastDay: string | null;
   lastKcal: number | null;
-  /** Journées complètes retenues dans la moyenne, et cette moyenne. */
+  /** Journées complètes retenues, et la dépense médiane de ces journées. */
   dayCount: number;
-  averageKcal: number;
+  typicalKcal: number;
+  /** Plus forte journée de la fenêtre, qui trahit une mesure aberrante. */
+  peakKcal: number;
   /** Nombre de journées requis avant que la cible bascule. */
   requiredDays: number;
 }
@@ -76,6 +78,12 @@ export function HealthBridge({
 
   const missing = status.requiredDays - status.dayCount;
 
+  // Seuil de suspicion : au-delà de quatre mille kilocalories actives en une
+  // journée, on est hors de ce qu'un humain dépense, cyclistes du Tour compris.
+  // Le chiffre est volontairement large ; il ne sert qu'à alerter, le calcul
+  // ayant déjà son propre plafond indexé sur le métabolisme de base.
+  const suspect = status.peakKcal > 4000;
+
   return (
     <>
       <p className="note mt-2">
@@ -99,11 +107,11 @@ export function HealthBridge({
           }
         />
         <Line
-          label="Moyenne retenue"
+          label="Dépense médiane"
           value={
             status.dayCount === 0
               ? '—'
-              : `${Math.round(status.averageKcal)} kcal sur ${status.dayCount} j`
+              : `${Math.round(status.typicalKcal)} kcal sur ${status.dayCount} j`
           }
         />
       </dl>
@@ -112,6 +120,14 @@ export function HealthBridge({
           ? 'La cible suit ta dépense mesurée.'
           : `Encore ${missing} journée${missing > 1 ? 's' : ''} avant que la cible bascule sur la mesure.`}
       </p>
+      {suspect ? (
+        <p role="alert" className="note mt-2" style={{ color: 'var(--color-danger)', opacity: 1 }}>
+          Une journée de la fenêtre atteint {Math.round(status.peakKcal)} kcal actives, ce
+          qu&apos;aucun corps ne dépense. Ton raccourci envoie probablement un cumul et non le
+          total du jour : vérifie que « Rechercher des échantillons » porte bien sur aujourd&apos;hui
+          seulement. La cible ignore cette journée, elle est calculée sur la médiane.
+        </p>
+      ) : null}
 
       <p className="kicker kicker-quiet mt-6 mb-2 block">Mode d&apos;emploi</p>
       <hr className="rule" />

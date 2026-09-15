@@ -1,4 +1,4 @@
-import type { Macros, OffLookup, OffPartialProduct } from '../types';
+import type { Macros, OffLookup, OffPartialProduct, ReferenceFood } from '../types';
 
 /**
  * Interrogation d'Open Food Facts (FR-13).
@@ -184,4 +184,266 @@ export async function lookupBarcode(barcode: string): Promise<OffLookup> {
       servingSizeG,
     },
   };
+}
+
+/**
+ * Recherche textuelle dans Open Food Facts (FR-7 étendu).
+ *
+ * CIQUAL décrit des aliments, pas des produits : « Glace ou crème glacée, en
+ * bac » y figure, un McFlurry non, et c'est normal — l'ANSES publie des
+ * moyennes d'aliments, pas un catalogue de marques. L'utilisateur, lui, mange
+ * des marques. Sans cette recherche, un McFlurry, un paquet de penne Barilla ou
+ * une canette de Coca n'existaient dans l'application qu'une fois scannés, ce
+ * qui suppose d'avoir l'emballage sous la main : impossible au restaurant, et
+ * pénible pour tout ce qui se consomme sans code-barres à portée.
+ *
+ * Le service interrogé est Search-a-licious, sur `search.openfoodfacts.org`,
+ * et non l'ancien `cgi/search.pl` d'Open Food Facts : celui-ci a été observé
+ * hors service, et le premier répond en quelques millisecondes.
+ *
+ * AD-2 s'applique ici comme pour le code-barres : l'appel part du NAVIGATEUR.
+ * Une route serveur mutualiserait l'adresse IP de la plateforme Vercel, et
+ * chaque frappe au clavier consommerait le quota de tout le monde.
+ */
+
+const SEARCH_ENDPOINT = 'https://search.openfoodfacts.org/search';
+
+/**
+ * Champs demandés. `_score` n'est rendu que s'il est réclamé explicitement, et
+ * il faut le réclamer : c'est lui qui porte la pertinence du moteur, seule
+ * information qui distingue un vrai « McFlurry » d'un produit dont le nom ne
+ * partage qu'un mot avec la requête.
+ */
+const SEARCH_FIELDS = [
+  '_score',
+  'code',
+  'product_name',
+  'product_name_fr',
+  'brands',
+  'nutriments',
+  'unique_scans_n',
+].join(',');
+
+/**
+ * Nombre de fiches demandées au moteur. Large parce qu'une bonne part d'entre
+ * elles n'a pas de valeurs nutritionnelles exploitables : sur les requêtes
+ * mesurées, une fiche sur cinq est écartée pour cette raison. En demander dix
+ * en rendrait huit.
+ */
+const SEARCH_PAGE_SIZE = 50;
+
+/** Nombre de produits finalement proposés, une fois le tri fait. */
+const SEARCH_LIMIT = 12;
+
+/**
+ * Largeur de la bande de pertinence, en part du meilleur score.
+ *
+ * À l'intérieur de cette bande, les fiches sont tenues pour également
+ * pertinentes et c'est la popularité qui les départage : sur « yaourt nature »,
+ * le moteur rend quarante fiches nommées exactement pareil et séparées par un
+ * pour cent de score, autant montrer d'abord celle que les gens scannent.
+ * Au-delà, l'ordre du moteur est conservé — trier tout le résultat par
+ * popularité remontait « Peanut Pouch » en tête d'une recherche « McFlurry ».
+ */
+const RELEVANCE_BAND = 0.95;
+
+/** Valeurs au-delà desquelles une fiche est fausse : rien ne dépasse 900 kcal. */
+const MAX_PLAUSIBLE_KCAL_100G = 900;
+const MAX_PLAUSIBLE_MACRO_100G = 100;
+
+/**
+ * Contrôle de cohérence entre l'énergie déclarée et ses macronutriments.
+ *
+ * Les coefficients d'Atwater — quatre, quatre et neuf kilocalories par gramme —
+ * redonnent l'énergie à partir des trois macros. Quand l'énergie déclarée est
+ * très inférieure à cette somme, la fiche se contredit : Open Food Facts porte
+ * un « Coca-cola » a trois kilocalories pour dix grammes de glucides, soit une
+ * énergie par portion recopiée dans la case des cent grammes. Recopiée dans le
+ * journal, elle y resterait figee (AD-1).
+ *
+ * Le contrôle ne joue que dans ce sens. Dans l'autre, l'écart est normal et
+ * fréquent : l'alcool et les polyols portent de l'énergie qu'aucune des trois
+ * macros ne compte, et un vin rouge affiche soixante-quinze kilocalories pour
+ * une somme d'Atwater nulle.
+ */
+const ATWATER = { protein: 4, carbs: 4, fat: 9 } as const;
+
+/** Part de la somme d'Atwater sous laquelle l'énergie déclarée est jugee fausse. */
+const ATWATER_MIN_RATIO = 0.6;
+
+/**
+ * Tolérance absolue, en kilocalories, sous laquelle l'écart ne prouve rien.
+ * Sans elle, les boissons allégées — zéro macro déclarée, quelques calories —
+ * tomberaient sur des arrondis.
+ */
+const ATWATER_TOLERANCE_KCAL = 20;
+
+/** Le délai est plus court qu'au code-barres : la recherche, elle, se refrappe. */
+const SEARCH_TIMEOUT_MS = 5000;
+
+interface OffSearchHit {
+  _score?: number;
+  code?: string;
+  product_name?: string;
+  product_name_fr?: string;
+  brands?: string | string[];
+  nutriments?: OffNutriments;
+  unique_scans_n?: number;
+}
+
+interface OffSearchPayload {
+  hits?: OffSearchHit[];
+}
+
+/**
+ * Le nom affiché, marque comprise. La recherche rend des homonymes par
+ * dizaines — quarante « Yaourt nature » — et la marque est le seul élément qui
+ * permette de reconnaître le sien.
+ *
+ * `brands` arrive tantôt en chaîne, tantôt en tableau selon la fiche.
+ */
+function pickSearchName(hit: OffSearchHit): string | null {
+  const base = [hit.product_name_fr, hit.product_name].find(
+    (value) => typeof value === 'string' && value.trim() !== '',
+  );
+  if (!base) {
+    return null;
+  }
+
+  const brands = Array.isArray(hit.brands) ? hit.brands : hit.brands?.split(',');
+  const brand = brands?.[0]?.trim();
+  const name = base.trim();
+  return brand && !name.toLowerCase().includes(brand.toLowerCase())
+    ? `${name} — ${brand}`
+    : name;
+}
+
+/**
+ * Les quatre valeurs pour 100 g, ou `null` si la fiche n'est pas exploitable.
+ *
+ * Une fiche sans énergie, sans protéines, ou qui annonce cent-vingt grammes de
+ * lipides pour cent grammes de produit, est écartée sans autre forme de procès :
+ * Open Food Facts est contributif, et une valeur fausse recopiée dans le
+ * journal y resterait figée (AD-1).
+ */
+function pickSearchMacros(nutriments: OffNutriments | undefined): Macros | null {
+  if (!nutriments) {
+    return null;
+  }
+
+  const kcal = pickKcal(nutriments);
+  const proteinG = toFiniteNumber(nutriments.proteins_100g);
+  const carbsG = toFiniteNumber(nutriments.carbohydrates_100g);
+  const fatG = toFiniteNumber(nutriments.fat_100g);
+
+  if (
+    kcal === undefined ||
+    proteinG === undefined ||
+    carbsG === undefined ||
+    fatG === undefined
+  ) {
+    return null;
+  }
+
+  const atwater =
+    proteinG * ATWATER.protein + carbsG * ATWATER.carbs + fatG * ATWATER.fat;
+
+  const implausible =
+    kcal > MAX_PLAUSIBLE_KCAL_100G ||
+    proteinG > MAX_PLAUSIBLE_MACRO_100G ||
+    carbsG > MAX_PLAUSIBLE_MACRO_100G ||
+    fatG > MAX_PLAUSIBLE_MACRO_100G ||
+    kcal + ATWATER_TOLERANCE_KCAL < atwater * ATWATER_MIN_RATIO;
+
+  if (implausible) {
+    return null;
+  }
+
+  // Arrondi à la précision de la colonne (AD-9). Open Food Facts rend des
+  // flottants bruités — « 4,6999998092651 g » — que rien ne gagnerait à
+  // promener jusqu'au journal.
+  return {
+    kcal: roundToMilli(kcal),
+    proteinG: roundToMilli(proteinG),
+    carbsG: roundToMilli(carbsG),
+    fatG: roundToMilli(fatG),
+  };
+}
+
+/** Arrondi au millième, précision des colonnes nutritionnelles (AD-9). */
+function roundToMilli(value: number): number {
+  return Math.round(value * 1000) / 1000;
+}
+
+/**
+ * Cherche des produits par leur nom.
+ *
+ * Rend une liste vide plutôt que de lever, et sur toutes les pannes : la
+ * recherche locale est servie en parallèle, et un moteur externe injoignable ne
+ * doit pas vider un écran que CIQUAL remplissait très bien.
+ */
+export async function searchProducts(
+  term: string,
+  signal?: AbortSignal,
+): Promise<ReferenceFood[]> {
+  const query = term.trim();
+  if (query === '') {
+    return [];
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), SEARCH_TIMEOUT_MS);
+  // L'abandon demandé par l'appelant, à chaque frappe, doit atteindre la
+  // requête sans effacer la temporisation qui la borne.
+  signal?.addEventListener('abort', () => controller.abort(), { once: true });
+
+  const url =
+    `${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}` +
+    `&langs=fr&page_size=${SEARCH_PAGE_SIZE}&fields=${SEARCH_FIELDS}`;
+
+  let payload: OffSearchPayload;
+  try {
+    const response = await fetch(url, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json', 'X-User-Agent': USER_AGENT_COMMENT },
+    });
+    if (!response.ok) {
+      return [];
+    }
+    payload = (await response.json()) as OffSearchPayload;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const usable = (payload.hits ?? []).flatMap((hit) => {
+    const barcode = hit.code?.trim();
+    const name = pickSearchName(hit);
+    const per100g = pickSearchMacros(hit.nutriments);
+    if (!barcode || !name || !per100g) {
+      return [];
+    }
+    return [
+      {
+        food: { kind: 'product' as const, ref: barcode, name, per100g, servingSizeG: null },
+        score: typeof hit._score === 'number' ? hit._score : 0,
+        scans: typeof hit.unique_scans_n === 'number' ? hit.unique_scans_n : 0,
+      },
+    ];
+  });
+
+  const best = usable[0];
+  if (best === undefined) {
+    return [];
+  }
+
+  // Le moteur rend déjà ses fiches par pertinence décroissante ; on ne réordonne
+  // que la tête de liste, celle dont les scores sont indiscernables.
+  const floor = best.score * RELEVANCE_BAND;
+  const band = usable.filter((entry) => entry.score >= floor);
+  const rest = usable.filter((entry) => entry.score < floor);
+  band.sort((a, b) => b.scans - a.scans);
+
+  return [...band, ...rest].slice(0, SEARCH_LIMIT).map((entry) => entry.food);
 }

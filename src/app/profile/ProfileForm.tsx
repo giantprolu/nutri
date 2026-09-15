@@ -26,6 +26,7 @@ interface Target {
   floored: boolean;
   equation: string;
   basis?: string;
+  activityCapped?: boolean;
   proteinG: number;
   carbsG: number;
   fatG: number;
@@ -40,6 +41,8 @@ export interface ProfileFormValues {
   activity: string;
   goal: 'lose' | 'maintain' | 'gain';
   ratePercentPerWeek: number;
+  /** Cible fixée à la main, ou `null` quand le calcul décide. */
+  manualTargetKcal: number | null;
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
@@ -49,6 +52,12 @@ const ACTIVITY_LABELS: Record<string, string> = {
   active: 'Actif, six à sept séances par semaine',
   veryActive: 'Très actif, métier physique ou deux séances par jour',
 };
+
+/** Plafond d'une cible saisie à la main, aligné sur `MANUAL_TARGET_MAX_KCAL`. */
+const MANUAL_TARGET_MAX = 6000;
+
+/** Chiffre proposé quand l'utilisateur bascule en manuel sans cible calculée. */
+const MANUAL_TARGET_SUGGESTION = 2000;
 
 const GOAL_LABELS: Record<string, string> = {
   lose: 'Perdre du poids',
@@ -160,6 +169,13 @@ function TargetBlock({ target }: { target: Target }) {
         </p>
       ) : null}
 
+      {target.activityCapped ? (
+        <p role="alert" className="note mt-3" style={{ color: 'var(--color-danger)', opacity: 1 }}>
+          La dépense remontée par Santé dépasse ce qu&apos;un corps humain soutient. Elle a été
+          ramenée à son plafond, et ton raccourci est probablement à revoir.
+        </p>
+      ) : null}
+
       <dl className="mt-4">
         <Line label="Métabolisme de base" value={`${formatKcal(target.bmrKcal)} kcal`} />
         <Line
@@ -169,7 +185,7 @@ function TargetBlock({ target }: { target: Target }) {
           value={`${formatKcal(target.maintenanceKcal)} kcal`}
         />
         <Line
-          label="Écart pour l'objectif"
+          label={target.basis === 'manual' ? 'Écart obtenu' : "Écart pour l'objectif"}
           value={`${sign} ${formatKcal(Math.abs(target.adjustmentKcal))} kcal`}
           accent
           last
@@ -177,12 +193,21 @@ function TargetBlock({ target }: { target: Target }) {
       </dl>
 
       <p className="note mt-3">
-        Calcul par{' '}
-        {target.equation === 'katch-mcardle'
-          ? 'Katch-McArdle, sur ta masse maigre'
-          : 'Mifflin-St Jeor'}
-        . Une estimation de population, pas une mesure : corrige-la après trois semaines selon
-        ton poids réel.
+        {target.basis === 'manual' ? (
+          <>
+            Cible fixée par toi. Le calcul reste affiché au-dessus pour situer l&apos;écart que
+            tu te donnes ; il ne décide plus de rien.
+          </>
+        ) : (
+          <>
+            Calcul par{' '}
+            {target.equation === 'katch-mcardle'
+              ? 'Katch-McArdle, sur ta masse maigre'
+              : 'Mifflin-St Jeor'}
+            . Une estimation de population, pas une mesure : corrige-la après trois semaines
+            selon ton poids réel.
+          </>
+        )}
       </p>
     </>
   );
@@ -233,6 +258,7 @@ export function ProfileForm({
       activity: 'moderate',
       goal: 'maintain',
       ratePercentPerWeek: 0,
+      manualTargetKcal: null,
     },
   );
   const [target, setTarget] = useState<Target | null>(initialTarget);
@@ -248,6 +274,12 @@ export function ProfileForm({
   // que du gras.
   const maxRate = values.goal === 'lose' ? 1 : 0.5;
   const rateDisabled = values.goal === 'maintain';
+
+  // Le plancher de la cible manuelle est le minimum clinique du sexe déclaré,
+  // repris de `@/lib/energy` : choisir son chiffre n'autorise pas à descendre
+  // sous l'apport qui couvre les micronutriments.
+  const manualEnabled = values.manualTargetKcal !== null;
+  const manualFloor = values.sex === 'male' ? 1500 : 1200;
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -408,6 +440,52 @@ export function ProfileForm({
                 : 'au-delà, le surplus se stocke sans servir.'}
             </p>
           </div>
+        )}
+
+        <hr className="rule my-5" />
+
+        <div className="flex items-baseline justify-between gap-3">
+          <span className="label">Fixer la cible moi-même</span>
+          <button
+            type="button"
+            className="link-accent flex-none text-[15px]"
+            aria-pressed={manualEnabled}
+            onClick={() =>
+              set(
+                'manualTargetKcal',
+                manualEnabled ? null : (target?.targetKcal ?? MANUAL_TARGET_SUGGESTION),
+              )
+            }
+          >
+            {manualEnabled ? 'Rendre la main au calcul' : 'Choisir mon chiffre'}
+          </button>
+        </div>
+
+        {manualEnabled ? (
+          <div className="mt-3">
+            <NumberField
+              id="manualTarget"
+              label="Ma cible quotidienne"
+              unit="kcal"
+              step="10"
+              min={manualFloor}
+              max={MANUAL_TARGET_MAX}
+              required
+              value={String(values.manualTargetKcal ?? '')}
+              onChange={(value) =>
+                set('manualTargetKcal', value === '' ? null : Math.round(Number(value)))
+              }
+            />
+            <p className="note mt-1.5">
+              Entre {manualFloor} et {MANUAL_TARGET_MAX} kcal. Ce chiffre remplace le calcul,
+              mesure d&apos;activité comprise. Les macronutriments sont répartis dessus.
+            </p>
+          </div>
+        ) : (
+          <p className="note mt-2">
+            Trois semaines de pesée en disent plus qu&apos;une équation. Si ton poids ne bouge
+            pas comme prévu, corrige la cible ici plutôt que de fausser tes mesures.
+          </p>
         )}
 
         {error ? (

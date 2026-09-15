@@ -235,6 +235,7 @@ async function runSearch(
 
   return rows.rows.map((row) => ({
     kind: row.kind,
+    origin: row.kind === 'ciqual' ? ('ciqual' as const) : ('cache' as const),
     ref: row.ref,
     name: row.name,
     per100g: {
