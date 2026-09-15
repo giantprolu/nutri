@@ -113,3 +113,75 @@ export function ageInYears(birthDate: string, today: string = todayInParis()): n
   const beforeBirthday = tm < bm || (tm === bm && td < bd);
   return ty - by - (beforeBirthday ? 1 : 0);
 }
+
+/**
+ * Le lundi de la semaine où tombe `isoDate`.
+ *
+ * Le lundi et non le dimanche : c'est le premier jour de la semaine en France,
+ * et surtout le jour où l'on décide de la semaine qui vient. Une semaine qui
+ * commencerait un dimanche couperait le week-end en deux, alors que c'est
+ * précisément là que se font les courses.
+ *
+ * Le calcul passe par UTC à midi plutôt qu'à minuit : une date de journal n'a
+ * pas d'heure, et minuit UTC bascule d'un jour au moindre décalage de fuseau.
+ */
+export function startOfWeek(isoDate: string): string {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  // getUTCDay rend 0 pour dimanche : le ramener à 6 place le lundi en tête.
+  const offset = (date.getUTCDay() + 6) % 7;
+  date.setUTCDate(date.getUTCDate() - offset);
+  return date.toISOString().slice(0, 10);
+}
+
+/** Les jours d'une date à l'autre, bornes comprises, en ordre chronologique. */
+export function daysFrom(startIsoDate: string, count: number): string[] {
+  const days: string[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const date = new Date(`${startIsoDate}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() + index);
+    days.push(date.toISOString().slice(0, 10));
+  }
+  return days;
+}
+
+/** La date décalée de `days` jours, en avant ou en arrière. */
+export function shiftDate(isoDate: string, days: number): string {
+  const date = new Date(`${isoDate}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+const weekdayFormatter = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'UTC',
+  weekday: 'long',
+});
+
+const dayMonthFormatter = new Intl.DateTimeFormat('fr-FR', {
+  timeZone: 'UTC',
+  day: 'numeric',
+  month: 'long',
+});
+
+/** « lundi », pour les en-têtes de jour du plan de la semaine. */
+export function formatWeekday(isoDate: string): string {
+  return weekdayFormatter.format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/** « 15 septembre », sans le nom du jour ni l'année. */
+export function formatDayMonth(isoDate: string): string {
+  return dayMonthFormatter.format(new Date(`${isoDate}T00:00:00Z`));
+}
+
+/**
+ * « du 15 au 21 septembre », ou « du 29 septembre au 5 octobre » quand la
+ * semaine enjambe deux mois. Le mois n'est répété que s'il change : le
+ * répéter systématiquement alourdirait un surtitre lu chaque jour.
+ */
+export function formatWeekRange(startIsoDate: string): string {
+  const end = shiftDate(startIsoDate, 6);
+  const sameMonth = startIsoDate.slice(0, 7) === end.slice(0, 7);
+  const start = sameMonth
+    ? new Date(`${startIsoDate}T00:00:00Z`).getUTCDate().toString()
+    : formatDayMonth(startIsoDate);
+  return `du ${start} au ${formatDayMonth(end)}`;
+}

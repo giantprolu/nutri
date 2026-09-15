@@ -31,6 +31,7 @@ import {
   type RecipeIngredient,
 } from '../src/lib/recipe';
 import { aisleFor } from '../src/lib/aisle';
+import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -420,5 +421,34 @@ assert.equal(aisleFor('Epinards surgele', '02'), 'frozen', 'sans accent aussi');
 // Un produit a code-barres ne porte aucun groupe : il finit en Divers, ou on
 // le retrouve, plutot qu'en epicerie ou on le chercherait longtemps.
 assert.equal(aisleFor('Barre proteinee', null), 'other', 'sans groupe connu');
+
+// --- Semaine du plan de repas ---
+
+// La semaine commence le lundi : c'est le jour ou l'on decide de celle qui vient.
+assert.equal(startOfWeek('2026-09-15'), '2026-09-14', 'un mardi remonte au lundi');
+assert.equal(startOfWeek('2026-09-14'), '2026-09-14', 'un lundi ne bouge pas');
+// Le dimanche ferme la semaine, il ne l'ouvre pas : sans quoi le week-end,
+// ou se font les courses, serait coupe en deux.
+assert.equal(startOfWeek('2026-09-20'), '2026-09-14', 'un dimanche reste dans sa semaine');
+
+// Une semaine fait sept jours consecutifs, changement de mois compris.
+const semaine = daysFrom('2026-09-28', 7);
+assert.equal(semaine.length, 7, 'sept jours');
+assert.equal(semaine[0], '2026-09-28', 'premier jour');
+assert.equal(semaine[6], '2026-10-04', 'dernier jour, mois suivant');
+// Le passage a l'heure d'hiver ne doit pas produire deux fois le meme jour.
+const bascule = daysFrom('2026-10-24', 4);
+assert.deepEqual(bascule, ['2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27'], 'changement d heure');
+
+assert.equal(shiftDate('2026-01-01', -1), '2025-12-31', 'recul d une annee');
+assert.equal(shiftDate('2026-02-28', 1), '2026-03-01', 'fevrier non bissextile');
+
+// Le mois n'est repete que s'il change : un surtitre lu chaque jour doit rester bref.
+assert.equal(formatWeekRange('2026-09-14'), 'du 14 au 20 septembre', 'semaine dans un seul mois');
+assert.equal(
+  formatWeekRange('2026-09-28'),
+  'du 28 septembre au 4 octobre',
+  'semaine a cheval sur deux mois',
+);
 
 console.log('Toutes les verifications pures passent.');

@@ -359,3 +359,52 @@ export const recipeIngredients = pgTable(
 
 export type RecipeIngredientRow = typeof recipeIngredients.$inferSelect;
 export type NewRecipeIngredientRow = typeof recipeIngredients.$inferInsert;
+
+/**
+ * Le plan de la semaine : un plat, un jour, un repas, un nombre de parts.
+ *
+ * `meal` reprend la liste de `@/lib/meal`, celle des entrées du journal. Le
+ * plan et le journal parlent des mêmes repas : un dîner prévu doit tomber au
+ * dîner une fois mangé, et deux listes de repas finiraient par diverger.
+ *
+ * `journaledAt` est la garde contre la double journalisation. Marquer un plat
+ * mangé crée une entrée par ingrédient ; le marquer deux fois compterait deux
+ * fois le repas, et rien dans les totaux ne le signalerait. La colonne porte
+ * l'horodatage plutôt qu'un booléen : savoir *quand* le plat a été journalisé
+ * permet de comprendre après coup une journée qui semble mal comptée.
+ *
+ * La clé étrangère vers `recipes` est en cascade : supprimer une recette
+ * retire ce qu'elle avait de prévu. Les entrées déjà journalisées, elles, ne
+ * bougent pas — elles portent leurs propres macros (AD-1) et ne référencent
+ * ni le plan ni la recette.
+ */
+export const mealPlanEntries = pgTable(
+  'meal_plan_entries',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Jour prévu, en Europe/Paris comme le journal (AD-11). */
+    planDate: date('plan_date').notNull(),
+    meal: text('meal').notNull(),
+    recipeId: bigint('recipe_id', { mode: 'number' })
+      .notNull()
+      .references(() => recipes.id, { onDelete: 'cascade' }),
+    /** Nombre de parts prévues, qui n'est pas celui de la recette. */
+    servings: numeric('servings', { precision: 4, scale: 1 }).notNull().default('1'),
+    journaledAt: timestamp('journaled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // L'utilisateur est en tête : une semaine se lit toujours pour quelqu'un.
+    index('meal_plan_user_date_idx').on(table.userId, table.planDate),
+    check(
+      'meal_plan_meal_check',
+      sql`${table.meal} in ('breakfast', 'lunch', 'dinner', 'snack')`,
+    ),
+  ],
+);
+
+export type MealPlanEntryRow = typeof mealPlanEntries.$inferSelect;
+export type NewMealPlanEntryRow = typeof mealPlanEntries.$inferInsert;

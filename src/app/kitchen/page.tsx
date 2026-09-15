@@ -1,82 +1,77 @@
 import Link from 'next/link';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { PlusIcon } from '@/components/icons';
+import { KitchenIcon } from '@/components/icons';
 import { requireUserId } from '@/server/guard';
+import { planForWeek, weekDays } from '@/server/services/meal-plan';
 import { recipesFor } from '@/server/services/recipes';
-import { macrosPerServing } from '@/lib/recipe';
-import { formatKcal } from '@/lib/nutrition';
-import { StarterRecipes } from './StarterRecipes';
+import { formatWeekRange, isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
+import { WeekPlanner } from './WeekPlanner';
 
-// Les recettes viennent du serveur à chaque navigation : rien n'est mis en cache (AD-5).
+// Le plan vient du serveur à chaque navigation : rien n'est mis en cache (AD-5).
 export const dynamic = 'force-dynamic';
 
 /**
- * La Cuisine : les recettes d'un compte.
+ * La Cuisine s'ouvre sur la semaine, et non sur les recettes.
  *
- * Composant serveur, aucun import client (AD-10). Les macros affichées sont
- * celles d'une part et non de la recette entière : c'est la seule grandeur
- * qu'on compare à une cible, et la seule qu'on mange.
+ * L'ordre n'est pas neutre. On ouvre cet écran pour savoir ce qu'on mange ce
+ * soir, pas pour relire ses fiches : c'est la question quotidienne, et c'est
+ * elle qui doit être en première page. Les recettes sont l'outil, la semaine
+ * est l'usage.
+ *
+ * Composant serveur, aucun import client (AD-10).
  */
-export default async function KitchenPage() {
-  const recipes = await recipesFor(await requireUserId());
+export default async function KitchenPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string }>;
+}) {
+  const userId = await requireUserId();
+  const today = todayInParis();
+
+  // Une date hors format retombe sur la semaine courante plutôt que de faire
+  // échouer l'écran : le paramètre vient d'une URL, que n'importe qui édite.
+  const requested = (await searchParams).from;
+  const startDate = startOfWeek(
+    requested !== undefined && isJournalDate(requested) ? requested : today,
+  );
+
+  const [planned, recipes] = await Promise.all([
+    planForWeek(userId, startDate),
+    recipesFor(userId),
+  ]);
 
   return (
     <>
-      <ScreenHeader title="Cuisine" kicker="Mes recettes" />
+      <ScreenHeader
+        title="Cuisine"
+        kicker={formatWeekRange(startDate)}
+        action={{
+          href: '/kitchen/recipes',
+          label: 'Voir mes recettes',
+          icon: <KitchenIcon className="h-[22px] w-[22px]" />,
+        }}
+      />
 
       {recipes.length === 0 ? (
-        <>
-          <StarterRecipes />
-          <hr className="rule" />
-          <p className="note mt-4 text-center">
-            Ou{' '}
-            <Link href="/kitchen/recipes/new" className="link-accent">
-              écris ta première recette
-            </Link>
+        <div className="py-8 text-center">
+          <p className="mx-auto max-w-[26ch] text-[23px] leading-[1.35] font-semibold">
+            Une semaine se remplit avec des recettes.
           </p>
-        </>
-      ) : (
-        <>
-          <ul>
-            {recipes.map((recipe) => {
-              const { macros, unresolvedCount } = macrosPerServing(recipe);
-              return (
-                <li key={recipe.id}>
-                  <Link href={`/kitchen/recipes/${recipe.id}`} className="entry-row items-center">
-                    <span className="min-w-0 flex-1">
-                      <span className="entry-name block">{recipe.name}</span>
-                      <span className="entry-meta mt-0.5 block">
-                        {recipe.ingredients.length === 1
-                          ? '1 ingrédient'
-                          : `${recipe.ingredients.length} ingrédients`}
-                        {' · '}
-                        {recipe.servings === 1 ? '1 part' : `${recipe.servings} parts`}
-                        {recipe.prepMinutes === null ? '' : ` · ${recipe.prepMinutes} min`}
-                      </span>
-                    </span>
-                    <span className="flex-none text-right">
-                      <span className="entry-kcal block">
-                        {/*
-                          Le total est dit partiel plutôt que faux : un
-                          ingrédient qu'on n'a pas su résoudre fait un chiffre
-                          trop bas, et rien ne le signalerait sans cela.
-                        */}
-                        {unresolvedCount > 0 ? '≈ ' : ''}
-                        {formatKcal(macros.kcal)} kcal
-                      </span>
-                      <span className="entry-meta mt-0.5 block">par part</span>
-                    </span>
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-
-          <Link href="/kitchen/recipes/new" className="action mt-6">
-            <PlusIcon className="h-4 w-4" />
-            Nouvelle recette
+          <p className="note mx-auto mt-3 max-w-[32ch]">
+            Installe les cinq plats de départ, ou écris les tiens.
+          </p>
+          <Link href="/kitchen/recipes" className="action mx-auto mt-6 max-w-[240px]">
+            Commencer par les recettes
           </Link>
-        </>
+        </div>
+      ) : (
+        <WeekPlanner
+          startDate={startDate}
+          days={weekDays(startDate)}
+          planned={planned}
+          recipes={recipes}
+          today={today}
+        />
       )}
     </>
   );
