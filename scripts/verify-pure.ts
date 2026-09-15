@@ -28,6 +28,7 @@ import {
   quantityForServings,
   recipeMacros,
   shoppingUnitCount,
+  stepDurationSeconds,
   type RecipeIngredient,
 } from '../src/lib/recipe';
 import { aisleFor } from '../src/lib/aisle';
@@ -606,5 +607,18 @@ const blocs = groupBySuperset([
 assert.equal(blocs.length, 2, 'deux blocs pour trois exercices');
 assert.equal(blocs[0]?.length, 1, 'le premier est seul');
 assert.equal(blocs[1]?.length, 2, 'le superset en compte deux');
+
+// Le minuteur du mode cuisine : un nombre suivi d'une unite de temps, et
+// rien d'autre. Une heuristique plus large proposerait deux cents minutes sur
+// « prechauffer le four a 200 °C », et un minuteur qu'on ne peut pas croire ne
+// sert a rien.
+assert.equal(stepDurationSeconds('Cuire 8 minutes a feu vif.'), 480, 'minutes');
+assert.equal(stepDurationSeconds('Laisser reposer 45 s.'), 45, 'secondes');
+assert.equal(stepDurationSeconds('Mijoter 2 h.'), 7200, 'heures');
+assert.equal(stepDurationSeconds('Enfourner 25 min.'), 1500, 'abrege');
+assert.equal(stepDurationSeconds('Prechauffer le four a 200 °C.'), null, 'une temperature n est pas une duree');
+assert.equal(stepDurationSeconds('Melanger le riz aux legumes.'), null, 'aucune duree');
+// La premiere duree l'emporte : c'est le premier geste qu'on va faire.
+assert.equal(stepDurationSeconds('Cuire 8 minutes, puis 2 minutes de repos.'), 480, 'la premiere duree');
 
 console.log('Toutes les verifications pures passent.');

@@ -12,7 +12,7 @@ import {
 } from '@/components/icons';
 import { journalMeal, planMeal, reopenMeal, unplanMeal } from '@/lib/client/plan';
 import { MEAL_LABELS, mealForHour, type Meal } from '@/lib/meal';
-import { formatDayMonth, formatWeekday, shiftDate } from '@/lib/date';
+import { formatDayMonth, formatWeekday, hourInParis, shiftDate } from '@/lib/date';
 import { macrosPerServing, type Recipe } from '@/lib/recipe';
 import { formatKcal, scaleMacros } from '@/lib/nutrition';
 import type { PlannedMeal } from '@/server/db/queries/meal-plan';
@@ -240,7 +240,7 @@ export function WeekPlanner({
                   planDate: day,
                   // Le repas proposé suit l'heure pour aujourd'hui, et le dîner
                   // pour les autres jours : c'est le repas qu'on planifie.
-                  meal: isToday ? mealForHour(new Date().getHours()) : 'dinner',
+                  meal: isToday ? mealForHour(hourInParis()) : 'dinner',
                 })
               }
               className="action-quiet mt-1"

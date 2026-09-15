@@ -218,3 +218,36 @@ export interface RecipeInput {
   notes: string | null;
   ingredients: RecipeIngredientInput[];
 }
+
+/**
+ * La durée annoncée par une étape, en secondes, ou `null`.
+ *
+ * Sert à proposer un minuteur sur les étapes qui en demandent un. La détection
+ * est volontairement étroite : un nombre suivi d'une unité de temps, et rien
+ * d'autre. Une heuristique plus large proposerait un minuteur de deux cents
+ * minutes sur « préchauffer le four à 200 °C », et un minuteur qu'on ne peut
+ * pas croire ne sert à rien.
+ *
+ * La première durée de l'étape est retenue. « Cuire 8 minutes, puis 2 minutes
+ * de repos » propose huit minutes : c'est le premier geste qu'on va faire, et
+ * l'étape reste là pour rappeler le second.
+ */
+export function stepDurationSeconds(step: string): number | null {
+  const match = /\b(\d{1,3})\s*(s|sec|secondes?|min|minutes?|h|heures?)\b/i.exec(step);
+  if (match === null) {
+    return null;
+  }
+
+  const value = Number(match[1]);
+  const unit = (match[2] ?? '').toLowerCase();
+  if (!Number.isFinite(value) || value <= 0) {
+    return null;
+  }
+
+  if (unit.startsWith('h')) {
+    return value * 3600;
+  }
+  // « s » et « sec » sont des secondes, « min » des minutes : le test porte sur
+  // « mi » pour ne pas confondre « min » avec « minutes » écrit en entier.
+  return unit.startsWith('mi') ? value * 60 : value;
+}

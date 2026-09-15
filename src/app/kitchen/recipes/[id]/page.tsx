@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { NavHeader } from '@/components/ScreenHeader';
-import { PencilIcon } from '@/components/icons';
+import { KitchenIcon, PencilIcon } from '@/components/icons';
 import { requireUserId } from '@/server/guard';
 import { recipeFor } from '@/server/services/recipes';
 import { formatIngredientQuantity, macrosPerServing, recipeMacros } from '@/lib/recipe';
@@ -106,7 +106,14 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
 
       <hr className="rule mt-6" />
 
-      <Link href={`/kitchen/recipes/${recipe.id}/edit`} className="action mt-4">
+      {recipe.steps.length > 0 ? (
+        <Link href={`/kitchen/recipes/${recipe.id}/cook`} className="action mt-4">
+          <KitchenIcon className="h-4 w-4" />
+          Cuisiner pas à pas
+        </Link>
+      ) : null}
+
+      <Link href={`/kitchen/recipes/${recipe.id}/edit`} className="action-quiet mt-3">
         <PencilIcon className="h-4 w-4" />
         Modifier
       </Link>
