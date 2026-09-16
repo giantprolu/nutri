@@ -2,9 +2,15 @@ import 'server-only';
 import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { db, schema } from '../client';
 import {
+  isEquipmentPreference,
+  isExerciseEquipment,
   isExerciseKind,
+  isExerciseRegion,
+  isTrainingFocus,
   type Exercise,
+  type Gym,
   type TemplateExercise,
+  type TrainingPreferences,
   type WorkoutSession,
   type WorkoutSet,
   type WorkoutTemplate,
@@ -33,15 +39,21 @@ function toExercise(row: typeof schema.exercises.$inferSelect): Exercise {
     // transtypage muet sur une ligne écrite par une version antérieure.
     kind: isExerciseKind(row.kind) ? row.kind : 'strength',
     muscleGroup: row.muscleGroup,
+    region: isExerciseRegion(row.region) ? row.region : 'upper',
+    equipment: isExerciseEquipment(row.equipment) ? row.equipment : 'machine',
+    rank: row.rank,
+    aliases: row.aliases,
   };
 }
 
 /**
  * Insère les exercices du catalogue livré, sans toucher à ceux qui existent.
  *
- * Idempotent sur le `slug` : relancer n'écrase rien. C'est délibéré — un
- * utilisateur a pu renommer un exercice du catalogue, et le seed n'a pas à
- * défaire ce choix à la prochaine installation.
+ * Idempotent sur le `slug` : relancer n'écrase rien d'autre que les colonnes
+ * de classement. Le nom, lui, est préservé — un utilisateur a pu le changer, et
+ * le seed n'a pas à défaire ce choix. Le matériel, la région et le rang sont
+ * en revanche réécrits : ce sont des propriétés du mouvement, pas des
+ * préférences, et une version qui les corrige doit pouvoir les corriger.
  */
 export async function ensureSeedExercises(seed: readonly SeedExercise[]): Promise<void> {
   if (seed.length === 0) {
@@ -49,13 +61,200 @@ export async function ensureSeedExercises(seed: readonly SeedExercise[]): Promis
   }
   await db()
     .insert(schema.exercises)
-    .values(seed.map((exercise) => ({ ...exercise, source: 'seed' })))
-    .onConflictDoNothing({ target: schema.exercises.slug });
+    .values(
+      seed.map((exercise) => ({
+        slug: exercise.slug,
+        name: exercise.name,
+        kind: exercise.kind,
+        muscleGroup: exercise.muscleGroup,
+        region: exercise.region,
+        equipment: exercise.equipment,
+        rank: exercise.rank,
+        aliases: [...exercise.aliases],
+        source: 'seed',
+      })),
+    )
+    .onConflictDoUpdate({
+      target: schema.exercises.slug,
+      set: {
+        muscleGroup: sql`excluded.muscle_group`,
+        region: sql`excluded.region`,
+        equipment: sql`excluded.equipment`,
+        rank: sql`excluded.rank`,
+        aliases: sql`excluded.aliases`,
+      },
+    });
 }
 
-export async function listExercises(): Promise<Exercise[]> {
-  const rows = await db().select().from(schema.exercises).orderBy(asc(schema.exercises.name));
-  return rows.map(toExercise);
+/**
+ * Le catalogue, restreint à une salle si l'on en a choisi une.
+ *
+ * `gymId` à `null` rend tout le catalogue : ne pas savoir où l'on s'entraîne
+ * doit ouvrir les possibilités, pas les fermer.
+ */
+export async function listExercises(gymId: number | null): Promise<Exercise[]> {
+  if (gymId === null) {
+    const rows = await db().select().from(schema.exercises).orderBy(asc(schema.exercises.name));
+    return rows.map(toExercise);
+  }
+
+  const rows = await db()
+    .select({ exercise: schema.exercises })
+    .from(schema.exercises)
+    .innerJoin(
+      schema.gymExercises,
+      eq(schema.gymExercises.exerciseId, schema.exercises.id),
+    )
+    .where(eq(schema.gymExercises.gymId, gymId))
+    .orderBy(asc(schema.exercises.name));
+  return rows.map((row) => toExercise(row.exercise));
+}
+
+/**
+ * Insère les salles et leur inventaire.
+ *
+ * L'inventaire est réécrit à chaque passage, contrairement au catalogue : il
+ * n'est le fruit d'aucun choix de l'utilisateur, et une version qui corrige la
+ * liste des machines d'une enseigne doit pouvoir la corriger.
+ */
+export async function ensureSeedGyms(
+  seed: readonly { slug: string; name: string; note: string; exerciseSlugs: readonly string[] }[],
+): Promise<void> {
+  if (seed.length === 0) {
+    return;
+  }
+
+  await db()
+    .insert(schema.gyms)
+    .values(seed.map(({ slug, name, note }) => ({ slug, name, note })))
+    .onConflictDoUpdate({
+      target: schema.gyms.slug,
+      set: { name: sql`excluded.name`, note: sql`excluded.note` },
+    });
+
+  const gymRows = await db().select().from(schema.gyms);
+  const gymBySlug = new Map(gymRows.map((row) => [row.slug, row.id]));
+
+  const exerciseRows = await db()
+    .select({ id: schema.exercises.id, slug: schema.exercises.slug })
+    .from(schema.exercises);
+  const exerciseBySlug = new Map(exerciseRows.map((row) => [row.slug, row.id]));
+
+  for (const gym of seed) {
+    const gymId = gymBySlug.get(gym.slug);
+    if (gymId === undefined) {
+      continue;
+    }
+    const links = gym.exerciseSlugs
+      .map((slug) => exerciseBySlug.get(slug))
+      .filter((id): id is number => id !== undefined)
+      .map((exerciseId) => ({ gymId, exerciseId }));
+
+    await db().delete(schema.gymExercises).where(eq(schema.gymExercises.gymId, gymId));
+    if (links.length > 0) {
+      await db().insert(schema.gymExercises).values(links);
+    }
+  }
+}
+
+/** Taille du référentiel, pour décider s'il faut le semer. */
+export async function catalogSize(): Promise<{ exercises: number; gyms: number }> {
+  const [exerciseRow] = await db()
+    .select({ count: sql<string>`count(*)` })
+    .from(schema.exercises);
+  const [gymRow] = await db().select({ count: sql<string>`count(*)` }).from(schema.gyms);
+  return { exercises: Number(exerciseRow?.count ?? 0), gyms: Number(gymRow?.count ?? 0) };
+}
+
+export async function listGyms(): Promise<Gym[]> {
+  const rows = await db().select().from(schema.gyms).orderBy(asc(schema.gyms.name));
+  return rows.map((row) => ({ id: row.id, slug: row.slug, name: row.name, note: row.note }));
+}
+
+/** Les préférences d'entraînement, ou `null` si le compte n'a jamais répondu. */
+export async function findPreferences(userId: number): Promise<TrainingPreferences | null> {
+  const [row] = await db()
+    .select()
+    .from(schema.trainingPreferences)
+    .where(eq(schema.trainingPreferences.userId, userId))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+  return {
+    gymId: row.gymId,
+    focus: isTrainingFocus(row.focus) ? row.focus : 'full',
+    equipment: isEquipmentPreference(row.equipment) ? row.equipment : 'any',
+    sessionsPerWeek: row.sessionsPerWeek,
+  };
+}
+
+export async function upsertPreferences(
+  userId: number,
+  preferences: TrainingPreferences,
+): Promise<void> {
+  await db()
+    .insert(schema.trainingPreferences)
+    .values({ userId, ...preferences })
+    .onConflictDoUpdate({
+      target: schema.trainingPreferences.userId,
+      set: {
+        gymId: sql`excluded.gym_id`,
+        focus: sql`excluded.focus`,
+        equipment: sql`excluded.equipment`,
+        sessionsPerWeek: sql`excluded.sessions_per_week`,
+        updatedAt: sql`now()`,
+      },
+    });
+}
+
+/**
+ * Crée un exercice saisi à la main, ou rend celui qui porte déjà ce slug.
+ *
+ * `rank` reste nul : l'exercice entre au catalogue pour que la séance importée
+ * puisse le référencer, mais il n'entrera jamais dans un programme généré. Le
+ * catalogue est commun, et une ligne recopiée d'un carnet n'a pas à se
+ * retrouver prescrite chez quelqu'un d'autre.
+ */
+export async function findOrCreateExercise(input: {
+  slug: string;
+  name: string;
+  kind: Exercise['kind'];
+  muscleGroup: string | null;
+  region: Exercise['region'];
+  equipment: Exercise['equipment'];
+}): Promise<Exercise> {
+  const [existing] = await db()
+    .select()
+    .from(schema.exercises)
+    .where(eq(schema.exercises.slug, input.slug))
+    .limit(1);
+
+  if (existing) {
+    return toExercise(existing);
+  }
+
+  const [created] = await db()
+    .insert(schema.exercises)
+    .values({ ...input, rank: null, aliases: [], source: 'manual' })
+    .onConflictDoNothing({ target: schema.exercises.slug })
+    .returning();
+
+  if (created) {
+    return toExercise(created);
+  }
+
+  // Une écriture concurrente a gagné la course : la ligne existe désormais.
+  const [raced] = await db()
+    .select()
+    .from(schema.exercises)
+    .where(eq(schema.exercises.slug, input.slug))
+    .limit(1);
+  if (!raced) {
+    throw new Error("L'exercice n'a pas pu être créé.");
+  }
+  return toExercise(raced);
 }
 
 /** Les exercices demandés, indexés par leur slug. */
@@ -213,6 +412,28 @@ export async function insertTemplate(
   return templateId;
 }
 
+/**
+ * Archive toutes les séances actives d'un compte.
+ *
+ * Employé quand on régénère le programme : les anciennes séances ne sont pas
+ * supprimées mais mises de côté, parce que les séances déjà réalisées les
+ * référencent et que les effacer ferait perdre le nom de ce qu'on a fait
+ * pendant des mois.
+ */
+export async function archiveAllTemplates(userId: number): Promise<number> {
+  const updated = await db()
+    .update(schema.workoutTemplates)
+    .set({ archivedAt: new Date() })
+    .where(
+      and(
+        eq(schema.workoutTemplates.userId, userId),
+        isNull(schema.workoutTemplates.archivedAt),
+      ),
+    )
+    .returning({ id: schema.workoutTemplates.id });
+  return updated.length;
+}
+
 /** Archive une séance modèle plutôt que de la supprimer (voir le schéma). */
 export async function archiveTemplate(userId: number, id: number): Promise<boolean> {
   const updated = await db()
@@ -245,6 +466,7 @@ function toSet(row: typeof schema.workoutSets.$inferSelect): WorkoutSet {
     weightKg: toNullableNumber(row.weightKg),
     reps: row.reps,
     seconds: row.seconds,
+    toFailure: row.toFailure,
     doneAt: row.doneAt,
   };
 }
@@ -387,6 +609,7 @@ export interface RecordSetInput {
   weightKg: number | null;
   reps: number | null;
   seconds: number | null;
+  toFailure: boolean;
 }
 
 /**
@@ -424,6 +647,7 @@ export async function upsertSet(userId: number, input: RecordSetInput): Promise<
       weightKg: input.weightKg === null ? null : String(input.weightKg),
       reps: input.reps,
       seconds: input.seconds,
+      toFailure: input.toFailure,
       doneAt: new Date(),
     })
     .onConflictDoUpdate({
@@ -436,10 +660,64 @@ export async function upsertSet(userId: number, input: RecordSetInput): Promise<
         weightKg: sql`excluded.weight_kg`,
         reps: sql`excluded.reps`,
         seconds: sql`excluded.seconds`,
+        toFailure: sql`excluded.to_failure`,
         doneAt: sql`now()`,
       },
     });
   return true;
+}
+
+/**
+ * Écrit une séance déjà terminée, avec toutes ses séries.
+ *
+ * Sert à l'import d'une séance recopiée après coup. La séance naît close :
+ * elle n'est pas en cours, elle a eu lieu. L'ouvrir puis la fermer ferait
+ * passer l'utilisateur par l'écran d'exécution d'une séance qu'il vient de
+ * terminer, et se heurterait à la règle d'une seule séance ouverte.
+ */
+export async function insertCompletedSession(
+  userId: number,
+  sessionDate: string,
+  sets: readonly Omit<RecordSetInput, 'sessionId'>[],
+): Promise<number> {
+  const now = new Date();
+  const [row] = await db()
+    .insert(schema.workoutSessions)
+    .values({ userId, templateId: null, sessionDate, startedAt: now, finishedAt: now })
+    .returning({ id: schema.workoutSessions.id });
+
+  const sessionId = row?.id;
+  if (sessionId === undefined) {
+    throw new Error("La séance n'a pas pu être enregistrée.");
+  }
+
+  if (sets.length > 0) {
+    await db()
+      .insert(schema.workoutSets)
+      .values(
+        sets.map((set) => ({
+          sessionId,
+          userId,
+          exerciseId: set.exerciseId,
+          position: set.position,
+          setIndex: set.setIndex,
+          weightKg: set.weightKg === null ? null : String(set.weightKg),
+          reps: set.reps,
+          seconds: set.seconds,
+          toFailure: set.toFailure,
+          doneAt: now,
+        })),
+      )
+      .onConflictDoNothing({
+        target: [
+          schema.workoutSets.sessionId,
+          schema.workoutSets.exerciseId,
+          schema.workoutSets.setIndex,
+        ],
+      });
+  }
+
+  return sessionId;
 }
 
 export async function deleteSet(userId: number, setId: number): Promise<boolean> {
@@ -483,6 +761,7 @@ export async function lastPerformance(
     weight_kg: string | null;
     reps: number | null;
     seconds: number | null;
+    to_failure: boolean;
     done_at: string;
   }>(sql`
     WITH derniere AS (
@@ -498,7 +777,7 @@ export async function lastPerformance(
       ORDER BY s.exercise_id, w.session_date DESC, s.done_at DESC
     )
     SELECT s.exercise_id, s.id, s.position, s.set_index, s.weight_kg, s.reps,
-           s.seconds, s.done_at
+           s.seconds, s.to_failure, s.done_at
     FROM workout_sets s
     JOIN derniere d ON d.exercise_id = s.exercise_id AND d.session_id = s.session_id
     WHERE s.user_id = ${userId}
@@ -516,6 +795,7 @@ export async function lastPerformance(
       weightKg: toNullableNumber(row.weight_kg),
       reps: row.reps,
       seconds: row.seconds,
+      toFailure: row.to_failure,
       doneAt: new Date(row.done_at),
     });
     byExercise.set(exerciseId, list);

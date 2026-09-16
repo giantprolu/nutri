@@ -43,8 +43,17 @@ import {
   groupBySuperset,
   sessionVolume,
   setVolume,
+  type Exercise,
   type TemplateExercise,
 } from '../src/lib/workout';
+import {
+  bestExerciseMatch,
+  normalizeExerciseName,
+  parseWorkoutLog,
+  slugFromName,
+} from '../src/lib/workout-log';
+import { buildProgram } from '../src/lib/workout-plan';
+import { gymInventory, SEED_EXERCISES, SEED_GYMS } from '../src/lib/workout-seed';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -546,7 +555,10 @@ const exo = (
   supersetGroup: number | null = null,
 ): TemplateExercise => ({
   id: 1, position: 0,
-  exercise: { id: 1, slug: 'x', name, kind, muscleGroup: null },
+  exercise: {
+    id: 1, slug: 'x', name, kind, muscleGroup: null,
+    region: 'upper', equipment: 'machine', rank: 1, aliases: [],
+  },
   targetSets, targetRepsMin: min, targetRepsMax: max, targetSeconds: seconds,
   supersetGroup, restSeconds: null, notes: null,
 });
@@ -648,5 +660,284 @@ assert.equal(detectPlatform(UA_MAC), 'desktop', 'ordinateur de bureau');
 // distingue d'un Mac, a qui l'on proposerait un bouton qui ne ferait rien.
 assert.equal(detectPlatform(UA_MAC, 5), 'ios-safari', 'iPad recent');
 assert.equal(detectPlatform(UA_MAC, 0), 'desktop', 'un Mac reste un Mac');
+
+
+// --- Seance ecrite a la main ---
+
+// Les trois lignes de l'enonce, telles qu'on les note en salle.
+const journal = parseWorkoutLog(
+  [
+    'Chest press machine 4X12 27.5kg - 20 kg - 27.5 kg - 20 kg',
+    'shoulder press machine 3X10 50 - 42.5 - 35',
+    'pec deck 2X12 et 1X10 (echec) 6-6-6',
+  ].join('\n'),
+);
+
+assert.equal(journal.length, 3, 'trois lignes lues');
+
+assert.equal(journal[0]?.name, 'Chest press machine', 'nom avant les series');
+assert.equal(journal[0]?.sets.length, 4, '4X12 donne quatre series');
+assert.deepEqual(
+  journal[0]?.sets.map((set) => set.weightKg),
+  [27.5, 20, 27.5, 20],
+  'une charge par serie, dans l ordre ecrit',
+);
+assert.deepEqual(journal[0]?.sets.map((set) => set.reps), [12, 12, 12, 12], 'douze partout');
+assert.equal(journal[0]?.warning, 'none', 'ligne sans doute');
+
+assert.deepEqual(
+  journal[1]?.sets.map((set) => set.weightKg),
+  [50, 42.5, 35],
+  'la decimale au point est lue',
+);
+
+// Deux groupes sur une ligne, et l'echec ne marque que le second : c'est
+// precisement pour cela qu'on ecrit « 2X12 et 1X10 » plutot que « 3 series ».
+assert.equal(journal[2]?.sets.length, 3, 'deux groupes font trois series');
+assert.deepEqual(journal[2]?.sets.map((set) => set.reps), [12, 12, 10], 'reps par groupe');
+assert.deepEqual(
+  journal[2]?.sets.map((set) => set.toFailure),
+  [false, false, true],
+  'l echec ne marque que le groupe qui le precede',
+);
+assert.deepEqual(journal[2]?.sets.map((set) => set.weightKg), [6, 6, 6], 'trois charges');
+
+// Une charge unique vaut pour toutes les series ; elle se lit sans ambiguite.
+const unique = parseWorkoutLog('Leg press 4x10 120kg');
+assert.deepEqual(
+  unique[0]?.sets.map((set) => set.weightKg),
+  [120, 120, 120, 120],
+  'une charge unique s applique a toutes',
+);
+
+// Un compte de charges qui ne tombe pas juste est un doute, pas une decision :
+// on remplit au mieux et on le signale, plutot que de trancher en silence.
+const boiteux = parseWorkoutLog('Rowing 4x10 60 - 62.5');
+assert.equal(boiteux[0]?.warning, 'weight_count', 'compte de charges signale');
+assert.deepEqual(boiteux[0]?.sets.map((set) => set.weightKg), [60, 62.5, 62.5, 62.5], 'complete');
+
+// Le poids du corps : des repetitions, aucune charge.
+const tractions = parseWorkoutLog('Tractions 4x8');
+assert.deepEqual(
+  tractions[0]?.sets.map((set) => set.weightKg),
+  [null, null, null, null],
+  'sans charge',
+);
+
+// « Velo 20 min » est une seance de cardio ecrite comme on la vit.
+const cardioLigne = parseWorkoutLog('Velo 20 min');
+assert.equal(cardioLigne[0]?.sets.length, 1, 'une seule serie');
+assert.equal(cardioLigne[0]?.sets[0]?.seconds, 1200, 'vingt minutes en secondes');
+assert.equal(cardioLigne[0]?.name, 'Velo', 'nom sans la duree');
+
+// Une ligne de gainage garde sa duree plutot que des repetitions.
+const gainage = parseWorkoutLog('Gainage 3x45s');
+assert.equal(gainage[0]?.sets.length, 3, 'trois series de gainage');
+assert.equal(gainage[0]?.sets[0]?.seconds, 45, 'duree par serie');
+assert.equal(gainage[0]?.sets[0]?.reps, null, 'pas de repetitions sur une duree');
+
+// Une ligne sans series est un titre ou une note : signalee, jamais devinee.
+assert.equal(parseWorkoutLog('Seance du lundi')[0]?.warning, 'no_sets', 'ligne sans series');
+
+// Les lignes vides ne produisent rien.
+assert.equal(parseWorkoutLog('\n\n  \n').length, 0, 'lignes vides ignorees');
+
+assert.equal(normalizeExerciseName('Développé couché'), 'developpe couche', 'accents retires');
+assert.equal(slugFromName('Chest press machine'), 'chest-press-machine', 'slug depuis le nom');
+
+// --- Catalogue et rapprochement ---
+
+/** Le catalogue livre, dote d'identifiants comme la base le ferait. */
+const catalogue: Exercise[] = SEED_EXERCISES.map((seed, index) => ({
+  id: index + 1,
+  slug: seed.slug,
+  name: seed.name,
+  kind: seed.kind,
+  muscleGroup: seed.muscleGroup,
+  region: seed.region,
+  equipment: seed.equipment,
+  rank: seed.rank,
+  aliases: seed.aliases,
+}));
+
+// Les trois noms de l'enonce sont ceux ecrits sur la machine, en anglais.
+// C'est la raison d'etre des alias : sans eux, aucune des trois lignes ne
+// retrouverait son exercice.
+assert.equal(
+  bestExerciseMatch('Chest press machine', catalogue)?.exercise.slug,
+  'chest-press',
+  'chest press retrouve',
+);
+assert.equal(
+  bestExerciseMatch('shoulder press machine', catalogue)?.exercise.slug,
+  'shoulder-press-machine',
+  'shoulder press retrouve',
+);
+assert.equal(bestExerciseMatch('pec deck', catalogue)?.exercise.slug, 'pec-deck', 'pec deck');
+assert.equal(
+  bestExerciseMatch('leg press', catalogue)?.exercise.slug,
+  'presse-a-cuisses',
+  'alias en anglais',
+);
+assert.equal(
+  bestExerciseMatch('bench press', catalogue)?.exercise.slug,
+  'developpe-couche',
+  'bench press',
+);
+// Un nom qui ne ressemble a rien ne doit pas ramener un exercice au hasard :
+// une proposition fausse se valide plus facilement qu'elle ne se corrige.
+assert.equal(bestExerciseMatch('zzzz qwerty', catalogue), null, 'aucun rapprochement force');
+
+// --- Inventaire des salles ---
+
+const keepcool = SEED_GYMS.find((gym) => gym.slug === 'keepcool')!;
+const inventaireKeepcool = gymInventory(keepcool, SEED_EXERCISES);
+assert.ok(!inventaireKeepcool.includes('squat'), 'pas de barre olympique');
+assert.ok(inventaireKeepcool.includes('presse-a-cuisses'), 'la presse reste');
+// Les halteres sont explicitement rajoutes : sans eux, un club sans barre
+// n'aurait plus aucun exercice de biceps.
+assert.ok(inventaireKeepcool.includes('curl-biceps'), 'les halteres restent');
+
+const maison = SEED_GYMS.find((gym) => gym.slug === 'maison')!;
+const inventaireMaison = gymInventory(maison, SEED_EXERCISES);
+assert.ok(inventaireMaison.includes('tractions'), 'le poids du corps reste');
+assert.ok(!inventaireMaison.includes('presse-a-cuisses'), 'aucune machine a la maison');
+
+// --- Composition du programme ---
+
+const regionDe = (slug: string) =>
+  SEED_EXERCISES.find((exercise) => exercise.slug === slug)?.region ?? null;
+
+// L'orientation reduit l'autre moitie du corps, elle ne la supprime pas :
+// « haut du corps » garde un exercice de jambes dans chaque seance, sans quoi
+// la preference deviendrait une blessure a retardement.
+const haut = buildProgram({
+  focus: 'upper',
+  equipment: 'any',
+  sessionsPerWeek: 3,
+  catalog: catalogue,
+});
+assert.equal(haut.templates.length, 3, 'trois seances');
+assert.equal(haut.missingGroups.length, 0, 'aucun groupe laisse de cote');
+for (const template of haut.templates) {
+  const regions = template.exercises.map((entry) => regionDe(entry.exercise.slug));
+  assert.ok(regions.includes('lower'), `du bas dans ${template.name}`);
+  assert.ok(
+    regions.filter((region) => region === 'upper').length >= 3,
+    `le haut domine dans ${template.name}`,
+  );
+}
+
+const bas = buildProgram({
+  focus: 'lower',
+  equipment: 'any',
+  sessionsPerWeek: 3,
+  catalog: catalogue,
+});
+for (const template of bas.templates) {
+  const regions = template.exercises.map((entry) => regionDe(entry.exercise.slug));
+  assert.ok(regions.includes('upper'), `du haut dans ${template.name}`);
+  assert.ok(
+    regions.filter((region) => region === 'lower').length >= 3,
+    `le bas domine dans ${template.name}`,
+  );
+}
+
+// Deux seances par semaine ne se decoupent pas en poussee et tirage : ce
+// serait laisser des groupes entiers sans passage.
+const deux = buildProgram({
+  focus: 'full',
+  equipment: 'any',
+  sessionsPerWeek: 2,
+  catalog: catalogue,
+});
+assert.equal(deux.templates.length, 2, 'deux seances');
+assert.ok(
+  deux.templates.some((template) =>
+    template.exercises.some((entry) => regionDe(entry.exercise.slug) === 'lower'),
+  ),
+  'les jambes passent quand meme',
+);
+
+// La preference de materiel classe, elle n'exclut pas.
+const machines = buildProgram({
+  focus: 'full',
+  equipment: 'machine',
+  sessionsPerWeek: 3,
+  catalog: catalogue,
+});
+const materielMachines = machines.templates.flatMap((template) =>
+  template.exercises.map((entry) => entry.exercise.equipment),
+);
+assert.ok(
+  materielMachines.filter((materiel) => materiel === 'machine' || materiel === 'cable').length >
+    materielMachines.filter((materiel) => materiel === 'free').length,
+  'les machines passent devant',
+);
+
+const libres = buildProgram({
+  focus: 'full',
+  equipment: 'free',
+  sessionsPerWeek: 3,
+  catalog: catalogue,
+});
+const materielLibres = libres.templates.flatMap((template) =>
+  template.exercises.map((entry) => entry.exercise.equipment),
+);
+assert.ok(
+  materielLibres.filter((materiel) => materiel === 'free').length >
+    materielLibres.filter((materiel) => materiel === 'machine').length,
+  'les poids libres passent devant',
+);
+
+// Un club sans barre ne doit prescrire aucun mouvement a la barre.
+const dispoKeepcool = new Set(inventaireKeepcool);
+const compact = buildProgram({
+  focus: 'full',
+  equipment: 'free',
+  sessionsPerWeek: 3,
+  catalog: catalogue.filter((exercise) => dispoKeepcool.has(exercise.slug)),
+});
+for (const template of compact.templates) {
+  for (const entry of template.exercises) {
+    assert.ok(
+      dispoKeepcool.has(entry.exercise.slug),
+      `${entry.exercise.slug} n est pas dans ce club`,
+    );
+  }
+}
+
+// La rotation doit rester une rotation : commencer les trois seances par le
+// meme mouvement reviendrait a n'en avoir qu'une, repetee.
+const tetes = haut.templates.map((template) => template.exercises[0]?.exercise.slug);
+assert.equal(new Set(tetes).size, tetes.length, 'chaque seance a sa propre tete');
+
+// La composition est deterministe : deux appels de suite doivent donner le
+// meme programme, sans quoi regenerer apres un changement d'avis deplacerait
+// des exercices sans raison.
+const rejoue = buildProgram({
+  focus: 'upper',
+  equipment: 'any',
+  sessionsPerWeek: 3,
+  catalog: catalogue,
+});
+assert.deepEqual(
+  rejoue.templates.map((template) => template.exercises.map((entry) => entry.exercise.slug)),
+  haut.templates.map((template) => template.exercises.map((entry) => entry.exercise.slug)),
+  'composition deterministe',
+);
+
+// L'echec se lit dans la serie affichee : « 6 reps » et « 6 reps a l'echec »
+// ne demandent pas la meme charge la semaine suivante.
+assert.equal(
+  formatSet({ weightKg: 6, reps: 10, seconds: null, toFailure: true }),
+  '6 kg × 10 (échec)',
+  'echec marque',
+);
+assert.equal(
+  formatSet({ weightKg: 6, reps: 10, seconds: null }),
+  '6 kg × 10',
+  'sans echec, rien ne s affiche',
+);
 
 console.log('Toutes les verifications pures passent.');

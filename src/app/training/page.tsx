@@ -1,6 +1,12 @@
 import { ScreenHeader } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
-import { openSessionFor, sessionHistory, templatesFor } from '@/server/services/workouts';
+import {
+  gymCatalog,
+  openSessionFor,
+  preferencesFor,
+  sessionHistory,
+  templatesFor,
+} from '@/server/services/workouts';
 import { TrainingHome } from './TrainingHome';
 
 // Les séances viennent du serveur à chaque navigation : rien n'est mis en cache (AD-5).
@@ -12,17 +18,21 @@ const RECENT_LIMIT = 6;
 /**
  * L'accueil du Sport.
  *
- * Composant serveur, aucun import client (AD-10). Les trois lectures partent
+ * Composant serveur, aucun import client (AD-10). Les lectures partent
  * ensemble : elles ne dépendent pas les unes des autres, et les enchaîner
- * tripleraient l'attente sur une connexion de salle de sport.
+ * multiplierait l'attente sur une connexion de salle de sport.
  */
 export default async function TrainingPage() {
   const userId = await requireUserId();
-  const [templates, openSession, history] = await Promise.all([
+  const [templates, openSession, history, preferences, gyms] = await Promise.all([
     templatesFor(userId),
     openSessionFor(userId),
     sessionHistory(userId, RECENT_LIMIT),
+    preferencesFor(userId),
+    gymCatalog(),
   ]);
+
+  const gymName = gyms.find((gym) => gym.id === preferences.gymId)?.name ?? null;
 
   return (
     <>
@@ -31,6 +41,8 @@ export default async function TrainingPage() {
         templates={templates}
         openSession={openSession}
         history={history.filter((session) => session.finishedAt !== null)}
+        preferences={preferences}
+        gymName={gymName}
       />
     </>
   );

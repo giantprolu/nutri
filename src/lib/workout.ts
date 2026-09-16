@@ -15,13 +15,114 @@ export function isExerciseKind(value: unknown): value is ExerciseKind {
   return value === 'strength' || value === 'hold' || value === 'cardio';
 }
 
+/**
+ * Le matériel qu'un exercice demande.
+ *
+ * C'est cette colonne qui décide si un exercice est faisable là où l'on
+ * s'entraîne, et non le groupe musculaire. Deux personnes qui veulent des
+ * pectoraux n'ont pas le même exercice selon qu'elles ont une barre, une
+ * poulie ou seulement une presse assise.
+ *
+ * `free` couvre barre et haltères ensemble : la distinction existe en salle,
+ * mais elle ne change ni la disponibilité ni le choix qu'on fait entre poids
+ * libre et machine guidée, qui est la seule question posée.
+ */
+export type ExerciseEquipment = 'free' | 'machine' | 'cable' | 'bodyweight' | 'cardio';
+
+export function isExerciseEquipment(value: unknown): value is ExerciseEquipment {
+  return (
+    value === 'free' ||
+    value === 'machine' ||
+    value === 'cable' ||
+    value === 'bodyweight' ||
+    value === 'cardio'
+  );
+}
+
+/**
+ * La moitié du corps que l'exercice travaille.
+ *
+ * Le groupe musculaire ne suffit pas à répondre à « je veux du haut et un
+ * minimum de bas » : il faudrait pour cela connaître par cœur de quel côté
+ * tombent les mollets et les lombaires. La colonne le dit.
+ */
+export type ExerciseRegion = 'upper' | 'lower' | 'core' | 'full';
+
+export function isExerciseRegion(value: unknown): value is ExerciseRegion {
+  return value === 'upper' || value === 'lower' || value === 'core' || value === 'full';
+}
+
 export interface Exercise {
   id: number;
   slug: string;
   name: string;
   kind: ExerciseKind;
   muscleGroup: string | null;
+  region: ExerciseRegion;
+  equipment: ExerciseEquipment;
+  /**
+   * Rang de choix dans son groupe musculaire : 1 désigne l'exercice de base.
+   *
+   * `null` pour un exercice créé à la main depuis un import de séance. C'est
+   * ce qui l'exclut de la génération de programme : une ligne saisie au
+   * clavier un soir n'a pas à se retrouver prescrite la semaine suivante.
+   */
+  rank: number | null;
+  /** Autres noms sous lesquels on l'écrit, pour retrouver une séance saisie. */
+  aliases: readonly string[];
 }
+
+/** Ce que l'utilisateur veut travailler, et ce qu'il accepte de ne pas perdre. */
+export type TrainingFocus = 'upper' | 'lower' | 'full';
+
+export function isTrainingFocus(value: unknown): value is TrainingFocus {
+  return value === 'upper' || value === 'lower' || value === 'full';
+}
+
+/** Poids libre, machine guidée, ou indifférent. */
+export type EquipmentPreference = 'free' | 'machine' | 'any';
+
+export function isEquipmentPreference(value: unknown): value is EquipmentPreference {
+  return value === 'free' || value === 'machine' || value === 'any';
+}
+
+/** Une salle, avec le matériel qu'on y trouve. */
+export interface Gym {
+  id: number;
+  slug: string;
+  name: string;
+  note: string | null;
+}
+
+/** Ce que l'utilisateur a répondu sur sa salle et ses envies. */
+export interface TrainingPreferences {
+  gymId: number | null;
+  focus: TrainingFocus;
+  equipment: EquipmentPreference;
+  sessionsPerWeek: number;
+}
+
+export const DEFAULT_PREFERENCES: TrainingPreferences = {
+  gymId: null,
+  focus: 'full',
+  equipment: 'any',
+  sessionsPerWeek: 3,
+};
+
+export const MIN_SESSIONS_PER_WEEK = 2;
+export const MAX_SESSIONS_PER_WEEK = 6;
+
+export const FOCUS_LABELS: Record<TrainingFocus, string> = {
+  upper: 'Haut du corps, avec un minimum de bas',
+  lower: 'Bas du corps, avec un minimum de haut',
+  full: 'Les deux à parts égales',
+};
+
+export const EQUIPMENT_PREFERENCE_LABELS: Record<EquipmentPreference, string> = {
+  free: 'Poids libres',
+  machine: 'Machines guidées',
+  any: 'Indifférent',
+};
 
 /** Un exercice prescrit dans une séance modèle. */
 export interface TemplateExercise {
@@ -55,6 +156,14 @@ export interface WorkoutSet {
   weightKg: number | null;
   reps: number | null;
   seconds: number | null;
+  /**
+   * La série est allée jusqu'à l'échec musculaire.
+   *
+   * On l'écrit parce qu'elle change la lecture de la suivante : « 6 reps » et
+   * « 6 reps à l'échec » ne disent pas la même chose de la charge à mettre la
+   * semaine prochaine. C'est la notation qu'on porte déjà sur un carnet.
+   */
+  toFailure: boolean;
   doneAt: Date;
 }
 
@@ -119,19 +228,21 @@ export function formatSet(set: {
   weightKg: number | null;
   reps: number | null;
   seconds: number | null;
+  toFailure?: boolean;
 }): string {
+  const failure = set.toFailure === true ? ' (échec)' : '';
   if (set.seconds !== null) {
-    return set.seconds >= 60
-      ? `${Math.round(set.seconds / 60)} min`
-      : `${set.seconds} s`;
+    const duration =
+      set.seconds >= 60 ? `${Math.round(set.seconds / 60)} min` : `${set.seconds} s`;
+    return `${duration}${failure}`;
   }
   if (set.reps === null) {
     return '—';
   }
   if (set.weightKg === null || set.weightKg === 0) {
-    return `${set.reps} reps`;
+    return `${set.reps} reps${failure}`;
   }
-  return `${set.weightKg.toLocaleString('fr-FR')} kg × ${set.reps}`;
+  return `${set.weightKg.toLocaleString('fr-FR')} kg × ${set.reps}${failure}`;
 }
 
 /**

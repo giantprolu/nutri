@@ -606,16 +606,143 @@ export const exercises = pgTable(
     kind: text('kind').notNull(),
     /** Groupe musculaire dominant, pour lire une séance d'un coup d'œil. */
     muscleGroup: text('muscle_group'),
+    /**
+     * `upper`, `lower`, `core` ou `full`.
+     *
+     * Le groupe musculaire ne répond pas à « du haut, et un minimum de bas » :
+     * il faudrait pour cela savoir de quel côté tombent les mollets et les
+     * lombaires. La colonne le dit, et l'orientation devient une clause `where`
+     * au lieu d'une liste de groupes recopiée dans le code.
+     */
+    region: text('region').notNull().default('upper'),
+    /**
+     * `free`, `machine`, `cable`, `bodyweight` ou `cardio`.
+     *
+     * C'est cette colonne qui décide si un exercice est faisable là où l'on
+     * s'entraîne, et elle porte aussi la préférence entre poids libre et
+     * machine guidée. Sans elle, « je veux des machines » n'aurait aucune
+     * traduction en base.
+     */
+    equipment: text('equipment').notNull().default('machine'),
+    /**
+     * Rang de choix dans son groupe musculaire : 1 est l'exercice de base.
+     *
+     * `null` pour un exercice créé depuis un import de séance. C'est ce qui
+     * l'exclut de la génération de programme : une ligne saisie au clavier un
+     * soir n'a pas à se retrouver prescrite la semaine suivante, ni chez son
+     * auteur ni chez les autres, le catalogue étant commun.
+     */
+    rank: integer('rank'),
+    /**
+     * Les autres noms sous lesquels l'exercice s'écrit.
+     *
+     * Un tableau et non une table : le catalogue tient en quelques dizaines de
+     * lignes, il est lu en entier pour rapprocher une séance saisie de ses
+     * exercices, et une jointure de plus ne ferait qu'alourdir cette lecture.
+     */
+    aliases: text('aliases').array().notNull().default(sql`'{}'::text[]`),
     /** `seed` ou `manual` : d'où vient la ligne. */
     source: text('source').notNull().default('seed'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
     check('exercises_kind_check', sql`${table.kind} in ('strength', 'hold', 'cardio')`),
+    check(
+      'exercises_region_check',
+      sql`${table.region} in ('upper', 'lower', 'core', 'full')`,
+    ),
+    check(
+      'exercises_equipment_check',
+      sql`${table.equipment} in ('free', 'machine', 'cable', 'bodyweight', 'cardio')`,
+    ),
+    index('exercises_group_idx').on(table.muscleGroup, table.rank),
   ],
 );
 
 export type ExerciseRow = typeof exercises.$inferSelect;
+
+/**
+ * Les salles, et ce qu'on y trouve.
+ *
+ * Référentiel commun, comme les exercices : le parc de machines d'une enseigne
+ * n'appartient à personne. La table existe parce qu'un programme composé sans
+ * savoir où il sera exécuté prescrit des mouvements impossibles — un rowing
+ * barre dans un club qui n'a pas de barre, et la séance s'arrête à la
+ * deuxième ligne.
+ *
+ * L'inventaire est une approximation assumée : les clubs d'une même enseigne
+ * ne sont pas identiques. Ne pas choisir de salle ouvre le catalogue entier,
+ * ce qui reste le comportement le plus sûr quand on ne sait pas.
+ */
+export const gyms = pgTable('gyms', {
+  id: bigserial('id', { mode: 'number' }).primaryKey(),
+  slug: text('slug').notNull().unique(),
+  name: text('name').notNull(),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type GymRow = typeof gyms.$inferSelect;
+
+/** Les exercices disponibles dans une salle. */
+export const gymExercises = pgTable(
+  'gym_exercises',
+  {
+    gymId: bigint('gym_id', { mode: 'number' })
+      .notNull()
+      .references(() => gyms.id, { onDelete: 'cascade' }),
+    exerciseId: bigint('exercise_id', { mode: 'number' })
+      .notNull()
+      .references(() => exercises.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.gymId, table.exerciseId] })],
+);
+
+export type GymExerciseRow = typeof gymExercises.$inferSelect;
+
+/**
+ * Ce que l'utilisateur a répondu sur sa salle et sur ce qu'il veut travailler.
+ *
+ * Une ligne par compte, comme `profiles`, et pour la même raison : ce sont des
+ * réponses, pas un historique. Elles portent l'utilisateur en clé primaire, et
+ * la génération d'un programme les relit à chaque fois plutôt que de figer
+ * leur effet dans les séances — changer de salle doit pouvoir refaire le
+ * programme sans qu'on ait à ressaisir quoi que ce soit.
+ */
+export const trainingPreferences = pgTable(
+  'training_preferences',
+  {
+    userId: bigint('user_id', { mode: 'number' })
+      .primaryKey()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** `null` quand l'utilisateur ne précise pas : tout le catalogue s'ouvre. */
+    gymId: bigint('gym_id', { mode: 'number' }).references(() => gyms.id, {
+      onDelete: 'set null',
+    }),
+    /** `upper`, `lower` ou `full`. */
+    focus: text('focus').notNull().default('full'),
+    /** `free`, `machine` ou `any`. */
+    equipment: text('equipment').notNull().default('any'),
+    sessionsPerWeek: integer('sessions_per_week').notNull().default(3),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    check(
+      'training_preferences_focus_check',
+      sql`${table.focus} in ('upper', 'lower', 'full')`,
+    ),
+    check(
+      'training_preferences_equipment_check',
+      sql`${table.equipment} in ('free', 'machine', 'any')`,
+    ),
+    check(
+      'training_preferences_sessions_check',
+      sql`${table.sessionsPerWeek} between 2 and 6`,
+    ),
+  ],
+);
+
+export type TrainingPreferencesRow = typeof trainingPreferences.$inferSelect;
 
 /**
  * Une séance modèle : la séance A, B ou C du programme.
@@ -748,6 +875,15 @@ export const workoutSets = pgTable(
     weightKg: numeric('weight_kg', { precision: 6, scale: 2 }),
     reps: integer('reps'),
     seconds: integer('seconds'),
+    /**
+     * La série est allée jusqu'à l'échec musculaire.
+     *
+     * C'est la notation qu'on porte déjà sur un carnet, et elle change la
+     * lecture de la semaine suivante : « 6 répétitions » et « 6 répétitions à
+     * l'échec » ne demandent pas la même charge. La perdre à l'import
+     * reviendrait à noter une série plus facile qu'elle ne l'a été.
+     */
+    toFailure: boolean('to_failure').notNull().default(false),
     doneAt: timestamp('done_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [

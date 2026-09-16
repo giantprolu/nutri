@@ -36,6 +36,14 @@ interface Draft {
   weightKg: string;
   reps: string;
   seconds: string;
+  /**
+   * La série est allée jusqu'à l'échec musculaire.
+   *
+   * Jamais préremplie depuis la dernière fois, contrairement aux chiffres :
+   * l'échec est un fait de la série qu'on vient de faire, pas une consigne.
+   * Le reporter d'une semaine sur l'autre inventerait un effort.
+   */
+  toFailure: boolean;
 }
 
 function draftKey(exerciseId: number, setIndex: number): string {
@@ -52,6 +60,7 @@ function initialDraft(
       weightKg: '',
       reps: '',
       seconds: String(previous?.seconds ?? entry.targetSeconds ?? ''),
+      toFailure: false,
     };
   }
   return {
@@ -60,6 +69,7 @@ function initialDraft(
     // et l'atteindre sur toutes les séries est le signal qu'il faut charger.
     reps: String(previous?.reps ?? entry.targetRepsMax ?? entry.targetRepsMin ?? ''),
     seconds: '',
+    toFailure: false,
   };
 }
 
@@ -96,6 +106,7 @@ export function SessionRunner({
         weightKg: recorded.weightKg === null ? '' : String(recorded.weightKg),
         reps: recorded.reps === null ? '' : String(recorded.reps),
         seconds: recorded.seconds === null ? '' : String(recorded.seconds),
+        toFailure: recorded.toFailure,
       };
     }
 
@@ -106,7 +117,10 @@ export function SessionRunner({
   function patch(key: string, change: Partial<Draft>) {
     setDrafts((current) => ({
       ...current,
-      [key]: { ...(current[key] ?? { weightKg: '', reps: '', seconds: '' }), ...change },
+      [key]: {
+        ...(current[key] ?? { weightKg: '', reps: '', seconds: '', toFailure: false }),
+        ...change,
+      },
     }));
   }
 
@@ -124,6 +138,7 @@ export function SessionRunner({
       weightKg: isTimed || draft.weightKg.trim() === '' ? null : Number(draft.weightKg),
       reps: isTimed || draft.reps.trim() === '' ? null : Number(draft.reps),
       seconds: isTimed && draft.seconds.trim() !== '' ? Number(draft.seconds) : null,
+      toFailure: draft.toFailure,
     });
     setBusy(false);
 
@@ -251,7 +266,7 @@ export function SessionRunner({
                             <span className="entry-meta flex-none">kg</span>
                           </label>
                           <span className="entry-meta flex-none">×</span>
-                          <label className="flex w-[84px] flex-none items-center gap-1">
+                          <label className="flex w-[72px] flex-none items-center gap-1">
                             <span className="sr-only">
                               Répétitions de la série {setIndex}
                             </span>
@@ -266,6 +281,24 @@ export function SessionRunner({
                           </label>
                         </>
                       )}
+
+                      {/*
+                        L'échec se marque au moment où il a lieu, d'un appui,
+                        et non dans un écran de correction : « 6 répétitions »
+                        et « 6 répétitions à l'échec » ne demandent pas la même
+                        charge la semaine suivante, et c'est cette différence
+                        qui rend la ligne relisible.
+                      */}
+                      <button
+                        type="button"
+                        onClick={() => patch(key, { toFailure: !draft.toFailure })}
+                        disabled={busy || closed}
+                        aria-pressed={draft.toFailure}
+                        aria-label={`Série ${setIndex} menée à l'échec`}
+                        className="chip flex-none"
+                      >
+                        éch.
+                      </button>
 
                       <button
                         type="button"

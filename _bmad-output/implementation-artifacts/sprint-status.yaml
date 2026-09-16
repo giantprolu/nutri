@@ -92,3 +92,9 @@ development_status:
   11-1-installation-sur-l-écran-d-accueil-selon-la-plateforme: done
   11-2-raccourci-santé-partageable-et-copie-du-jeton: done
   epic-11-retrospective: optional
+
+  epic-12: done
+  12-1-preferences-d-entrainement-salle-materiel-et-orientation: done
+  12-2-composition-du-programme-selon-les-preferences: done
+  12-3-saisie-d-une-seance-ecrite-a-la-main: done
+  epic-12-retrospective: optional

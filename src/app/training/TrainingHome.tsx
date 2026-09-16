@@ -3,54 +3,55 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { installProgram, startSession } from '@/lib/client/training';
+import { startSession } from '@/lib/client/training';
 import {
+  EQUIPMENT_PREFERENCE_LABELS,
   formatPrescription,
   groupBySuperset,
   sessionVolume,
+  type TrainingPreferences,
   type WorkoutSession,
   type WorkoutTemplate,
 } from '@/lib/workout';
 import { formatRelativeJournalDate } from '@/lib/date';
 
+/** Ce que les réponses de l'utilisateur donnent, en une ligne. */
+const FOCUS_SHORT: Record<TrainingPreferences['focus'], string> = {
+  upper: 'Haut du corps',
+  lower: 'Bas du corps',
+  full: 'Haut et bas',
+};
+
 /**
- * L'accueil du Sport : la séance en cours s'il y en a une, les trois séances
- * du programme, et ce qu'on a fait récemment.
+ * L'accueil du Sport : la séance en cours s'il y en a une, les séances du
+ * programme, et ce qu'on a fait récemment.
  *
  * La séance ouverte passe avant tout le reste. C'est le cas nominal d'un usage
  * en salle : on pose son téléphone entre deux séries, l'application se
  * recharge, et il faut retrouver la séance là où on l'a laissée sans la
  * chercher.
+ *
+ * Le programme n'est plus installé d'un bouton mais composé depuis des
+ * réponses, et l'écran renvoie donc vers elles plutôt que de proposer un
+ * programme tout fait que rien n'ajusterait ensuite.
  */
 export function TrainingHome({
   templates,
   openSession,
   history,
+  preferences,
+  gymName,
 }: {
   templates: readonly WorkoutTemplate[];
   openSession: WorkoutSession | null;
   history: readonly WorkoutSession[];
+  preferences: TrainingPreferences;
+  /** Le nom de la salle choisie, ou `null` si l'utilisateur ne précise pas. */
+  gymName: string | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [skipped, setSkipped] = useState<string[] | null>(null);
-
-  async function install() {
-    setBusy(true);
-    setError(null);
-    const outcome = await installProgram();
-    setBusy(false);
-
-    if (outcome.kind === 'error') {
-      setError('Installation impossible. Réessaie dans un instant.');
-      return;
-    }
-    if (outcome.skipped.length > 0) {
-      setSkipped(outcome.skipped);
-    }
-    router.refresh();
-  }
 
   async function begin(templateId: number) {
     setBusy(true);
@@ -68,31 +69,19 @@ export function TrainingHome({
   if (templates.length === 0) {
     return (
       <div className="py-8 text-center">
-        <p className="mx-auto max-w-[26ch] text-[23px] leading-[1.35] font-semibold">
-          Trois séances en rotation sur la semaine.
+        <p className="mx-auto max-w-[28ch] text-[23px] leading-[1.35] font-semibold">
+          Un programme composé pour ta salle.
         </p>
-        <p className="note mx-auto mt-3 max-w-[32ch]">
-          Poussée, tirage, haut du corps et cardio. Modifiables et supprimables ensuite.
+        <p className="note mx-auto mt-3 max-w-[34ch]">
+          Ce que tu veux travailler, où tu t’entraînes, poids libres ou machines.
+          Trois réponses, et les séances se composent.
         </p>
-        <button
-          type="button"
-          onClick={() => void install()}
-          disabled={busy}
-          className="action mx-auto mt-6 max-w-[260px]"
-        >
-          {busy ? 'Installation…' : 'Installer ce programme'}
-        </button>
-
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
-        {skipped !== null ? (
-          <p className="note mx-auto mt-4 max-w-[34ch]">
-            Exercices non installés : {skipped.join(', ')}.
-          </p>
-        ) : null}
+        <Link href="/training/preferences" className="action mx-auto mt-6 max-w-[260px]">
+          Composer mon programme
+        </Link>
+        <Link href="/training/import" className="action-quiet mx-auto mt-3 max-w-[260px]">
+          Saisir une séance déjà faite
+        </Link>
       </div>
     );
   }
@@ -125,7 +114,21 @@ export function TrainingHome({
         </p>
       ) : null}
 
-      <p className="kicker mt-4 mb-1">Le programme</p>
+      <div className="mode-row mt-4">
+        <span className="min-w-0 flex-1">
+          <strong>{FOCUS_SHORT[preferences.focus]}</strong>
+          <small>
+            {gymName ?? 'Salle non précisée'} ·{' '}
+            {EQUIPMENT_PREFERENCE_LABELS[preferences.equipment].toLowerCase()} ·{' '}
+            {preferences.sessionsPerWeek} séances par semaine
+          </small>
+        </span>
+        <Link href="/training/preferences" className="chip flex-none">
+          Modifier
+        </Link>
+      </div>
+
+      <p className="kicker mt-5 mb-1">Le programme</p>
 
       <ul>
         {templates.map((template) => (
@@ -173,6 +176,10 @@ export function TrainingHome({
           </li>
         ))}
       </ul>
+
+      <Link href="/training/import" className="action-quiet mt-4">
+        Saisir une séance déjà faite
+      </Link>
 
       {history.length > 0 ? (
         <>

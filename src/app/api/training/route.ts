@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { apiError } from '@/server/errors';
 import { currentUserId } from '@/server/guard';
-import { installProgram, removeTemplate, templatesFor } from '@/server/services/workouts';
+import { generateProgram, removeTemplate, templatesFor } from '@/server/services/workouts';
 
 export const runtime = 'nodejs';
 
@@ -14,9 +14,14 @@ export async function GET(): Promise<Response> {
   return Response.json({ templates: await templatesFor(userId) });
 }
 
-const postSchema = z.object({ action: z.literal('install') });
+const postSchema = z.object({ action: z.literal('generate') });
 
-/** Installe le programme de départ. Sans effet si le compte a déjà une séance. */
+/**
+ * Compose le programme à partir des préférences, et remplace le précédent.
+ *
+ * Rejouable sans risque : les séances remplacées sont archivées, pas
+ * supprimées, et les séances déjà réalisées gardent donc leur nom.
+ */
 export async function POST(request: Request): Promise<Response> {
   const userId = await currentUserId();
   if (userId === null) {
@@ -34,7 +39,7 @@ export async function POST(request: Request): Promise<Response> {
     return apiError('invalid_input');
   }
 
-  return Response.json(await installProgram(userId), { status: 201 });
+  return Response.json(await generateProgram(userId), { status: 201 });
 }
 
 const deleteSchema = z.object({ templateId: z.number().int().positive() });

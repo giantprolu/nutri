@@ -3,22 +3,52 @@
  * Résultats discriminés plutôt qu'exceptions (AD-12).
  */
 
-export type InstallProgramOutcome =
-  | { kind: 'installed'; created: number; skipped: string[] }
+export type GenerateProgramOutcome =
+  | { kind: 'generated'; created: number; replaced: number; missingGroups: string[] }
   | { kind: 'error' };
 
-export async function installProgram(): Promise<InstallProgramOutcome> {
+/** Compose le programme depuis les préférences, et remplace le précédent. */
+export async function generateProgram(): Promise<GenerateProgramOutcome> {
   try {
     const response = await fetch('/api/training', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'install' }),
+      body: JSON.stringify({ action: 'generate' }),
     });
     if (!response.ok) {
       return { kind: 'error' };
     }
-    const body = (await response.json()) as { created: number; skipped: string[] };
-    return { kind: 'installed', created: body.created, skipped: body.skipped };
+    const body = (await response.json()) as {
+      created: number;
+      replaced: number;
+      missingGroups: string[];
+    };
+    return {
+      kind: 'generated',
+      created: body.created,
+      replaced: body.replaced,
+      missingGroups: body.missingGroups,
+    };
+  } catch {
+    return { kind: 'error' };
+  }
+}
+
+export type SavePreferencesOutcome = { kind: 'saved' } | { kind: 'error' };
+
+export async function savePreferences(preferences: {
+  gymId: number | null;
+  focus: 'upper' | 'lower' | 'full';
+  equipment: 'free' | 'machine' | 'any';
+  sessionsPerWeek: number;
+}): Promise<SavePreferencesOutcome> {
+  try {
+    const response = await fetch('/api/training/preferences', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(preferences),
+    });
+    return response.ok ? { kind: 'saved' } : { kind: 'error' };
   } catch {
     return { kind: 'error' };
   }
@@ -63,6 +93,7 @@ export async function recordSet(input: {
   weightKg: number | null;
   reps: number | null;
   seconds: number | null;
+  toFailure: boolean;
 }): Promise<SimpleOutcome> {
   try {
     const response = await fetch('/api/training/sets', {
@@ -107,6 +138,73 @@ export async function discardSession(id: number): Promise<SimpleOutcome> {
   try {
     const response = await fetch(`/api/training/sessions/${id}`, { method: 'DELETE' });
     return response.ok ? { kind: 'ok' } : { kind: 'error' };
+  } catch {
+    return { kind: 'error' };
+  }
+}
+
+/** Une série lue sur une ligne saisie à la main. */
+export interface ParsedSetPayload {
+  reps: number | null;
+  seconds: number | null;
+  weightKg: number | null;
+  toFailure: boolean;
+}
+
+export interface AnalysedLinePayload {
+  raw: string;
+  name: string;
+  sets: ParsedSetPayload[];
+  warning: 'none' | 'no_sets' | 'weight_count';
+  matchedExerciseId: number | null;
+  candidates: { id: number; name: string; score: number }[];
+}
+
+export type AnalyseLogOutcome =
+  | { kind: 'analysed'; lines: AnalysedLinePayload[] }
+  | { kind: 'error' };
+
+/** Lit une séance écrite, sans rien enregistrer. */
+export async function analyseWorkoutLog(text: string): Promise<AnalyseLogOutcome> {
+  try {
+    const response = await fetch('/api/training/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'analyse', text }),
+    });
+    if (!response.ok) {
+      return { kind: 'error' };
+    }
+    const body = (await response.json()) as { lines: AnalysedLinePayload[] };
+    return { kind: 'analysed', lines: body.lines };
+  } catch {
+    return { kind: 'error' };
+  }
+}
+
+export type SaveWrittenSessionOutcome =
+  | { kind: 'saved'; id: number; sets: number }
+  | { kind: 'error' };
+
+export async function saveWrittenSession(input: {
+  sessionDate: string;
+  lines: readonly {
+    exerciseId: number | null;
+    name: string;
+    sets: readonly ParsedSetPayload[];
+  }[];
+}): Promise<SaveWrittenSessionOutcome> {
+  try {
+    const response = await fetch('/api/training/import', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ action: 'save', ...input }),
+    });
+    if (!response.ok) {
+      return { kind: 'error' };
+    }
+    const body = (await response.json()) as { id: number; sets: number };
+    return { kind: 'saved', id: body.id, sets: body.sets };
   } catch {
     return { kind: 'error' };
   }
