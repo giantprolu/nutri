@@ -27,7 +27,9 @@ d'une seule personne. Poids, âge et repas de tiers sont des données de santé.
 5. Marquer la story comme terminée dans le sprint status BMAD
 
 Ne jamais passer à la story suivante si le build échoue.
-Ne jamais pusher sur `main`. Uniquement `bmad/dev`.
+Le travail se committe sur `bmad/dev`. Reporter ensuite `main` dessus est
+autorisé, en avance rapide uniquement : c'est le même historique, pas une
+fusion. Si l'avance rapide n'est pas possible, s'arrêter et le dire.
 Si une commande échoue deux fois de suite, s'arrêter et écrire le blocage
 dans `BLOCKERS.md` plutôt que de contourner.
 
