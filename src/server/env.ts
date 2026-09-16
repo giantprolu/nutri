@@ -29,6 +29,15 @@ const schema = z.object({
   // dont le coût reste négligeable à quelques photos par jour. Repasser au
   // petit modèle ne demande que cette variable.
   MISTRAL_MODEL: z.string().min(1).default('mistral-medium-latest'),
+  /**
+   * Lien iCloud du raccourci Santé tout fait, s'il en existe un.
+   *
+   * Sans préfixe NEXT_PUBLIC_, comme tout ce fichier : la valeur n'a rien de
+   * secret — c'est un lien de partage — mais elle descend au navigateur par
+   * une propriété de composant, depuis un composant serveur, et non par une
+   * variable inlinée à la compilation. Une seule porte vers process.env.
+   */
+  HEALTH_SHORTCUT_URL: z.string().url().optional(),
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
   OFF_USER_AGENT: z
     .string()
@@ -96,6 +105,9 @@ export const env = {
   },
   get offUserAgent(): string {
     return read().OFF_USER_AGENT;
+  },
+  get healthShortcutUrl(): string | undefined {
+    return read().HEALTH_SHORTCUT_URL;
   },
   /** Vrai sur Vercel, faux sous `next dev`. Sert aux attributs du cookie. */
   get isProduction(): boolean {

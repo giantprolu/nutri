@@ -126,7 +126,7 @@ export default async function SettingsPage() {
         <Row
           href="/settings/install"
           label="Installer sur l'écran d'accueil"
-          hint="Quatre étapes dans Safari"
+          hint="Un bouton sur Android, trois gestes sur iPhone"
         />
         <Row
           href="/settings/appearance"

@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
 import { Source_Sans_3 } from 'next/font/google';
 import { TabBar } from '@/components/TabBar';
+import { INSTALL_PROMPT_KEY, INSTALL_READY_EVENT } from '@/lib/client/install';
 import {
   THEME_COLORS,
   THEME_COOKIE,
@@ -68,6 +69,23 @@ export async function generateViewport(): Promise<Viewport> {
   };
 }
 
+/**
+ * Capture de `beforeinstallprompt`, posée avant tout le reste.
+ *
+ * Chromium émet cet événement une seule fois, tôt, et souvent avant que React
+ * n'ait pris la main. Un écouteur monté dans un composant arriverait après la
+ * fête neuf fois sur dix, et le bouton d'installation ne s'afficherait jamais
+ * sur Android — panne parfaitement muette, puisque rien n'échoue.
+ *
+ * `preventDefault` empêche la bannière spontanée du navigateur : l'invite
+ * s'ouvrira au geste de l'utilisateur, depuis l'écran qui l'explique, et non
+ * par surprise au milieu d'une saisie de repas.
+ *
+ * Quatre lignes en clair dans le document plutôt qu'un module chargé : tout ce
+ * qui passe par le graphe de modules arrive, par construction, trop tard.
+ */
+const CAPTURE_SCRIPT = `window.${INSTALL_PROMPT_KEY}=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.${INSTALL_PROMPT_KEY}=e;dispatchEvent(new Event('${INSTALL_READY_EVENT}'))});addEventListener('appinstalled',function(){window.${INSTALL_PROMPT_KEY}=null});`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -81,6 +99,9 @@ export default async function RootLayout({
       {...(theme === undefined ? {} : { 'data-theme': theme })}
       className={sourceSans.variable}
     >
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: CAPTURE_SCRIPT }} />
+      </head>
       <body className="min-h-dvh">
         <main className="safe-top mx-auto w-full max-w-lg px-4">{children}</main>
         <TabBar />

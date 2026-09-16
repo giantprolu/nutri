@@ -35,6 +35,7 @@ import { aisleFor } from '../src/lib/aisle';
 import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
 import { aggregateNeeds, bestMatch, matchScore, ingredientKey } from '../src/lib/shopping';
 import type { ShoppingNeed } from '../src/lib/shopping';
+import { detectPlatform } from '../src/lib/install';
 import {
   bestSet,
   formatPrescription,
@@ -620,5 +621,32 @@ assert.equal(stepDurationSeconds('Prechauffer le four a 200 °C.'), null, 'une t
 assert.equal(stepDurationSeconds('Melanger le riz aux legumes.'), null, 'aucune duree');
 // La premiere duree l'emporte : c'est le premier geste qu'on va faire.
 assert.equal(stepDurationSeconds('Cuire 8 minutes, puis 2 minutes de repos.'), 480, 'la premiere duree');
+
+// Detection du contexte d'installation. Elle ne decide que d'un texte d'aide,
+// mais se tromper envoie chercher un bouton qui n'existe pas la ou on regarde.
+const UA_IPHONE_SAFARI =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1';
+const UA_IPHONE_CHROME =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0 Mobile/15E148 Safari/604.1';
+const UA_INSTAGRAM =
+  'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 Instagram 330.0';
+const UA_ANDROID =
+  'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36';
+const UA_MAC =
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36';
+
+assert.equal(detectPlatform(UA_IPHONE_SAFARI), 'ios-safari', 'iPhone sous Safari');
+// iOS 16.4 a ouvert l'installation aux navigateurs tiers, par leur propre
+// menu : envoyer chercher le bouton Partager de Safari serait une impasse.
+assert.equal(detectPlatform(UA_IPHONE_CHROME), 'ios-other', 'Chrome sur iPhone');
+// La vue web d'Instagram porte aussi « iPhone » : testee en premier, sans quoi
+// on ferait chercher un bouton Partager absent de cette barre d'outils.
+assert.equal(detectPlatform(UA_INSTAGRAM), 'in-app', 'navigateur integre');
+assert.equal(detectPlatform(UA_ANDROID), 'android', 'Android');
+assert.equal(detectPlatform(UA_MAC), 'desktop', 'ordinateur de bureau');
+// iPadOS 13+ s'annonce « Macintosh » : seul le nombre de points de contact le
+// distingue d'un Mac, a qui l'on proposerait un bouton qui ne ferait rien.
+assert.equal(detectPlatform(UA_MAC, 5), 'ios-safari', 'iPad recent');
+assert.equal(detectPlatform(UA_MAC, 0), 'desktop', 'un Mac reste un Mac');
 
 console.log('Toutes les verifications pures passent.');

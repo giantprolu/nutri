@@ -1,38 +1,29 @@
 import { NavHeader } from '@/components/ScreenHeader';
+import { InstallGuide } from './InstallGuide';
 
 /**
- * Procédure d'installation sur l'écran d'accueil (FR-24).
+ * Installation sur l'écran d'accueil (FR-24).
  *
- * Permanente et non rejetable : iOS ne permet aucune invite automatique, et le
- * chemin est assez obscur pour mériter d'être rappelé. Elle a désormais son
- * écran plutôt que le haut des réglages, où elle se relisait chaque fois.
+ * La page ne porte plus la marche à suivre : celle-ci dépend du navigateur, et
+ * un texte unique se trompait deux fois sur trois — il parlait de Safari à
+ * quelqu'un sur Android, et de quatre étapes à qui a déjà installé
+ * l'application. Tout ce qui varie est descendu dans `InstallGuide`, qui sait
+ * où il tourne.
+ *
+ * Elle reste permanente et non rejetable : il n'existe aucune invite
+ * automatique sur iOS, et le chemin est assez obscur pour mériter un écran.
  */
-const STEPS = [
-  'Ouvre NutriPerso dans Safari.',
-  'Touche le bouton Partager, en bas de l’écran.',
-  'Choisis « Sur l’écran d’accueil ».',
-  'Valide. L’application s’ouvrira sans barre d’adresse.',
-];
-
 export default function InstallPage() {
   return (
     <>
       <NavHeader label="Réglages" href="/settings" mode="back" />
       <h1 className="display-sm mt-3">Installer sur l&apos;écran d&apos;accueil</h1>
       <p className="note mt-2">
-        Une fois installée, l&apos;application s&apos;ouvre en plein écran et garde sa session
-        plus longtemps.
+        Une fois installée, l&apos;application s&apos;ouvre en plein écran, sans barre
+        d&apos;adresse, et garde sa session plus longtemps.
       </p>
-      <hr className="rule mt-4" />
 
-      <ol>
-        {STEPS.map((step, index) => (
-          <li key={step} className="mode-row items-baseline">
-            <span className="kicker flex-none">{index + 1}</span>
-            <span className="flex-1 text-[16px]">{step}</span>
-          </li>
-        ))}
-      </ol>
+      <InstallGuide />
     </>
   );
 }

@@ -2,6 +2,7 @@ import { NavHeader } from '@/components/ScreenHeader';
 import { currentUserId } from '@/server/guard';
 import { hasIngestToken } from '@/server/db/queries/users';
 import { bridgeStatus } from '@/server/services/profile';
+import { env } from '@/server/env';
 import { HealthBridge } from '../HealthBridge';
 
 export const dynamic = 'force-dynamic';
@@ -30,7 +31,11 @@ export default async function HealthPage() {
     <>
       <NavHeader label="Réglages" href="/settings" mode="back" />
       <h1 className="display-sm mt-3">Activité depuis Santé</h1>
-      <HealthBridge hasToken={tokenExists} status={status} />
+      <HealthBridge
+        hasToken={tokenExists}
+        status={status}
+        shortcutUrl={env.healthShortcutUrl ?? null}
+      />
     </>
   );
 }

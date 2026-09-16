@@ -87,3 +87,8 @@ development_status:
   10-1-catalogue-de-repas-par-objectif: done
   10-2-panier-de-la-semaine-et-courses-depuis-le-panier: done
   epic-10-retrospective: optional
+
+  epic-11: done
+  11-1-installation-sur-l-écran-d-accueil-selon-la-plateforme: done
+  11-2-raccourci-santé-partageable-et-copie-du-jeton: done
+  epic-11-retrospective: optional

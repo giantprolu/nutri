@@ -2,6 +2,8 @@
 
 import { useState } from 'react';
 import { formatRelativeJournalDate } from '@/lib/date';
+import { CopyField } from './CopyField';
+
 
 /**
  * Pont vers Santé d'Apple, par l'app Raccourcis (FR-27).
@@ -28,12 +30,28 @@ export interface BridgeStatus {
   requiredDays: number;
 }
 
-const STEPS = [
+/** À assembler soi-même, faute de raccourci partagé configuré. */
+const MANUAL_STEPS = [
   'Fabrique un jeton ci-dessous et copie-le.',
   'Dans Raccourcis, ajoute « Rechercher des échantillons de l’app Santé », type Énergie active, sur aujourd’hui.',
   'Ajoute « Calculer les statistiques », opération Somme, sur les valeurs.',
   'Ajoute « Obtenir le contenu de l’URL », et non « de la page web », sur l’adresse ci-dessous. Touche « Afficher plus » pour déplier les réglages : méthode POST, en-tête x-ingest-token valant le jeton, corps JSON avec un champ Nombre activeKcal valant la somme.',
   'Dans Automatisation, déclenche-le chaque soir à 23 h 55.',
+];
+
+/**
+ * Avec le lien, il ne reste qu'à coller deux valeurs et à poser l'horaire.
+ *
+ * La dernière étape reste manuelle et le restera : Apple ne permet pas de
+ * partager une automatisation personnelle, seulement un raccourci. Le dire
+ * franchement vaut mieux que de laisser croire que tout est réglé, et de
+ * découvrir huit jours plus tard qu'aucune journée n'est remontée.
+ */
+const SHARED_STEPS = [
+  'Fabrique un jeton ci-dessous et copie-le.',
+  'Touche « Ajouter le raccourci ». Raccourcis s’ouvre et demande deux valeurs.',
+  'Colle l’adresse puis le jeton quand il les réclame, et valide l’ajout.',
+  'Dans Raccourcis, onglet Automatisation, crée un déclenchement quotidien à 23 h 55 sur ce raccourci. Cette étape ne peut pas être partagée : Apple n’exporte que les raccourcis, jamais les automatisations.',
 ];
 
 function Line({ label, value }: { label: string; value: string }) {
@@ -48,12 +66,30 @@ function Line({ label, value }: { label: string; value: string }) {
   );
 }
 
+/**
+ * Le pont, avec ou sans raccourci tout fait.
+ *
+ * `shortcutUrl` est le lien iCloud d'un raccourci déjà assemblé, quand
+ * l'installation en publie un. Un raccourci se partage ; une automatisation ne
+ * se partage pas, Apple n'exportant que le premier. Le lien épargne donc les
+ * cinq actions à monter à la main, mais le déclenchement quotidien reste à
+ * créer sur l'appareil, et c'est irréductible.
+ *
+ * Le raccourci partagé est le même pour tout le monde et ne peut donc pas
+ * porter le jeton de quelqu'un : c'est la fonction « questions à
+ * l'importation » de l'app Raccourcis qui le réclame au moment de l'ajout.
+ * Sans elle, un lien unique donnerait à chaque personne le compte de celle qui
+ * l'a fabriqué.
+ */
 export function HealthBridge({
   hasToken,
   status,
+  shortcutUrl,
 }: {
   hasToken: boolean;
   status: BridgeStatus;
+  /** Lien iCloud du raccourci tout fait, ou `null` s'il faut l'assembler. */
+  shortcutUrl: string | null;
 }) {
   const [token, setToken] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -77,6 +113,7 @@ export function HealthBridge({
   }
 
   const missing = status.requiredDays - status.dayCount;
+  const steps = shortcutUrl === null ? MANUAL_STEPS : SHARED_STEPS;
 
   // Seuil de suspicion : au-delà de quatre mille kilocalories actives en une
   // journée, on est hors de ce qu'un humain dépense, cyclistes du Tour compris.
@@ -132,7 +169,7 @@ export function HealthBridge({
       <p className="kicker kicker-quiet mt-6 mb-2 block">Mode d&apos;emploi</p>
       <hr className="rule" />
       <ol>
-        {STEPS.map((step, index) => (
+        {steps.map((step, index) => (
           <li key={step} className="mode-row items-baseline">
             <span className="kicker flex-none">{index + 1}</span>
             <span className="flex-1 text-[15px] leading-relaxed">{step}</span>
@@ -140,17 +177,27 @@ export function HealthBridge({
         ))}
       </ol>
 
-      <p className="label mt-6 block">Adresse à appeler</p>
-      <p className="tabular field mt-2 h-auto break-all py-2 text-[13px]">{endpoint}</p>
+      {shortcutUrl === null ? null : (
+        <a
+          href={shortcutUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="action mt-4"
+          // Le raccourci ne s'ajoute que depuis un iPhone ou un iPad : sur un
+          // ordinateur, le lien ouvre une page qui ne mène à rien.
+        >
+          Ajouter le raccourci
+        </a>
+      )}
+
+      <CopyField label="Adresse à appeler" value={endpoint} />
 
       {token ? (
-        <>
-          <p className="label mt-6 block">Ton jeton, à copier maintenant</p>
-          <p className="tabular field mt-2 h-auto break-all py-2 text-[13px]">{token}</p>
-          <p className="note mt-2">
-            Il ne sera plus affiché. En refabriquer un annule celui-ci.
-          </p>
-        </>
+        <CopyField
+          label="Ton jeton, à copier maintenant"
+          value={token}
+          hint="Il ne sera plus affiché. En refabriquer un annule celui-ci."
+        />
       ) : null}
 
       <button
