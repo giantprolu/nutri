@@ -29,6 +29,7 @@ export function PlanMealSheet({
   planDate,
   meal: initialMeal,
   recipes,
+  basketRecipeIds,
   busy,
   onClose,
   onConfirm,
@@ -37,6 +38,8 @@ export function PlanMealSheet({
   planDate: string;
   meal: Meal;
   recipes: readonly Recipe[];
+  /** Recettes du panier de la semaine, présentées d'abord. */
+  basketRecipeIds: ReadonlySet<number>;
   busy: boolean;
   onClose: () => void;
   onConfirm: (recipeId: number, meal: Meal, servings: number) => void;
@@ -63,6 +66,40 @@ export function PlanMealSheet({
     setMeal(initialMeal);
     setServings(DEFAULT_SERVINGS);
   }, [initialMeal, planDate, open]);
+
+  const chosen = recipes.filter((recipe) => basketRecipeIds.has(recipe.id));
+  const others = recipes.filter((recipe) => !basketRecipeIds.has(recipe.id));
+
+  function renderRecipe(recipe: Recipe) {
+    const per = macrosPerServing(recipe);
+    // Ce qui compte est ce qu'on va manger, pas ce que la recette produit :
+    // une part de plus double le chiffre affiché.
+    const eaten = scaleMacros(per.macros, servings * 100);
+    return (
+      <li key={recipe.id}>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => onConfirm(recipe.id, meal, servings)}
+          className="entry-row items-center"
+        >
+          <span className="min-w-0 flex-1">
+            <span className="entry-name block">{recipe.name}</span>
+            <span className="entry-meta mt-0.5 block">
+              {recipe.ingredients.length === 1
+                ? '1 ingrédient'
+                : `${recipe.ingredients.length} ingrédients`}
+              {recipe.prepMinutes === null ? '' : ` · ${recipe.prepMinutes} min`}
+            </span>
+          </span>
+          <span className="entry-kcal flex-none">
+            {per.unresolvedCount > 0 ? '≈ ' : ''}
+            {formatKcal(eaten.kcal)} kcal
+          </span>
+        </button>
+      </li>
+    );
+  }
 
   return (
     <dialog
@@ -127,38 +164,33 @@ export function PlanMealSheet({
       {recipes.length === 0 ? (
         <p className="note py-6 text-center">Aucune recette à prévoir pour l&apos;instant.</p>
       ) : (
-        <ul>
-          {recipes.map((recipe) => {
-            const per = macrosPerServing(recipe);
-            // Ce qui compte est ce qu'on va manger, pas ce que la recette
-            // produit : une part de plus double le chiffre affiché.
-            const eaten = scaleMacros(per.macros, servings * 100);
-            return (
-              <li key={recipe.id}>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => onConfirm(recipe.id, meal, servings)}
-                  className="entry-row items-center"
-                >
-                  <span className="min-w-0 flex-1">
-                    <span className="entry-name block">{recipe.name}</span>
-                    <span className="entry-meta mt-0.5 block">
-                      {recipe.ingredients.length === 1
-                        ? '1 ingrédient'
-                        : `${recipe.ingredients.length} ingrédients`}
-                      {recipe.prepMinutes === null ? '' : ` · ${recipe.prepMinutes} min`}
-                    </span>
-                  </span>
-                  <span className="entry-kcal flex-none">
-                    {per.unresolvedCount > 0 ? '≈ ' : ''}
-                    {formatKcal(eaten.kcal)} kcal
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {/*
+            Les plats du panier d'abord, et séparés du reste. C'est pour eux
+            qu'on a fait les courses : proposer les cent recettes du carnet sur
+            le même rang obligerait à retrouver chaque soir, dans la liste,
+            celles dont les ingrédients sont effectivement au frigo.
+          */}
+          {chosen.length > 0 ? (
+            <>
+              <p className="meal-head">
+                <span>Au panier cette semaine</span>
+              </p>
+              <ul>{chosen.map(renderRecipe)}</ul>
+            </>
+          ) : null}
+
+          {others.length > 0 ? (
+            <>
+              {chosen.length > 0 ? (
+                <p className="meal-head mt-2">
+                  <span>Mes autres recettes</span>
+                </p>
+              ) : null}
+              <ul>{others.map(renderRecipe)}</ul>
+            </>
+          ) : null}
+        </>
       )}
     </dialog>
   );

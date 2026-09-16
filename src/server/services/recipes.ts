@@ -7,7 +7,6 @@ import {
   type Recipe,
 } from '@/lib/recipe';
 import { isValidQuantity } from '@/lib/nutrition';
-import { STARTER_RECIPES } from '@/lib/starter-recipes';
 import {
   countRecipes,
   deleteRecipe,
@@ -17,7 +16,6 @@ import {
   missingReferences,
   updateRecipe,
 } from '../db/queries/recipes';
-import { searchReferenceFoods } from '../db/queries/search';
 
 /**
  * Service des recettes.
@@ -166,78 +164,4 @@ export function removeRecipe(userId: number, id: number): Promise<boolean> {
 
 export function recipeCount(userId: number): Promise<number> {
   return countRecipes(userId);
-}
-
-export interface StarterInstallReport {
-  created: number;
-  /** Ingrédients qu'aucune fiche CIQUAL n'a pu servir, désignés par leur nom. */
-  skipped: string[];
-}
-
-/**
- * Installe les plats de départ sur un compte qui n'a encore aucune recette.
- *
- * Chaque ingrédient passe par la recherche que l'utilisateur emploierait
- * lui-même, plutôt que par un code CIQUAL écrit en dur : les codes de l'ANSES
- * changent de millésime en millésime, et une liste figée finirait par
- * installer des recettes pointant vers rien.
- *
- * Ce qui ne se résout pas est omis et rapporté, jamais remplacé par une
- * valeur approchante. Un ingrédient absent se voit et se corrige en dix
- * secondes ; un ingrédient silencieusement remplacé par le premier résultat
- * venu fausse toutes les journées à venir sans qu'on sache pourquoi.
- *
- * Le garde-fou sur le nombre de recettes existantes est ici et non dans
- * l'écran : c'est une écriture, et elle ne doit pas se rejouer au double clic.
- */
-export async function installStarterRecipes(userId: number): Promise<StarterInstallReport> {
-  if ((await countRecipes(userId)) > 0) {
-    return { created: 0, skipped: [] };
-  }
-
-  const report: StarterInstallReport = { created: 0, skipped: [] };
-
-  for (const starter of STARTER_RECIPES) {
-    const resolved = await Promise.all(
-      starter.ingredients.map(async (ingredient) => {
-        const [best] = await searchReferenceFoods(ingredient.searchTerm, 1);
-        if (!best) {
-          return null;
-        }
-        return {
-          refKind: best.kind,
-          refValue: best.ref,
-          label: ingredient.label,
-          quantityG: ingredient.quantityG,
-          unitName: ingredient.unitName ?? null,
-          unitGrams: ingredient.unitGrams ?? null,
-        };
-      }),
-    );
-
-    const ingredients = resolved.filter((ingredient) => ingredient !== null);
-    report.skipped.push(
-      ...starter.ingredients
-        .filter((_, index) => resolved[index] === null)
-        .map((ingredient) => ingredient.label),
-    );
-
-    // Une recette dont plus rien ne se résout n'aurait aucun total : mieux
-    // vaut ne pas la créer que d'en laisser une coquille à supprimer.
-    if (ingredients.length === 0) {
-      continue;
-    }
-
-    await insertRecipe(userId, {
-      name: starter.name,
-      servings: starter.servings,
-      steps: [...starter.steps],
-      prepMinutes: starter.prepMinutes,
-      notes: null,
-      ingredients,
-    });
-    report.created += 1;
-  }
-
-  return report;
 }

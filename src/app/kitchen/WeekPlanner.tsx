@@ -41,12 +41,15 @@ export function WeekPlanner({
   days,
   planned,
   recipes,
+  basketRecipeIds,
   today,
 }: {
   startDate: string;
   days: readonly string[];
   planned: readonly PlannedMeal[];
   recipes: readonly Recipe[];
+  /** Recettes du panier de la semaine, mises en tête du choix. */
+  basketRecipeIds: ReadonlySet<number>;
   today: string;
 }) {
   const router = useRouter();
@@ -257,6 +260,7 @@ export function WeekPlanner({
         planDate={target?.planDate ?? startDate}
         meal={target?.meal ?? 'dinner'}
         recipes={recipes}
+        basketRecipeIds={basketRecipeIds}
         busy={busy}
         onClose={() => setTarget(null)}
         onConfirm={(recipeId, meal, servings) => void add(recipeId, meal, servings)}

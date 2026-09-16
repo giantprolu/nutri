@@ -3,9 +3,12 @@ import { notFound } from 'next/navigation';
 import { NavHeader } from '@/components/ScreenHeader';
 import { KitchenIcon, PencilIcon } from '@/components/icons';
 import { requireUserId } from '@/server/guard';
+import { basketFor } from '@/server/services/basket';
 import { recipeFor } from '@/server/services/recipes';
 import { formatIngredientQuantity, macrosPerServing, recipeMacros } from '@/lib/recipe';
 import { formatGrams, formatKcal, scaleMacros } from '@/lib/nutrition';
+import { startOfWeek, todayInParis } from '@/lib/date';
+import { AddToBasket } from './AddToBasket';
 import { DeleteRecipe } from './DeleteRecipe';
 
 export const dynamic = 'force-dynamic';
@@ -28,6 +31,12 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
   if (recipe === null) {
     notFound();
   }
+
+  // La semaine du jour, et non celle qu'on consultait : on arrive ici depuis
+  // une recherche ou un lien, et « cette semaine » ne veut dire qu'une chose.
+  const weekStart = startOfWeek(todayInParis());
+  const basket = await basketFor(userId, weekStart);
+  const alreadyChosen = basket.some((item) => item.recipeId === recipe.id);
 
   const perServing = macrosPerServing(recipe);
   const total = recipeMacros(recipe.ingredients);
@@ -112,6 +121,13 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
           Cuisiner pas à pas
         </Link>
       ) : null}
+
+      <AddToBasket
+        recipeId={recipe.id}
+        servings={recipe.servings}
+        weekStart={weekStart}
+        alreadyChosen={alreadyChosen}
+      />
 
       <Link href={`/kitchen/recipes/${recipe.id}/edit`} className="action-quiet mt-3">
         <PencilIcon className="h-4 w-4" />

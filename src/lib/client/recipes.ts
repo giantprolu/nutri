@@ -71,29 +71,3 @@ export async function deleteRecipe(id: number): Promise<DeleteRecipeOutcome> {
     return { kind: 'error' };
   }
 }
-
-export interface StarterInstallReport {
-  created: number;
-  skipped: string[];
-}
-
-export type InstallStarterOutcome =
-  | { kind: 'installed'; report: StarterInstallReport }
-  | { kind: 'error' };
-
-/** Installe les plats de départ. Sans effet si le compte a déjà une recette. */
-export async function installStarterRecipes(): Promise<InstallStarterOutcome> {
-  try {
-    const response = await fetch('/api/recipes', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ action: 'starter' }),
-    });
-    if (!response.ok) {
-      return { kind: 'error' };
-    }
-    return { kind: 'installed', report: (await response.json()) as StarterInstallReport };
-  } catch {
-    return { kind: 'error' };
-  }
-}

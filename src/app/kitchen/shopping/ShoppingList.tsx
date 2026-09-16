@@ -6,6 +6,7 @@ import { BarcodeIcon, CloseIcon } from '@/components/icons';
 import { AISLES, AISLE_LABELS, type Aisle } from '@/lib/aisle';
 import { formatIngredientQuantity, shoppingUnitCount } from '@/lib/recipe';
 import { checkItem, generateList, removeItem } from '@/lib/client/shopping';
+import Link from 'next/link';
 import type { ShoppingList as List, ShoppingItem } from '@/server/db/queries/shopping';
 import { ScanToCheck } from './ScanToCheck';
 
@@ -50,7 +51,7 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
     }
     setError(
       outcome.kind === 'empty'
-        ? 'Rien n’est prévu cette semaine : commence par remplir le plan.'
+        ? 'Aucun plat au panier pour cette semaine : commence par choisir tes repas.'
         : 'La liste n’a pas pu être engendrée.',
     );
   }
@@ -85,10 +86,10 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
     return (
       <div className="py-8 text-center">
         <p className="mx-auto max-w-[26ch] text-[23px] leading-[1.35] font-semibold">
-          La liste se déduit de ce que tu as prévu.
+          La liste se déduit des plats choisis.
         </p>
         <p className="note mx-auto mt-3 max-w-[32ch]">
-          Les ingrédients des plats de la semaine, additionnés et rangés par rayon.
+          Les ingrédients du panier de la semaine, additionnés et rangés par rayon.
         </p>
         <button
           type="button"
@@ -98,6 +99,9 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
         >
           {busy ? 'Calcul…' : 'Engendrer la liste'}
         </button>
+        <Link href={`/kitchen/catalog?from=${weekStart}`} className="action-quiet mx-auto mt-3 max-w-[260px]">
+          Choisir mes repas
+        </Link>
         {error ? (
           <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
             {error}

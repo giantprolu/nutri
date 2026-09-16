@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
  * La liste de courses.
  *
  * Composant serveur, aucun import client (AD-10). La semaine affichée est
- * celle du plan qu'on veut couvrir, et non celle de la liste existante : on
+ * celle du panier qu'on veut couvrir, et non celle de la liste existante : on
  * arrive ici pour préparer les courses de la semaine qui vient.
  */
 export default async function ShoppingPage({

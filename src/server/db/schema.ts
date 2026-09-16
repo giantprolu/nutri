@@ -300,6 +300,21 @@ export const recipes = pgTable(
     steps: text('steps').array().notNull().default(sql`'{}'::text[]`),
     prepMinutes: integer('prep_minutes'),
     notes: text('notes'),
+    /**
+     * Le plat du catalogue dont cette recette est la copie, `null` pour une
+     * recette écrite à la main.
+     *
+     * Elle sert à deux choses, et les deux tiennent à l'identité : savoir
+     * qu'un plat est déjà installé sans comparer des noms que l'utilisateur
+     * est libre de changer, et rendre l'installation rejouable sans créer de
+     * doublon au double appui.
+     *
+     * Ce n'est pas une clé étrangère : le catalogue vit dans le code, pas en
+     * base. Un plat retiré du catalogue laisse donc une recette orpheline,
+     * ce qui est exactement le bon comportement — elle a été recopiée, elle
+     * appartient à l'utilisateur, et rien ne justifierait de la lui reprendre.
+     */
+    catalogSlug: text('catalog_slug'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
@@ -307,6 +322,11 @@ export const recipes = pgTable(
     // L'utilisateur est en tête, comme partout ailleurs : aucune lecture ne
     // balaie les recettes des autres.
     index('recipes_user_name_idx').on(table.userId, table.name),
+    // Un plat du catalogue ne s'installe qu'une fois par compte. La contrainte
+    // est en base et pas seulement dans le service : c'est elle qui tient
+    // quand deux requêtes arrivent en même temps. Postgres traite les `null`
+    // comme distincts, donc les recettes écrites à la main ne se gênent pas.
+    unique('recipes_user_catalog_slug_key').on(table.userId, table.catalogSlug),
   ],
 );
 
@@ -360,6 +380,51 @@ export const recipeIngredients = pgTable(
 
 export type RecipeIngredientRow = typeof recipeIngredients.$inferSelect;
 export type NewRecipeIngredientRow = typeof recipeIngredients.$inferInsert;
+
+/**
+ * Le panier de la semaine : les plats retenus, sans jour ni repas.
+ *
+ * C'est l'étape qui manquait entre les recettes et le plan. On choisit
+ * d'abord ce qu'on mangera cette semaine — six ou sept plats —, on achète en
+ * conséquence, et ce n'est que chaque soir qu'on décide lequel passe à table.
+ * Décider du mardi soir le samedi au supermarché est une fiction : on ne sait
+ * pas encore à quelle heure on rentrera.
+ *
+ * Distincte de `meal_plan_entries`, qui porte un jour et un repas. La
+ * différence n'est pas une nuance de remplissage : le panier dit ce qu'on a
+ * acheté, le plan dit ce qu'on a mis à table. Le premier commande la liste de
+ * courses, le second commande le journal.
+ *
+ * `servings` est le nombre de parts prévues sur toute la semaine, et c'est lui
+ * qui est multiplié pour les courses. Un plat à quatre parts acheté une fois
+ * nourrit deux dîners ; c'est au plan de dire lesquels.
+ */
+export const mealBasket = pgTable(
+  'meal_basket',
+  {
+    id: bigserial('id', { mode: 'number' }).primaryKey(),
+    userId: bigint('user_id', { mode: 'number' })
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** Lundi de la semaine concernée, en Europe/Paris comme le reste (AD-11). */
+    weekStart: date('week_start').notNull(),
+    recipeId: bigint('recipe_id', { mode: 'number' })
+      .notNull()
+      .references(() => recipes.id, { onDelete: 'cascade' }),
+    servings: numeric('servings', { precision: 4, scale: 1 }).notNull().default('2'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    // L'utilisateur est en tête : un panier se lit toujours pour quelqu'un.
+    index('meal_basket_user_week_idx').on(table.userId, table.weekStart),
+    // Un plat ne figure qu'une fois dans un panier : le choisir de nouveau ne
+    // change rien, et ses parts se règlent explicitement. Deux lignes pour le
+    // même plat donneraient deux articles de courses là où il en faut un.
+    unique('meal_basket_unique_key').on(table.userId, table.weekStart, table.recipeId),
+  ],
+);
+
+export type MealBasketRow = typeof mealBasket.$inferSelect;
 
 /**
  * Le plan de la semaine : un plat, un jour, un repas, un nombre de parts.

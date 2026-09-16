@@ -16,7 +16,7 @@ import {
   setItemChecked,
   type ShoppingList,
 } from '../db/queries/shopping';
-import { listPlannedMeals } from '../db/queries/meal-plan';
+import { basketRecipesBetween } from '../db/queries/basket';
 import { findRecipe } from '../db/queries/recipes';
 import { WEEK_LENGTH } from './meal-plan';
 
@@ -36,11 +36,13 @@ export function currentList(userId: number): Promise<ShoppingList | null> {
 }
 
 /**
- * Engendre une liste depuis les plats prévus d'une période.
+ * Engendre une liste depuis le panier de la semaine.
  *
- * Les plats déjà journalisés sont écartés : ils ont été mangés, leurs
- * ingrédients sont donc déjà achetés. Régénérer une liste en milieu de semaine
- * ne doit pas faire racheter les dîners de lundi et mardi.
+ * Depuis le panier et non depuis le plan, et c'est le point d'articulation de
+ * tout le parcours : on choisit des plats, on achète de quoi les faire, et ce
+ * n'est qu'ensuite qu'on décide quel soir chacun passe à table. L'inverse —
+ * remplir sept jours avant d'aller au supermarché — demandait de savoir le
+ * samedi à quelle heure on rentrerait le mardi.
  *
  * Les ingrédients sans fiche sont gardés, contrairement à ce que fait la
  * journalisation. Les deux traitements divergent parce que leurs erreurs
@@ -53,12 +55,11 @@ export async function generateList(
   fromDate: string,
   toDate: string = shiftDate(fromDate, WEEK_LENGTH - 1),
 ): Promise<ShoppingList | null> {
-  const planned = await listPlannedMeals(userId, fromDate, toDate);
-  const pending = planned.filter((entry) => entry.journaledAt === null);
+  const chosen = await basketRecipesBetween(userId, fromDate, toDate);
 
-  // Les recettes sont chargées une fois chacune : un plat répété trois fois
-  // dans la semaine ne doit pas coûter trois lectures.
-  const recipeIds = [...new Set(pending.map((entry) => entry.recipeId))];
+  // Les recettes sont chargées une fois chacune : un plat qui figure dans deux
+  // paniers successifs ne doit pas coûter deux lectures.
+  const recipeIds = [...new Set(chosen.map((entry) => entry.recipeId))];
   const recipes = new Map(
     (await Promise.all(recipeIds.map((id) => findRecipe(userId, id))))
       .filter((recipe) => recipe !== null)
@@ -66,7 +67,7 @@ export async function generateList(
   );
 
   const raw: (Omit<ShoppingNeed, 'aisle'> & { aisle: Aisle | null })[] = [];
-  for (const entry of pending) {
+  for (const entry of chosen) {
     const recipe = recipes.get(entry.recipeId);
     if (recipe === undefined) {
       continue;

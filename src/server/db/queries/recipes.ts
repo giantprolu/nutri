@@ -220,7 +220,11 @@ function toIngredientRows(
  * une recette incomplète se corrige, une entrée fausse se propage dans les
  * totaux sans prévenir.
  */
-export async function insertRecipe(userId: number, input: RecipeInput): Promise<number> {
+export async function insertRecipe(
+  userId: number,
+  input: RecipeInput,
+  catalogSlug: string | null = null,
+): Promise<number> {
   const [row] = await db()
     .insert(schema.recipes)
     .values({
@@ -230,6 +234,7 @@ export async function insertRecipe(userId: number, input: RecipeInput): Promise<
       steps: input.steps,
       prepMinutes: input.prepMinutes,
       notes: input.notes,
+      catalogSlug,
     })
     .returning({ id: schema.recipes.id });
 
