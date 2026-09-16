@@ -3,18 +3,20 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CartIcon } from '@/components/icons';
+import { CartIcon, ChevronRightIcon } from '@/components/icons';
 import { chooseMeals } from '@/lib/client/basket';
 import { CATALOG_GOAL_LABELS, CATALOG_GOAL_NOTES } from '@/lib/meal-catalog';
 import type { Goal } from '@/lib/energy';
-import { MEALS, MEAL_LABELS, MEAL_SHORT_LABELS, type Meal } from '@/lib/meal';
+import { MEALS, MEAL_SHORT_LABELS, type Meal } from '@/lib/meal';
+import { CatalogMealSheet } from './CatalogMealSheet';
 
 /**
  * Un plat du catalogue tel que l'écran de choix le lit.
  *
- * Bien plus léger que `CatalogMeal` : ni étapes ni ingrédients détaillés. On
- * choisit un plat sur son nom, son temps et ses calories, et la recette
- * complète n'a de sens qu'une fois installée.
+ * Il porte tout le plat, étapes comprises, mais pour un seul objectif à la
+ * fois : la page n'envoie que l'onglet ouvert, les autres arrivant par une
+ * navigation. Descendre les soixante-douze plats d'un coup pour en afficher
+ * vingt-quatre triplerait la charge utile sans rien montrer de plus.
  */
 export interface CatalogCard {
   slug: string;
@@ -22,7 +24,13 @@ export interface CatalogCard {
   slot: Meal;
   servings: number;
   prepMinutes: number;
-  ingredientCount: number;
+  steps: readonly string[];
+  ingredients: readonly {
+    label: string;
+    quantityG: number;
+    unitName: string | null;
+    unitGrams: number | null;
+  }[];
   /** Ordre de grandeur d'une part. Les valeurs justes viennent avec la recette. */
   kcal: number;
   proteinG: number;
@@ -32,6 +40,12 @@ export interface CatalogCard {
 
 /**
  * Le choix des plats de la semaine.
+ *
+ * Chaque ligne ne porte que le nom, et se touche à deux endroits : le rond
+ * choisit, le reste ouvre le détail. Deux gestes distincts parce que ce sont
+ * deux intentions — on parcourt une liste de trente plats pour reconnaître un
+ * nom, et on ouvre le détail des deux ou trois dont on hésite. Empiler
+ * ingrédients et durées sous chaque nom rendrait ce parcours impraticable.
  *
  * La sélection est locale tant qu'on n'a pas validé : cocher huit plats fait
  * huit écritures si chaque coche part au serveur, et l'écran devient
@@ -44,22 +58,22 @@ export interface CatalogCard {
 export function CatalogPicker({
   weekStart,
   goal,
-  cards,
+  meals,
   basketCount,
 }: {
   weekStart: string;
   goal: Goal;
-  cards: Record<Goal, CatalogCard[]>;
+  meals: readonly CatalogCard[];
   basketCount: number;
 }) {
   const router = useRouter();
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [slot, setSlot] = useState<Meal | 'all'>('all');
+  const [detail, setDetail] = useState<CatalogCard | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
-  const meals = cards[goal];
   const shown = slot === 'all' ? meals : meals.filter((card) => card.slot === slot);
 
   function toggle(slug: string) {
@@ -163,53 +177,58 @@ export function CatalogPicker({
         {shown.map((card) => {
           const picked = selected.has(card.slug);
           return (
-            <li key={card.slug}>
+            <li
+              key={card.slug}
+              className="flex items-center gap-2"
+              style={{ borderBottom: '1px solid var(--color-divider)' }}
+            >
+              {/*
+                Deux boutons frères et non l'un dans l'autre : un bouton
+                imbriqué est un balisage invalide, que les lecteurs d'écran
+                rendent de façon imprévisible. Le rond garde ses 44 px de
+                cible, sans quoi il se touche une fois sur deux.
+              */}
               <button
                 type="button"
                 disabled={busy || card.inBasket}
                 onClick={() => toggle(card.slug)}
                 aria-pressed={picked}
-                className="entry-row w-full items-center text-left"
-                style={card.inBasket ? { opacity: 0.55 } : undefined}
+                aria-label={`Choisir ${card.name}`}
+                className="tap-target -ml-2 flex flex-none items-center justify-center"
               >
-                <span className="min-w-0 flex-1">
-                  <span className="entry-name block">{card.name}</span>
-                  <span className="entry-meta mt-0.5 block">
-                    {MEAL_LABELS[card.slot]}
-                    {' · '}
-                    {card.prepMinutes} min
-                    {' · '}
-                    {card.servings === 1 ? '1 part' : `${card.servings} parts`}
-                    {' · '}
-                    {card.ingredientCount} ingrédients
-                  </span>
-                </span>
-                <span className="flex-none text-right">
-                  <span className="entry-kcal block">≈ {card.kcal} kcal</span>
-                  <span className="entry-meta mt-0.5 block">
-                    {card.inBasket ? 'Au panier' : `${card.proteinG} g de protéines`}
-                  </span>
-                </span>
                 <span
                   aria-hidden
-                  className="ml-3 flex h-6 w-6 flex-none items-center justify-center rounded-full border"
+                  className="flex h-[22px] w-[22px] items-center justify-center rounded-full border text-[13px] leading-none font-semibold"
                   style={{
-                    borderColor: picked ? 'var(--color-accent)' : 'var(--color-divider)',
+                    borderColor:
+                      picked || card.inBasket ? 'var(--color-accent)' : 'var(--color-divider)',
                     color: 'var(--color-accent)',
+                    opacity: card.inBasket ? 0.55 : 1,
                   }}
                 >
-                  {picked ? '✓' : ''}
+                  {picked || card.inBasket ? '✓' : ''}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDetail(card)}
+                className="flex min-w-0 flex-1 items-center gap-2 py-[13px] text-left"
+                aria-haspopup="dialog"
+              >
+                <span
+                  className="entry-name"
+                  style={card.inBasket ? { opacity: 0.55 } : undefined}
+                >
+                  {card.name}
+                </span>
+                {card.inBasket ? <span className="entry-meta flex-none">Au panier</span> : null}
+                <ChevronRightIcon className="h-4 w-4 flex-none opacity-40" />
               </button>
             </li>
           );
         })}
       </ul>
-
-      <p className="note mt-4">
-        Les calories affichées sont un ordre de grandeur, pour départager deux plats. Les valeurs
-        exactes arrivent avec la recette, calculées depuis Ciqual.
-      </p>
 
       {/*
         Le bouton de validation reste en bas du flux et non en position fixe :
@@ -220,7 +239,7 @@ export function CatalogPicker({
         type="button"
         onClick={() => void confirm()}
         disabled={busy || selected.size === 0}
-        className="action mt-4"
+        className="action mt-5"
       >
         {busy
           ? 'Ajout…'
@@ -239,6 +258,17 @@ export function CatalogPicker({
             : `${basketCount} plats au panier — passer aux courses`}
         </Link>
       ) : null}
+
+      <CatalogMealSheet
+        card={detail}
+        picked={detail !== null && selected.has(detail.slug)}
+        busy={busy}
+        onClose={() => setDetail(null)}
+        onToggle={(slug) => {
+          toggle(slug);
+          setDetail(null);
+        }}
+      />
     </>
   );
 }

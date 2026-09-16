@@ -2,7 +2,7 @@ import { NavHeader } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
 import { basketFor, installedFor } from '@/server/services/basket';
 import { profileFor } from '@/server/services/profile';
-import { MEAL_CATALOG } from '@/lib/meal-catalog';
+import { catalogFor } from '@/lib/meal-catalog';
 import type { Goal } from '@/lib/energy';
 import { formatWeekRange, isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
 import { CatalogPicker, type CatalogCard } from './CatalogPicker';
@@ -28,9 +28,10 @@ function isGoal(value: string | undefined): value is Goal {
  * dîner de maintien n'est pas interdit à qui cherche à perdre du poids, et
  * l'onglet n'est qu'un point de départ.
  *
- * Les étapes des recettes ne descendent pas au client. On choisit un plat sur
- * son nom, son temps et ses calories ; les quatre lignes de préparation de
- * soixante-douze plats pèseraient dix fois le reste de la page pour rien.
+ * Seul l'objectif ouvert descend au client, et il descend en entier — étapes
+ * et ingrédients compris, puisque le détail d'un plat s'ouvre sans aller-retour
+ * au serveur. Envoyer les trois objectifs triplerait la charge utile pour
+ * afficher la même liste de vingt-quatre noms.
  *
  * Composant serveur, aucun import client (AD-10).
  */
@@ -65,27 +66,26 @@ export default async function CatalogPage({
 
   const chosenRecipeIds = new Set(basket.map((item) => item.recipeId));
 
-  const cards: Record<Goal, CatalogCard[]> = {
-    lose: [],
-    maintain: [],
-    gain: [],
-  };
-  for (const objective of GOALS) {
-    cards[objective] = MEAL_CATALOG[objective].map((meal) => {
-      const recipeId = installed.get(meal.slug);
-      return {
-        slug: meal.slug,
-        name: meal.name,
-        slot: meal.slot,
-        servings: meal.servings,
-        prepMinutes: meal.prepMinutes,
-        ingredientCount: meal.ingredients.length,
-        kcal: meal.estimate.kcal,
-        proteinG: meal.estimate.proteinG,
-        inBasket: recipeId !== undefined && chosenRecipeIds.has(recipeId),
-      };
-    });
-  }
+  const meals: CatalogCard[] = catalogFor(goal).map((meal) => {
+    const recipeId = installed.get(meal.slug);
+    return {
+      slug: meal.slug,
+      name: meal.name,
+      slot: meal.slot,
+      servings: meal.servings,
+      prepMinutes: meal.prepMinutes,
+      steps: meal.steps,
+      ingredients: meal.ingredients.map((ingredient) => ({
+        label: ingredient.label,
+        quantityG: ingredient.quantityG,
+        unitName: ingredient.unitName ?? null,
+        unitGrams: ingredient.unitGrams ?? null,
+      })),
+      kcal: meal.estimate.kcal,
+      proteinG: meal.estimate.proteinG,
+      inBasket: recipeId !== undefined && chosenRecipeIds.has(recipeId),
+    };
+  });
 
   return (
     <>
@@ -98,7 +98,7 @@ export default async function CatalogPage({
       <CatalogPicker
         weekStart={weekStart}
         goal={goal}
-        cards={cards}
+        meals={meals}
         basketCount={basket.length}
       />
     </>
