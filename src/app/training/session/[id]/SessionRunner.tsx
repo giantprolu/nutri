@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ExerciseSheet, type SheetExercise } from '@/components/ExerciseSheet';
 import { NavHeader } from '@/components/ScreenHeader';
 import { discardSession, finishSession, recordSet } from '@/lib/client/training';
 import {
@@ -88,6 +89,7 @@ export function SessionRunner({
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shown, setShown] = useState<SheetExercise | null>(null);
 
   const doneSets = new Map(
     session.sets.map((set) => [draftKey(set.exerciseId, set.setIndex), set]),
@@ -201,8 +203,20 @@ export function SessionRunner({
 
         return (
           <section key={entry.id} className="mt-5">
+            {/*
+              Le nom ouvre la fiche, ici aussi. C'est en salle, devant la
+              machine, qu'on a le plus besoin de vérifier qu'on est au bon
+              appareil — et c'est le seul endroit où l'on ne peut pas aller
+              chercher l'information ailleurs sans perdre sa place.
+            */}
             <div className="meal-head">
-              <span>{entry.exercise.name}</span>
+              <button
+                type="button"
+                onClick={() => setShown(entry.exercise)}
+                className="link-accent text-left"
+              >
+                {entry.exercise.name}
+              </button>
               <span className="kicker tabular">{formatPrescription(entry)}</span>
             </div>
 
@@ -339,6 +353,8 @@ export function SessionRunner({
           </button>
         </>
       ) : null}
+
+      <ExerciseSheet exercise={shown} onClose={() => setShown(null)} />
     </>
   );
 }

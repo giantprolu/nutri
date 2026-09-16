@@ -334,16 +334,37 @@ export function previousPerformance(
 }
 
 /** Une ligne lue, avec l'exercice proposé et les autres candidats. */
+/**
+ * Un exercice proposé pour une ligne.
+ *
+ * Le slug et le matériel voyagent avec le nom pour que l'écran puisse ouvrir
+ * la fiche illustrée sans un aller-retour de plus : c'est en confirmant un
+ * rapprochement qu'on a le plus besoin de voir la photo, et une attente à ce
+ * moment-là ferait valider sans regarder.
+ */
+export interface AnalysedCandidate {
+  id: number;
+  slug: string;
+  name: string;
+  muscleGroup: string | null;
+  equipment: Exercise['equipment'];
+  /** De 0 à 1. Une correspondance exacte, nom ou alias, vaut 1. */
+  score: number;
+}
+
 export interface AnalysedLine extends ParsedExerciseLine {
   /** L'exercice retenu d'emblée, ou `null` si aucun n'est assez proche. */
   matchedExerciseId: number | null;
-  candidates: { id: number; name: string; score: number }[];
+  candidates: AnalysedCandidate[];
 }
 
-function toCandidate(match: ExerciseMatch) {
+function toCandidate(match: ExerciseMatch): AnalysedCandidate {
   return {
     id: match.exercise.id,
+    slug: match.exercise.slug,
     name: match.exercise.name,
+    muscleGroup: match.exercise.muscleGroup,
+    equipment: match.exercise.equipment,
     score: Math.round(match.score * 100) / 100,
   };
 }

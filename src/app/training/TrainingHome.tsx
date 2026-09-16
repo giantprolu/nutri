@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ExerciseSheet, type SheetExercise } from '@/components/ExerciseSheet';
 import { startSession } from '@/lib/client/training';
 import {
   EQUIPMENT_PREFERENCE_LABELS,
@@ -52,6 +53,7 @@ export function TrainingHome({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shown, setShown] = useState<SheetExercise | null>(null);
 
   async function begin(templateId: number) {
     setBusy(true);
@@ -157,12 +159,27 @@ export function TrainingHome({
               ce qu'on va faire avant de s'engager, sans une navigation de plus.
               Les supersets sont marqués, c'est leur seule particularité utile
               au moment du coup d'œil.
+
+              Chaque nom ouvre sa fiche. C'est ici que le besoin est le plus
+              fort : on découvre un programme qu'on n'a pas écrit, et la moitié
+              des lignes sont des mots de salle qu'on n'a jamais vus.
             */}
             <ul className="mt-2">
               {groupBySuperset(template.exercises).map((block, index) => (
                 <li key={index} className="flex items-baseline justify-between py-1">
                   <span className="min-w-0 flex-1 text-[15px]">
-                    {block.map((entry) => entry.exercise.name).join(' + ')}
+                    {block.map((entry, rank) => (
+                      <span key={entry.id}>
+                        {rank > 0 ? ' + ' : null}
+                        <button
+                          type="button"
+                          onClick={() => setShown(entry.exercise)}
+                          className="link-accent text-left"
+                        >
+                          {entry.exercise.name}
+                        </button>
+                      </span>
+                    ))}
                     {block.length > 1 ? (
                       <span className="kicker kicker-quiet ml-2">superset</span>
                     ) : null}
@@ -207,6 +224,8 @@ export function TrainingHome({
           </ul>
         </>
       ) : null}
+
+      <ExerciseSheet exercise={shown} onClose={() => setShown(null)} />
     </>
   );
 }

@@ -118,6 +118,15 @@ export const FOCUS_LABELS: Record<TrainingFocus, string> = {
   full: 'Les deux à parts égales',
 };
 
+/** Le matériel d'un exercice, tel qu'on le nomme en salle. */
+export const EQUIPMENT_LABELS: Record<ExerciseEquipment, string> = {
+  free: 'Barre ou haltères',
+  machine: 'Machine guidée',
+  cable: 'Poulie',
+  bodyweight: 'Poids du corps',
+  cardio: 'Cardio',
+};
+
 export const EQUIPMENT_PREFERENCE_LABELS: Record<EquipmentPreference, string> = {
   free: 'Poids libres',
   machine: 'Machines guidées',

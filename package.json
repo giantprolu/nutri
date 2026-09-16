@@ -16,7 +16,8 @@
     "db:migrate": "drizzle-kit migrate",
     "import:ciqual": "tsx scripts/import-ciqual.ts",
     "verify:off": "tsx scripts/verify-off.ts",
-    "verify:catalog": "tsx --conditions=react-server scripts/verify-catalog.ts"
+    "verify:catalog": "tsx --conditions=react-server scripts/verify-catalog.ts",
+    "images:exercises": "tsx scripts/fetch-exercise-images.ts"
   },
   "dependencies": {
     "@mistralai/mistralai": "2.7.0",

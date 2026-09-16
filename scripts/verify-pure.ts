@@ -54,6 +54,11 @@ import {
 } from '../src/lib/workout-log';
 import { buildProgram } from '../src/lib/workout-plan';
 import { gymInventory, SEED_EXERCISES, SEED_GYMS } from '../src/lib/workout-seed';
+import {
+  demoSearchUrl,
+  illustrationFor,
+  ILLUSTRATION_SOURCES,
+} from '../src/lib/exercise-media';
 
 // FR-10 : 250 kcal/100 g sur 150 g donne 375 kcal.
 const per100g = { kcal: 250, proteinG: 12, carbsG: 30, fatG: 8 };
@@ -926,6 +931,40 @@ assert.deepEqual(
   haut.templates.map((template) => template.exercises.map((entry) => entry.exercise.slug)),
   'composition deterministe',
 );
+
+// --- Illustrations ---
+
+// Chaque exercice du catalogue doit avoir sa photo. C'est la verification qui
+// compte : un exercice ajoute au catalogue sans illustration passerait
+// inapercu jusqu'a ce que quelqu'un touche son nom et n'obtienne rien.
+const sansPhoto = SEED_EXERCISES.filter(
+  (exercise) => illustrationFor(exercise.slug) === null,
+).map((exercise) => exercise.slug);
+assert.deepEqual(sansPhoto, [], 'tout exercice du catalogue a une illustration');
+
+// Et reciproquement : une entree qui ne designe plus aucun exercice telecharge
+// deux images que personne n'affichera.
+const orphelines = Object.keys(ILLUSTRATION_SOURCES).filter(
+  (slug) => !SEED_EXERCISES.some((exercise) => exercise.slug === slug),
+);
+assert.deepEqual(orphelines, [], 'aucune illustration orpheline');
+
+const frames = illustrationFor('chest-press');
+assert.deepEqual(
+  frames,
+  ['/exercices/chest-press/0.jpg', '/exercices/chest-press/1.jpg'],
+  'les deux poses du mouvement',
+);
+// Un exercice cree depuis un import n'a pas de photo, et n'en invente pas.
+assert.equal(illustrationFor('machine-inconnue-du-club'), null, 'aucune photo inventee');
+
+// Le lien de demonstration echappe le nom : « Écarté à la poulie » contient
+// un accent et des espaces, qui casseraient l'adresse tels quels.
+assert.ok(
+  demoSearchUrl('Écarté à la poulie').startsWith('https://www.youtube.com/results?search_query='),
+  'lien de recherche',
+);
+assert.ok(!demoSearchUrl('Écarté à la poulie').includes(' '), 'aucune espace dans l adresse');
 
 // L'echec se lit dans la serie affichee : « 6 reps » et « 6 reps a l'echec »
 // ne demandent pas la meme charge la semaine suivante.

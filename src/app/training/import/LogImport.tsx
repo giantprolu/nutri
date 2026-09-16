@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ExerciseSheet, type SheetExercise } from '@/components/ExerciseSheet';
 import { NavHeader } from '@/components/ScreenHeader';
 import {
   analyseWorkoutLog,
@@ -57,6 +58,7 @@ export function LogImport({ today }: { today: string }) {
   const [kept, setKept] = useState<boolean[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [shown, setShown] = useState<SheetExercise | null>(null);
 
   async function analyse() {
     if (text.trim() === '') {
@@ -163,6 +165,10 @@ export function LogImport({ today }: { today: string }) {
               const choice = choices[index]!;
               const warning = WARNINGS[line.warning];
               const keep = kept[index] === true;
+              const chosen =
+                choice.kind === 'catalog'
+                  ? (line.candidates.find((candidate) => candidate.id === choice.id) ?? null)
+                  : null;
 
               return (
                 <li key={index} className="py-3">
@@ -205,29 +211,48 @@ export function LogImport({ today }: { today: string }) {
                       <label htmlFor={`exercise-${index}`} className="sr-only">
                         Exercice correspondant à {line.name}
                       </label>
-                      <select
-                        id={`exercise-${index}`}
-                        className="field mt-2 w-full"
-                        value={choice.kind === 'new' ? 'new' : String(choice.id)}
-                        onChange={(event) =>
-                          setChoices((current) =>
-                            current.map((value, position) =>
-                              position === index
-                                ? event.target.value === 'new'
-                                  ? { kind: 'new' }
-                                  : { kind: 'catalog', id: Number(event.target.value) }
-                                : value,
-                            ),
-                          )
-                        }
-                      >
-                        {line.candidates.map((candidate) => (
-                          <option key={candidate.id} value={candidate.id}>
-                            {candidate.name}
-                          </option>
-                        ))}
-                        <option value="new">Créer « {line.name} »</option>
-                      </select>
+                      <div className="mt-2 flex items-center gap-2">
+                        <select
+                          id={`exercise-${index}`}
+                          className="field min-w-0 flex-1"
+                          value={choice.kind === 'new' ? 'new' : String(choice.id)}
+                          onChange={(event) =>
+                            setChoices((current) =>
+                              current.map((value, position) =>
+                                position === index
+                                  ? event.target.value === 'new'
+                                    ? { kind: 'new' }
+                                    : { kind: 'catalog', id: Number(event.target.value) }
+                                  : value,
+                              ),
+                            )
+                          }
+                        >
+                          {line.candidates.map((candidate) => (
+                            <option key={candidate.id} value={candidate.id}>
+                              {candidate.name}
+                            </option>
+                          ))}
+                          <option value="new">Créer « {line.name} »</option>
+                        </select>
+
+                        {/*
+                          La photo du candidat retenu, à un toucher. C'est en
+                          confirmant un rapprochement qu'on en a le plus besoin :
+                          « rowing » propose quatre exercices, et les noms seuls
+                          ne suffisent pas à trancher.
+                        */}
+                        {chosen === null ? null : (
+                          <button
+                            type="button"
+                            onClick={() => setShown(chosen)}
+                            aria-label={`Voir ${chosen.name}`}
+                            className="chip flex-none"
+                          >
+                            Voir
+                          </button>
+                        )}
+                      </div>
                     </>
                   ) : null}
                 </li>
@@ -268,6 +293,8 @@ export function LogImport({ today }: { today: string }) {
           </button>
         </>
       ) : null}
+
+      <ExerciseSheet exercise={shown} onClose={() => setShown(null)} />
     </>
   );
 }

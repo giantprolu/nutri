@@ -151,13 +151,23 @@ export interface ParsedSetPayload {
   toFailure: boolean;
 }
 
+/** Un exercice du catalogue proposé pour une ligne saisie. */
+export interface AnalysedCandidatePayload {
+  id: number;
+  slug: string;
+  name: string;
+  muscleGroup: string | null;
+  equipment: 'free' | 'machine' | 'cable' | 'bodyweight' | 'cardio';
+  score: number;
+}
+
 export interface AnalysedLinePayload {
   raw: string;
   name: string;
   sets: ParsedSetPayload[];
   warning: 'none' | 'no_sets' | 'weight_count';
   matchedExerciseId: number | null;
-  candidates: { id: number; name: string; score: number }[];
+  candidates: AnalysedCandidatePayload[];
 }
 
 export type AnalyseLogOutcome =

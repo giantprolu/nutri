@@ -30,7 +30,14 @@ export const config = {
   // Exclut les ressources statiques et la coquille PWA, accessibles sans session.
   // `zxing` en fait partie : c'est un binaire public, et le laisser rediriger
   // vers /unlock ferait mettre en cache la page de déverrouillage à sa place.
+  //
+  // `exercices` pour la même raison, avec un piège de plus : l'optimiseur
+  // d'images de Next va rechercher le fichier source par lui-même, sans le
+  // cookie de session. Sous le garde, il ne recevrait pas une photo mais la
+  // redirection vers /unlock, et chaque illustration serait cassée pour tout le
+  // monde, connecté compris. Ce sont des photos de catalogue identiques pour
+  // chacun, sans la moindre donnée personnelle.
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icons|zxing|sw.js|offline).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|manifest.json|icons|zxing|exercices|sw.js|offline).*)',
   ],
 };
