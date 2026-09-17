@@ -12,7 +12,8 @@ d'une seule personne. Poids, âge et repas de tiers sont des données de santé.
 
 ## Stack imposée
 - Next.js 15 (App Router) + TypeScript strict
-- Tailwind + daisyUI
+- Tailwind + shadcn/ui (composants dans `src/components/ui`, icônes lucide).
+  Aucun autre kit de composants : un écran se compose des primitives shadcn
 - Postgres (Neon) + Drizzle ORM, extensions `pg_trgm` et `unaccent`
 - Déploiement Vercel
 - Auth : comptes en base, empreinte PBKDF2 via Web Crypto, session signée en

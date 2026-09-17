@@ -3,13 +3,12 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import {
-  CartIcon,
-  ChevronLeftIcon,
-  ChevronRightIcon,
-  CloseIcon,
-  PlusIcon,
-} from '@/components/icons';
+import { ChevronLeftIcon, ChevronRightIcon, CookingPotIcon, PlusIcon, XIcon } from 'lucide-react';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { journalMeal, planMeal, reopenMeal, unplanMeal } from '@/lib/client/plan';
 import { MEAL_LABELS, mealForHour, type Meal } from '@/lib/meal';
 import { formatDayMonth, formatWeekday, hourInParis, shiftDate } from '@/lib/date';
@@ -122,34 +121,23 @@ export function WeekPlanner({
 
   return (
     <>
-      <nav className="flex items-center justify-between py-2" aria-label="Semaine">
-        <Link
-          href={`/kitchen?from=${shiftDate(startDate, -7)}`}
-          aria-label="Semaine précédente"
-          className="tap-target -ml-3 flex items-center justify-center"
-        >
-          <ChevronLeftIcon className="h-5 w-5" />
-        </Link>
-        <Link href={`/kitchen/shopping?from=${startDate}`} className="chip">
-          <CartIcon className="mr-2 h-4 w-4" />
-          Courses
-        </Link>
-        <Link
-          href={`/kitchen?from=${shiftDate(startDate, 7)}`}
-          aria-label="Semaine suivante"
-          className="tap-target -mr-3 flex items-center justify-center"
-        >
-          <ChevronRightIcon className="h-5 w-5" />
-        </Link>
+      <nav className="mt-4 flex items-center justify-between" aria-label="Semaine">
+        <Button asChild variant="ghost" size="icon" className="-ml-2.5">
+          <Link href={`/kitchen?from=${shiftDate(startDate, -7)}`} aria-label="Semaine précédente">
+            <ChevronLeftIcon className="size-5" />
+          </Link>
+        </Button>
+        <span className="text-[13px] font-semibold tracking-tight">Le plan</span>
+        <Button asChild variant="ghost" size="icon" className="-mr-2.5">
+          <Link href={`/kitchen?from=${shiftDate(startDate, 7)}`} aria-label="Semaine suivante">
+            <ChevronRightIcon className="size-5" />
+          </Link>
+        </Button>
       </nav>
 
-      {error ? (
-        <p role="alert" className="mt-2 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert className="mt-2">{error}</ErrorAlert> : null}
       {notice ? (
-        <p role="status" className="note mt-2">
+        <p role="status" className="mt-2 text-muted-foreground">
           {notice}
         </p>
       ) : null}
@@ -159,98 +147,109 @@ export function WeekPlanner({
         const isToday = day === today;
 
         return (
-          <section key={day} className="mt-4">
-            <div className="meal-head">
-              <span className="first-letter:uppercase">
+          <section key={day} aria-label={`${formatWeekday(day)} ${formatDayMonth(day)}`}>
+            <div className="flex items-center justify-between pt-[18px] pb-2">
+              <h2 className="text-[13px] font-semibold tracking-tight first-letter:uppercase">
                 {formatWeekday(day)} {formatDayMonth(day)}
-              </span>
-              {isToday ? <span className="kicker">Aujourd’hui</span> : null}
+              </h2>
+              {isToday ? <Badge variant="outline">Aujourd’hui</Badge> : null}
             </div>
 
-            {meals.length === 0 ? (
-              <p className="note py-2">Rien de prévu.</p>
-            ) : (
-              <ul>
-                {meals.map((entry) => {
-                  const recipe = byRecipe.get(entry.recipeId);
-                  const eaten =
-                    recipe === undefined
-                      ? null
-                      : scaleMacros(macrosPerServing(recipe).macros, entry.servings * 100);
-                  const done = entry.journaledAt !== null;
+            <ul className="flex flex-col gap-2">
+              {meals.map((entry) => {
+                const recipe = byRecipe.get(entry.recipeId);
+                const eaten =
+                  recipe === undefined
+                    ? null
+                    : scaleMacros(macrosPerServing(recipe).macros, entry.servings * 100);
+                const done = entry.journaledAt !== null;
 
-                  return (
-                    <li key={entry.id} className="py-2">
-                      <div className="flex items-start gap-3">
-                        <div className="min-w-0 flex-1">
-                          <Link
-                            href={`/kitchen/recipes/${entry.recipeId}`}
-                            className="entry-name block"
-                            style={done ? { opacity: 0.55 } : undefined}
-                          >
-                            {entry.recipeName}
-                          </Link>
-                          <p className="entry-meta mt-0.5">
-                            {MEAL_LABELS[entry.meal]}
-                            {' · '}
-                            {entry.servings === 1 ? '1 part' : `${entry.servings} parts`}
-                            {eaten === null ? '' : ` · ${formatKcal(eaten.kcal)} kcal`}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-none items-center gap-2">
-                          {done ? (
-                            <button
-                              type="button"
-                              onClick={() => void reopen(entry.id)}
-                              disabled={busy}
-                              className="chip"
-                            >
-                              Au journal
-                            </button>
-                          ) : (
-                            <button
-                              type="button"
-                              onClick={() => void eat(entry.id)}
-                              disabled={busy}
-                              className="chip"
-                              aria-pressed={false}
-                            >
-                              J’ai mangé
-                            </button>
+                return (
+                  <li key={entry.id}>
+                    <Card className="flex-row items-center gap-3 px-3.5 py-3">
+                      <span
+                        aria-hidden
+                        className={cn(
+                          'flex size-8 flex-none items-center justify-center rounded-lg bg-muted',
+                          done && 'opacity-60',
+                        )}
+                      >
+                        <CookingPotIcon className="size-4" />
+                      </span>
+                      <div className={cn('min-w-0 flex-1', done && 'opacity-60')}>
+                        <Link
+                          href={`/kitchen/recipes/${entry.recipeId}`}
+                          className={cn(
+                            'block truncate text-[14.5px] font-medium tracking-tight',
+                            done && 'line-through',
                           )}
+                        >
+                          {entry.recipeName}
+                        </Link>
+                        <p className="tabular mt-px text-[12.5px] text-muted-foreground">
+                          {MEAL_LABELS[entry.meal]}
+                          {' · '}
+                          {entry.servings === 1 ? '1 part' : `${entry.servings} parts`}
+                          {eaten === null ? '' : ` · ${formatKcal(eaten.kcal)} kcal`}
+                        </p>
+                      </div>
+
+                      {done ? (
+                        <Badge asChild variant="secondary" className="h-9 px-3">
                           <button
                             type="button"
-                            onClick={() => void remove(entry.id)}
+                            onClick={() => void reopen(entry.id)}
                             disabled={busy}
-                            aria-label={`Retirer ${entry.recipeName} du plan`}
-                            className="tap-target flex items-center justify-center"
+                            aria-label={`Retirer ${entry.recipeName} du journal`}
                           >
-                            <CloseIcon className="h-4 w-4" />
+                            Au journal
                           </button>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-
-            <button
-              type="button"
-              onClick={() =>
-                setTarget({
-                  planDate: day,
-                  // Le repas proposé suit l'heure pour aujourd'hui, et le dîner
-                  // pour les autres jours : c'est le repas qu'on planifie.
-                  meal: isToday ? mealForHour(hourInParis()) : 'dinner',
-                })
-              }
-              className="action-quiet mt-1"
-            >
-              <PlusIcon className="h-4 w-4" />
-              Prévoir un plat
-            </button>
+                        </Badge>
+                      ) : (
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => void eat(entry.id)}
+                          disabled={busy}
+                        >
+                          Manger
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => void remove(entry.id)}
+                        disabled={busy}
+                        aria-label={`Retirer ${entry.recipeName} du plan`}
+                        className="-mr-1.5 text-muted-foreground"
+                      >
+                        <XIcon />
+                      </Button>
+                    </Card>
+                  </li>
+                );
+              })}
+              <li>
+                <Card asChild className="min-h-[52px] w-full flex-row items-center justify-center gap-2 border-dashed py-0 text-[13.5px] text-muted-foreground transition-colors active:bg-accent">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setTarget({
+                        planDate: day,
+                        // Le repas proposé suit l'heure pour aujourd'hui, et le dîner
+                        // pour les autres jours : c'est le repas qu'on planifie.
+                        meal: isToday ? mealForHour(hourInParis()) : 'dinner',
+                      })
+                    }
+                  >
+                    <PlusIcon className="size-4" />
+                    Prévoir un plat
+                  </button>
+                </Card>
+              </li>
+            </ul>
           </section>
         );
       })}

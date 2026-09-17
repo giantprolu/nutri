@@ -1,8 +1,10 @@
+import { CalendarIcon, PlusIcon } from 'lucide-react';
 import Link from 'next/link';
-import { ScreenHeader } from '@/components/ScreenHeader';
+import { AddFab } from '@/components/AddFab';
 import { DayDial } from '@/components/DayDial';
 import { MealJournal } from '@/components/MealJournal';
-import { HistoryIcon, PlusIcon } from '@/components/icons';
+import { ScreenHeader } from '@/components/ScreenHeader';
+import { Button } from '@/components/ui/button';
 import { journalForToday } from '@/server/services/entries';
 import { requireUserId } from '@/server/guard';
 import { targetFor } from '@/server/services/profile';
@@ -12,11 +14,12 @@ import { formatJournalDate, todayInParis } from '@/lib/date';
 export const dynamic = 'force-dynamic';
 
 /**
- * Journal du jour (FR-4). Composant serveur : aucun import client (AD-10).
+ * Journal du jour (FR-4). Composant serveur : seuls le bouton d'ajout et la
+ * liste, qui gère la suppression, sont des composants client (AD-10).
  *
- * Le surtitre porte la date en toutes lettres et non « Aujourd'hui » : cet
- * écran ne montre jamais autre chose que le jour même, et le dire deux fois
- * serait du remplissage. La date, elle, situe.
+ * La ligne sous le titre porte la date en toutes lettres et non
+ * « Aujourd'hui » : cet écran ne montre jamais autre chose que le jour même,
+ * et le dire deux fois serait du remplissage. La date, elle, situe.
  */
 export default async function JournalPage() {
   const today = todayInParis();
@@ -27,20 +30,22 @@ export default async function JournalPage() {
   ]);
 
   return (
-    <>
+    <div className="pb-16">
       {/*
         L'historique se rejoint d'ici depuis que la barre basse porte la
-        Cuisine et le Sport. Il n'y perd rien : on le consulte une fois de
-        temps en temps, et toujours depuis le journal du jour.
+        Cuisine et le Sport. On le consulte de temps en temps, et toujours
+        depuis le journal du jour.
       */}
       <ScreenHeader
         title="Journal"
         kicker={formatJournalDate(today)}
-        action={{
-          href: '/history',
-          label: 'Voir les journaux passés',
-          icon: <HistoryIcon className="h-[22px] w-[22px]" />,
-        }}
+        action={
+          <Button asChild variant="outline" size="icon">
+            <Link href="/history" aria-label="Voir les journaux passés">
+              <CalendarIcon className="size-[19px]" />
+            </Link>
+          </Button>
+        }
       />
 
       <DayDial
@@ -57,36 +62,35 @@ export default async function JournalPage() {
         }
       />
 
-      <hr className="rule" />
-
       {entries.length === 0 ? (
-        <>
-          <div className="py-8 text-center">
-            <p className="mx-auto max-w-[24ch] text-[23px] leading-[1.35] font-semibold">
-              Le premier geste de la journée tient en trois touches.
-            </p>
-            <p className="note mx-auto mt-3 max-w-[30ch]">
-              Scanne un code-barres, cherche un nom, ou photographie l&apos;assiette.
-            </p>
-            <Link href="/add" className="action mx-auto mt-6 max-w-[220px]">
-              <PlusIcon className="h-4 w-4" />
-              Ajouter une entrée
+        <div className="py-10 text-center">
+          <p className="mx-auto max-w-[26ch] text-lg font-semibold tracking-tight">
+            Le premier geste de la journée tient en trois touches.
+          </p>
+          <p className="mx-auto mt-2 max-w-[32ch] text-muted-foreground">
+            Scanne un code-barres, cherche un nom, ou photographie l&apos;assiette.
+          </p>
+          <Button asChild variant="outline" className="mt-5">
+            <Link href="/add">
+              <PlusIcon />
+              Ajouter un aliment
             </Link>
-          </div>
-          <hr className="rule" />
-        </>
+          </Button>
+        </div>
       ) : (
         <MealJournal entries={entries} deletable />
       )}
 
       {target === null ? (
-        <p className="note mt-4 text-center">
+        <p className="mt-5 text-center text-muted-foreground">
           Pas de cible calorique définie.{' '}
-          <Link href="/profile" className="link-accent">
+          <Link href="/profile" className="text-foreground underline underline-offset-4">
             La calculer en une minute
           </Link>
         </p>
       ) : null}
-    </>
+
+      <AddFab />
+    </div>
   );
 }

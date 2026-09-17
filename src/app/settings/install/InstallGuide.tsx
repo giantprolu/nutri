@@ -1,6 +1,9 @@
 'use client';
 
+import { ShareIcon } from 'lucide-react';
 import { useEffect, useState } from 'react';
+import { StepList } from '@/components/StepList';
+import { Button } from '@/components/ui/button';
 import {
   INSTALL_HEADLINES,
   INSTALL_STEPS,
@@ -34,26 +37,6 @@ import {
  * repli : montrer les étapes iOS pendant une fraction de seconde à quelqu'un
  * sur Android est pire que d'attendre.
  */
-
-/** Le carré surmonté d'une flèche du menu Partager d'iOS, redessiné. */
-function ShareIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.7}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-      aria-hidden
-    >
-      <path d="M12 3v12" />
-      <path d="M8 7l4-4 4 4" />
-      <path d="M5 12v7a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-7" />
-    </svg>
-  );
-}
 
 export function InstallGuide() {
   const [platform, setPlatform] = useState<InstallPlatform | null>(null);
@@ -91,10 +74,10 @@ export function InstallGuide() {
   if (installed) {
     return (
       <div className="py-8 text-center">
-        <p className="mx-auto max-w-[26ch] text-[23px] leading-[1.35] font-semibold">
+        <p className="mx-auto max-w-[26ch] text-lg font-semibold tracking-tight">
           C’est déjà fait.
         </p>
-        <p className="note mx-auto mt-3 max-w-[32ch]">
+        <p className="mx-auto mt-2 max-w-[32ch] text-muted-foreground">
           Tu lis cette page depuis l’application installée. Son icône est sur ton écran
           d’accueil.
         </p>
@@ -109,30 +92,29 @@ export function InstallGuide() {
     <>
       {native ? (
         <>
-          <p className="note mt-4">
+          <p className="mt-4 text-muted-foreground">
             Ce navigateur sait installer l’application tout seul. Un seul geste suffit.
           </p>
-          <button
+          <Button
             type="button"
             onClick={() => void install()}
             disabled={busy}
-            className="action mt-4"
+            className="mt-4 w-full"
           >
             {busy ? 'Installation…' : 'Installer NutriPerso'}
-          </button>
+          </Button>
           {outcome === 'dismissed' ? (
-            <p role="status" className="note mt-3">
+            <p role="status" className="mt-3 text-muted-foreground">
               Installation annulée. Tu peux la reprendre par le menu du navigateur, ci-dessous.
             </p>
           ) : null}
           {outcome === 'unavailable' ? (
-            <p role="status" className="note mt-3">
+            <p role="status" className="mt-3 text-muted-foreground">
               Le navigateur n’a pas ouvert la boîte de dialogue. Passe par le menu, ci-dessous.
             </p>
           ) : null}
 
-          <hr className="rule mt-6" />
-          <p className="kicker mt-4 mb-1">Ou à la main</p>
+          <h2 className="mt-5 mb-2 text-[12.5px] text-muted-foreground">Ou à la main</h2>
         </>
       ) : (
         <>
@@ -142,7 +124,7 @@ export function InstallGuide() {
             notice : sur iPhone, c'est une promesse qu'aucun navigateur ne
             peut tenir, et mieux vaut l'annoncer que la laisser découvrir.
           */}
-          <p className="note mt-4">
+          <p className="mt-4 text-muted-foreground">
             {platform === 'in-app'
               ? 'Cette page s’affiche dans le navigateur intégré d’une autre application, qui ne sait pas installer d’application web.'
               : isApple
@@ -150,32 +132,28 @@ export function InstallGuide() {
                 : 'Ce navigateur n’ouvre pas de boîte de dialogue d’installation. Elle se fait par son menu.'}
           </p>
 
-          <hr className="rule mt-6" />
-          <p className="kicker mt-4 mb-1">{INSTALL_HEADLINES[platform]}</p>
+          <h2 className="mt-5 mb-2 text-[12.5px] text-muted-foreground">
+            {INSTALL_HEADLINES[platform]}
+          </h2>
         </>
       )}
 
-      <ol>
-        {steps.map((step, index) => (
-          <li key={step} className="mode-row items-baseline">
-            <span className="kicker flex-none">{index + 1}</span>
-            <span className="flex-1 text-[16px]">
-              {step}
-              {/*
-                L'icône est rappelée dans la ligne qui la nomme : « le bouton
-                Partager » ne désigne rien pour qui ne l'a jamais cherché, et
-                c'est exactement l'étape où l'on abandonne.
-              */}
-              {platform === 'ios-safari' && index === 0 ? (
-                <ShareIcon className="ml-1.5 inline-block h-[18px] w-[18px] align-text-bottom" />
-              ) : null}
-            </span>
-          </li>
-        ))}
-      </ol>
+      {/*
+        L'icône est rappelée dans la ligne qui la nomme : « le bouton Partager »
+        ne désigne rien pour qui ne l'a jamais cherché, et c'est exactement
+        l'étape où l'on abandonne.
+      */}
+      <StepList
+        steps={steps}
+        renderExtra={(index) =>
+          platform === 'ios-safari' && index === 0 ? (
+            <ShareIcon aria-hidden className="ml-1.5 inline-block size-[17px] align-text-bottom" />
+          ) : null
+        }
+      />
 
       {platform === 'ios-safari' ? (
-        <p className="note mt-4">
+        <p className="mt-3 text-[12.5px] text-muted-foreground">
           Sur iPhone, le bouton Partager est au bas de l’écran ; sur iPad, en haut à droite de la
           barre d’adresse.
         </p>

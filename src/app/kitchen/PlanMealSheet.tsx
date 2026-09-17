@@ -1,6 +1,16 @@
-import { useEffect, useRef, useState } from 'react';
-import { CloseIcon } from '@/components/icons';
-import { MEALS, MEAL_SHORT_LABELS, type Meal } from '@/lib/meal';
+import { useEffect, useState } from 'react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { MEALS, MEAL_SHORT_LABELS, isMeal, type Meal } from '@/lib/meal';
 import { formatWeekday, formatDayMonth } from '@/lib/date';
 import { macrosPerServing, type Recipe } from '@/lib/recipe';
 import { formatKcal, scaleMacros } from '@/lib/nutrition';
@@ -8,13 +18,9 @@ import { formatKcal, scaleMacros } from '@/lib/nutrition';
 /**
  * Feuille d'ajout d'un plat au plan.
  *
- * Rendue dans un `<dialog>` natif, comme `AddSheet` et pour les mêmes raisons :
- * le navigateur fournit la couche supérieure, le piège à focus et la fermeture
- * par la touche d'échappement.
- *
  * L'ordre des questions suit celui de la décision réelle. On sait quel jour on
  * remplit — c'est le bouton qu'on vient de toucher — et on cherche quoi y
- * mettre ; le repas et les parts se règlent après, et tombent juste le plus
+ * mettre ; le repas et les parts se règlent avant, et tombent juste le plus
  * souvent sans qu'on y touche.
  *
  * Pas de directive `use client` : ce composant n'est monté que depuis
@@ -44,21 +50,8 @@ export function PlanMealSheet({
   onClose: () => void;
   onConfirm: (recipeId: number, meal: Meal, servings: number) => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [meal, setMeal] = useState<Meal>(initialMeal);
   const [servings, setServings] = useState(DEFAULT_SERVINGS);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (open && !dialog.open) {
-      dialog.showModal();
-    } else if (!open && dialog.open) {
-      dialog.close();
-    }
-  }, [open]);
 
   // Le repas suit le bouton touché : ouvrir la feuille depuis le dîner de
   // jeudi ne doit pas proposer le déjeuner.
@@ -81,18 +74,20 @@ export function PlanMealSheet({
           type="button"
           disabled={busy}
           onClick={() => onConfirm(recipe.id, meal, servings)}
-          className="entry-row items-center"
+          className="flex w-full items-center gap-3 border-b py-2.5 text-left transition-colors active:bg-accent disabled:opacity-50"
         >
           <span className="min-w-0 flex-1">
-            <span className="entry-name block">{recipe.name}</span>
-            <span className="entry-meta mt-0.5 block">
+            <span className="block truncate text-[14.5px] font-medium tracking-tight">
+              {recipe.name}
+            </span>
+            <span className="tabular mt-px block text-[12.5px] text-muted-foreground">
               {recipe.ingredients.length === 1
                 ? '1 ingrédient'
                 : `${recipe.ingredients.length} ingrédients`}
               {recipe.prepMinutes === null ? '' : ` · ${recipe.prepMinutes} min`}
             </span>
           </span>
-          <span className="entry-kcal flex-none">
+          <span className="tabular flex-none font-medium">
             {per.unresolvedCount > 0 ? '≈ ' : ''}
             {formatKcal(eaten.kcal)} kcal
           </span>
@@ -102,96 +97,85 @@ export function PlanMealSheet({
   }
 
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === ref.current) {
-          onClose();
-        }
-      }}
-      aria-label="Prévoir un plat"
-      className="sheet"
-    >
-      <div className="flex items-baseline justify-between">
-        <div>
-          <p className="kicker first-letter:uppercase">
+    <Sheet open={open} onOpenChange={(next) => (next ? undefined : onClose())}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
+        <SheetHeader className="p-0 pr-10">
+          <SheetTitle className="text-[17px]">Prévoir un plat</SheetTitle>
+          <SheetDescription className="first-letter:uppercase">
             {formatWeekday(planDate)} {formatDayMonth(planDate)}
-          </p>
-          <h2 className="display-sm mt-1">Prévoir un plat</h2>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer"
-          className="tap-target -mr-2 flex items-center justify-center opacity-55"
+          </SheetDescription>
+        </SheetHeader>
+
+        <Tabs
+          value={meal}
+          onValueChange={(value) => isMeal(value) && setMeal(value)}
+          className="mt-4"
         >
-          <CloseIcon className="h-5 w-5" />
-        </button>
-      </div>
+          <TabsList aria-label="Repas" className="w-full">
+            {MEALS.map((candidate) => (
+              <TabsTrigger key={candidate} value={candidate}>
+                {MEAL_SHORT_LABELS[candidate]}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </Tabs>
 
-      <div className="segmented mt-4" role="group" aria-label="Repas">
-        {MEALS.map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            onClick={() => setMeal(candidate)}
-            aria-pressed={meal === candidate}
-          >
-            {MEAL_SHORT_LABELS[candidate]}
-          </button>
-        ))}
-      </div>
+        <div className="mt-3.5 flex items-center gap-3">
+          <Label htmlFor="plan-servings" className="flex-1">
+            Parts mangées
+          </Label>
+          <Input
+            id="plan-servings"
+            type="number"
+            inputMode="decimal"
+            min={0.5}
+            step={0.5}
+            value={servings}
+            onChange={(event) => setServings(Number(event.target.value))}
+            className="tabular w-[92px] text-right"
+          />
+        </div>
 
-      <div className="mt-4 flex items-center gap-3">
-        <label className="label mb-0 flex-1" htmlFor="plan-servings">
-          Parts mangées
-        </label>
-        <input
-          id="plan-servings"
-          type="number"
-          inputMode="decimal"
-          min={0.5}
-          step={0.5}
-          value={servings}
-          onChange={(event) => setServings(Number(event.target.value))}
-          className="field w-[92px] text-right text-[17px]"
-        />
-      </div>
+        <Separator className="mt-4" />
 
-      <hr className="rule mt-4" />
+        {recipes.length === 0 ? (
+          <p className="py-6 text-center text-muted-foreground">
+            Aucune recette à prévoir pour l&apos;instant.
+          </p>
+        ) : (
+          <>
+            {/*
+              Les plats du panier d'abord, et séparés du reste. C'est pour eux
+              qu'on a fait les courses : proposer les cent recettes du carnet sur
+              le même rang obligerait à retrouver chaque soir, dans la liste,
+              celles dont les ingrédients sont effectivement au frigo.
+            */}
+            {chosen.length > 0 ? (
+              <>
+                <h3 className="pt-4 pb-1 text-[12.5px] text-muted-foreground">
+                  Au panier cette semaine
+                </h3>
+                <ul>{chosen.map(renderRecipe)}</ul>
+              </>
+            ) : null}
 
-      {recipes.length === 0 ? (
-        <p className="note py-6 text-center">Aucune recette à prévoir pour l&apos;instant.</p>
-      ) : (
-        <>
-          {/*
-            Les plats du panier d'abord, et séparés du reste. C'est pour eux
-            qu'on a fait les courses : proposer les cent recettes du carnet sur
-            le même rang obligerait à retrouver chaque soir, dans la liste,
-            celles dont les ingrédients sont effectivement au frigo.
-          */}
-          {chosen.length > 0 ? (
-            <>
-              <p className="meal-head">
-                <span>Au panier cette semaine</span>
-              </p>
-              <ul>{chosen.map(renderRecipe)}</ul>
-            </>
-          ) : null}
-
-          {others.length > 0 ? (
-            <>
-              {chosen.length > 0 ? (
-                <p className="meal-head mt-2">
-                  <span>Mes autres recettes</span>
-                </p>
-              ) : null}
-              <ul>{others.map(renderRecipe)}</ul>
-            </>
-          ) : null}
-        </>
-      )}
-    </dialog>
+            {others.length > 0 ? (
+              <>
+                {chosen.length > 0 ? (
+                  <h3 className="pt-4 pb-1 text-[12.5px] text-muted-foreground">
+                    Mes autres recettes
+                  </h3>
+                ) : null}
+                <ul>{others.map(renderRecipe)}</ul>
+              </>
+            ) : null}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

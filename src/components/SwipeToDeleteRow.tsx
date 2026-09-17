@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 /**
  * Balayage vers la gauche pour révéler la suppression (UX-DR-8).
@@ -68,20 +69,17 @@ export function SwipeToDeleteRow({
   return (
     <li className="relative overflow-hidden">
       <div className="absolute inset-y-0 right-0 flex items-stretch">
-        <button
+        <Button
           type="button"
+          variant="destructive"
           onClick={remove}
           disabled={busy}
           aria-label={`Supprimer ${label}`}
           tabIndex={revealed ? 0 : -1}
-          className="tap-target w-[88px] text-[15px] font-semibold disabled:opacity-60"
-          style={{
-            background: 'var(--color-danger)',
-            color: 'var(--color-bg)',
-          }}
+          className="h-full w-[88px] rounded-none"
         >
           {busy ? '…' : 'Supprimer'}
-        </button>
+        </Button>
       </div>
 
       <div
@@ -89,13 +87,10 @@ export function SwipeToDeleteRow({
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
-        className="relative touch-pan-y transition-transform duration-150 ease-out"
-        style={{
-          transform: `translateX(${offset}px)`,
-          // Le fond est opaque : sans lui, le bouton de suppression resterait
-          // visible par transparence sous la ligne au repos.
-          background: 'var(--color-bg)',
-        }}
+        // Le fond est opaque : sans lui, le bouton de suppression resterait
+        // visible par transparence sous la ligne au repos.
+        className="relative touch-pan-y bg-background transition-transform duration-150 ease-out"
+        style={{ transform: `translateX(${offset}px)` }}
       >
         {children}
       </div>

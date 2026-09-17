@@ -1,4 +1,8 @@
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { isValidNutrient } from '@/lib/nutrition';
 import type { Macros } from '@/lib/types';
 
@@ -10,17 +14,17 @@ import type { Macros } from '@/lib/types';
  * la retrouve directement.
  *
  * Le code-barres n'est pas repris ici : l'écran qui monte ce formulaire
- * l'affiche déjà en surtitre, et un champ en lecture seule de plus ne ferait
- * qu'éloigner le premier champ réellement saisissable.
+ * l'affiche déjà, et un champ en lecture seule de plus ne ferait qu'éloigner le
+ * premier champ réellement saisissable.
  *
  * Pas de directive `use client` : ce composant n'est monté que depuis ScanFlow.
  */
 
 const FIELDS = [
-  { key: 'kcal', label: 'Énergie', unit: 'kcal' },
-  { key: 'proteinG', label: 'Protéines', unit: 'g' },
-  { key: 'carbsG', label: 'Glucides', unit: 'g' },
-  { key: 'fatG', label: 'Lipides', unit: 'g' },
+  { key: 'kcal', label: 'Énergie (kcal)' },
+  { key: 'proteinG', label: 'Protéines (g)' },
+  { key: 'carbsG', label: 'Glucides (g)' },
+  { key: 'fatG', label: 'Lipides (g)' },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]['key'];
@@ -71,9 +75,11 @@ export function ProductForm({
 
   const macros = parsed();
   const ready = name.trim().length > 0 && macros !== null;
+  const anyMissing = FIELDS.some((field) => initialPer100g[field.key] === undefined);
 
   return (
     <form
+      className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault();
         if (ready && macros && !submitting) {
@@ -85,64 +91,62 @@ export function ProductForm({
         }
       }}
     >
-      <label htmlFor="product-name" className="label">
-        Nom du produit
-      </label>
-      <input
-        id="product-name"
-        type="text"
-        required
-        maxLength={200}
-        autoComplete="off"
-        value={name}
-        onChange={(event) => setName(event.target.value)}
-        className="field mt-2 mb-6"
-      />
+      <div className="grid gap-2">
+        <Label htmlFor="product-name">Nom du produit</Label>
+        <Input
+          id="product-name"
+          type="text"
+          required
+          maxLength={200}
+          autoComplete="off"
+          value={name}
+          onChange={(event) => setName(event.target.value)}
+        />
+      </div>
 
-      <fieldset>
-        <legend className="kicker kicker-quiet">Valeurs pour 100 g</legend>
-        <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4">
-          {FIELDS.map((field) => {
-            const missing = initialPer100g[field.key] === undefined;
-            return (
-              <div key={field.key}>
-                <label htmlFor={`product-${field.key}`} className="label">
-                  {field.label}
-                  {missing ? (
-                    <span className="ml-1" style={{ color: 'var(--color-accent)' }}>
-                      ·
-                    </span>
-                  ) : null}
-                </label>
-                <div className={`field mt-1.5 items-baseline ${missing ? 'field-accent' : ''}`}>
-                  <input
-                    id={`product-${field.key}`}
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    autoComplete="off"
-                    value={values[field.key]}
-                    onChange={(event) =>
-                      setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
-                    }
-                    className="tabular w-full min-w-0 border-0 bg-transparent p-0 outline-none"
-                  />
-                  <span aria-hidden className="flex-none text-[14px] opacity-45">
-                    {field.unit}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-        <p className="note mt-3">
-          Les champs marqués d&apos;un point sont absents de la fiche d&apos;origine.
-        </p>
-      </fieldset>
+      <Card>
+        <CardContent>
+          <fieldset aria-labelledby="product-values">
+            <CardTitle id="product-values" className="text-[13.5px]">
+              Valeurs pour 100 g
+            </CardTitle>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-3 pt-3">
+              {FIELDS.map((field) => {
+                const missing = initialPer100g[field.key] === undefined;
+                return (
+                  <div key={field.key} className="grid min-w-0 gap-2">
+                    <Label htmlFor={`product-${field.key}`}>
+                      {field.label}
+                      {missing ? <span className="text-muted-foreground">·</span> : null}
+                    </Label>
+                    <Input
+                      id={`product-${field.key}`}
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      autoComplete="off"
+                      value={values[field.key]}
+                      onChange={(event) =>
+                        setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                      }
+                      className="tabular"
+                    />
+                  </div>
+                );
+              })}
+            </div>
+            {anyMissing ? (
+              <p className="mt-3 text-[12.5px] text-muted-foreground">
+                Les champs marqués d&apos;un point sont absents de la fiche d&apos;origine.
+              </p>
+            ) : null}
+          </fieldset>
+        </CardContent>
+      </Card>
 
-      <button type="submit" disabled={!ready || submitting} className="action mt-6">
+      <Button type="submit" disabled={!ready || submitting} className="w-full">
         {submitting ? 'Enregistrement…' : 'Continuer'}
-      </button>
+      </Button>
     </form>
   );
 }

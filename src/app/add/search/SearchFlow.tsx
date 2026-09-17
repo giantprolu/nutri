@@ -1,16 +1,22 @@
 'use client';
 
+import { ChevronRightIcon, SearchIcon, XIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { ErrorAlert } from '@/components/ErrorAlert';
 import { NavHeader } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
-import { SearchIcon } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { cacheProduct } from '@/lib/client/products';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { MIN_QUERY_LENGTH, SEARCH_DEBOUNCE_MS, searchFoods } from '@/lib/client/search';
-import { formatGrams, formatKcal } from '@/lib/nutrition';
+import { formatKcal } from '@/lib/nutrition';
 import type { Meal } from '@/lib/meal';
 import type { SearchHit } from '@/lib/types';
 
@@ -33,16 +39,35 @@ type Step =
  * n'accorde pas le même crédit aux deux, encore faut-il les distinguer.
  */
 const SOURCE_LABEL: Record<SearchHit['origin'], string> = {
-  ciqual: 'Ciqual',
+  ciqual: 'CIQUAL',
   cache: 'Scanné',
   off: 'Open Food Facts',
 };
+
+/**
+ * Filtre des résultats par provenance, sans nouvelle requête : les résultats
+ * sont déjà là. Les produits scannés et ceux d'Open Food Facts vont ensemble :
+ * ce sont des produits du commerce, face aux aliments génériques de CIQUAL.
+ */
+type Filter = 'all' | 'ciqual' | 'products';
+
+function isFilter(value: string): value is Filter {
+  return value === 'all' || value === 'ciqual' || value === 'products';
+}
+
+function matches(filter: Filter, hit: SearchHit): boolean {
+  if (filter === 'all') {
+    return true;
+  }
+  return filter === 'ciqual' ? hit.origin === 'ciqual' : hit.origin !== 'ciqual';
+}
 
 export function SearchFlow() {
   const router = useRouter();
   const [step, setStep] = useState<Step>({ name: 'search' });
   const [term, setTerm] = useState('');
   const [hits, setHits] = useState<SearchHit[] | null>(null);
+  const [filter, setFilter] = useState<Filter>('all');
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -138,8 +163,7 @@ export function SearchFlow() {
     return (
       <>
         <NavHeader
-          label="Quantité"
-          mode="back"
+          label="Rechercher"
           onDismiss={() => {
             setError(null);
             setStep({ name: 'search' });
@@ -153,22 +177,23 @@ export function SearchFlow() {
           submitting={submitting}
           onSubmit={save}
         />
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       </>
     );
   }
 
+  const shown = hits?.filter((hit) => matches(filter, hit)) ?? null;
+
   return (
     <>
-      <NavHeader label="Rechercher" href="/" />
+      <NavHeader label="Ajouter" href="/add" />
 
-      <div className="field field-accent">
-        <SearchIcon className="h-[18px] w-[18px] flex-none" />
-        <input
+      <div className="relative">
+        <SearchIcon
+          aria-hidden
+          className="pointer-events-none absolute top-1/2 left-3 size-[17px] -translate-y-1/2 text-muted-foreground"
+        />
+        <Input
           ref={inputRef}
           type="search"
           autoComplete="off"
@@ -176,48 +201,76 @@ export function SearchFlow() {
           placeholder="riz blanc"
           value={term}
           onChange={(event) => setTerm(event.target.value)}
-          className="w-full min-w-0 border-0 bg-transparent p-0 text-[19px] outline-none"
+          className="px-9 [&::-webkit-search-cancel-button]:hidden"
         />
+        {term === '' ? null : (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-sm"
+            onClick={() => {
+              setTerm('');
+              inputRef.current?.focus();
+            }}
+            aria-label="Effacer la recherche"
+            className="absolute top-1/2 right-0.5 -translate-y-1/2 text-muted-foreground"
+          >
+            <XIcon className="size-[15px]" />
+          </Button>
+        )}
       </div>
 
-      {error ? (
-        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
+      <Tabs
+        value={filter}
+        onValueChange={(value) => isFilter(value) && setFilter(value)}
+        className="mt-3.5"
+      >
+        <TabsList className="w-full">
+          <TabsTrigger value="all">Tout</TabsTrigger>
+          <TabsTrigger value="ciqual">CIQUAL</TabsTrigger>
+          <TabsTrigger value="products">Produits</TabsTrigger>
+        </TabsList>
+      </Tabs>
+
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
+
+      {searching ? (
+        <div aria-label="Recherche…" className="mt-5 flex flex-col gap-2.5">
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+          <Skeleton className="h-12" />
+        </div>
       ) : null}
 
-      {searching ? <p className="kicker kicker-quiet mt-6">Recherche…</p> : null}
-
-      {hits !== null && hits.length === 0 && !searching ? (
-        <p className="note mt-6">Aucun aliment trouvé.</p>
+      {shown !== null && shown.length === 0 && !searching ? (
+        <p className="mt-5 text-muted-foreground">Aucun aliment trouvé.</p>
       ) : null}
 
-      {hits !== null && hits.length > 0 ? (
+      {shown !== null && shown.length > 0 && !searching ? (
         <>
-          <p className="kicker kicker-quiet mt-6 mb-2">
-            {hits.length === 1 ? '1 résultat' : `${hits.length} résultats`}
+          <p className="mt-5 text-[12.5px] text-muted-foreground">
+            {shown.length === 1 ? '1 résultat' : `${shown.length} résultats`}
           </p>
-          <hr className="rule" />
           <ul>
-            {hits.map((hit) => (
+            {shown.map((hit) => (
               <li key={`${hit.kind}-${hit.ref}`}>
                 <button
                   type="button"
                   onClick={() => void pick(hit)}
-                  className="entry-row items-center"
+                  className="flex w-full items-center gap-3 border-b py-2.5 text-left transition-colors active:bg-accent"
                 >
                   <span className="min-w-0 flex-1">
-                    <span className="entry-name block">{hit.name}</span>
-                    <span className="entry-meta mt-0.5 block">
-                      {formatKcal(hit.per100g.kcal)} kcal · {formatGrams(hit.per100g.proteinG)} P ·{' '}
-                      {formatGrams(hit.per100g.carbsG)} G · {formatGrams(hit.per100g.fatG)} L
+                    <span className="block truncate text-[14.5px] font-medium tracking-tight">
+                      {hit.name}
+                    </span>
+                    <span className="tabular mt-px block text-[12.5px] text-muted-foreground">
+                      {formatKcal(hit.per100g.kcal)} kcal / 100 g
                     </span>
                   </span>
-                  <span
-                    className={`kicker flex-none ${hit.origin === 'ciqual' ? 'kicker-quiet' : ''}`}
-                  >
+                  <Badge variant={hit.origin === 'ciqual' ? 'outline' : 'secondary'}>
                     {SOURCE_LABEL[hit.origin]}
-                  </span>
+                  </Badge>
+                  <ChevronRightIcon aria-hidden className="size-4 flex-none text-muted-foreground" />
                 </button>
               </li>
             ))}
@@ -226,9 +279,9 @@ export function SearchFlow() {
       ) : null}
 
       {hits !== null && !searching ? (
-        <p className="note mt-6 text-center">
+        <p className="mt-6 text-center text-muted-foreground">
           Rien ne correspond ?{' '}
-          <Link href="/add/manual" className="link-accent">
+          <Link href="/add/manual" className="text-foreground underline underline-offset-4">
             Saisis les valeurs à la main
           </Link>
         </p>

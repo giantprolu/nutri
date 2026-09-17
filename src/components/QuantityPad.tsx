@@ -1,7 +1,21 @@
+import { CheckIcon, MinusIcon, PlusIcon } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { BottomBar } from './BottomBar';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
 import { MAX_QUANTITY_G, formatGrams, formatKcal, scaleMacros } from '@/lib/nutrition';
 import type { Macros } from '@/lib/types';
-import { MEALS, MEAL_SHORT_LABELS, type Meal, mealForHour } from '@/lib/meal';
+import { MEALS, MEAL_LABELS, type Meal, isMeal, mealForHour } from '@/lib/meal';
 import { hourInParis } from '@/lib/date';
 import type { QuantityShortcut } from '@/lib/shortcuts';
 
@@ -9,9 +23,9 @@ import type { QuantityShortcut } from '@/lib/shortcuts';
  * Écran de quantité (FR-8, FR-9). Étape terminale commune aux quatre chemins
  * d'ajout : saisie ad hoc, scan, recherche et reconnaissance photo s'y branchent.
  *
- * Deux choses vivent en bas, sous un filet, dans une barre qui ne défile pas :
- * le repas et l'enregistrement. Toute cible tactile fréquente vit dans les deux
- * tiers inférieurs (UX-DR-3), et ces deux-là closent le geste.
+ * Deux choses vivent en bas, dans une barre qui ne défile pas : le repas et
+ * l'enregistrement. Toute cible tactile fréquente vit dans les deux tiers
+ * inférieurs (UX-DR-3), et ces deux-là closent le geste.
  *
  * Le repas est présélectionné d'après l'heure, jamais imposé : c'est une
  * proposition qui tombe juste assez souvent pour que le geste ordinaire soit
@@ -23,6 +37,9 @@ import type { QuantityShortcut } from '@/lib/shortcuts';
  */
 
 export type { QuantityShortcut };
+
+/** Pas des boutons moins et plus, en grammes. */
+const STEP_G = 10;
 
 export function QuantityPad({
   foodLabel,
@@ -69,6 +86,12 @@ export function QuantityPad({
   const valid = raw.trim() !== '' && error === null;
   const preview = valid ? scaleMacros(per100g, quantity) : null;
 
+  function step(delta: number) {
+    const current = /^\d+$/.test(raw.trim()) ? quantity : 0;
+    const next = Math.min(MAX_QUANTITY_G - 1, Math.max(0, current + delta));
+    setRaw(next === 0 ? '' : String(next));
+  }
+
   return (
     <form
       id="quantity-form"
@@ -79,111 +102,133 @@ export function QuantityPad({
         }
       }}
     >
-      <div className="pt-4">
-        <p className="kicker">{sourceLabel} · pour 100 g</p>
-        <h2 className="display-sm mt-1.5">{foodLabel}</h2>
-        <p className="tabular note mt-2">
+      <div className="pt-1">
+        <div className="flex items-center gap-2">
+          <h2 className="text-[17px] font-semibold tracking-tight">{foodLabel}</h2>
+          <Badge variant="outline">{sourceLabel}</Badge>
+        </div>
+        <p className="tabular mt-1 text-[13px] text-muted-foreground">
           {formatKcal(per100g.kcal)} kcal · {formatGrams(per100g.proteinG)} P ·{' '}
-          {formatGrams(per100g.carbsG)} G · {formatGrams(per100g.fatG)} L
+          {formatGrams(per100g.carbsG)} G · {formatGrams(per100g.fatG)} L, pour 100 g
         </p>
       </div>
 
-      <hr className="rule my-4" />
+      <Separator className="my-4" />
 
-      {shortcuts.length > 0 ? (
-        <>
-          <p className="label">Quantités habituelles</p>
-          <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Quantités habituelles">
-            {shortcuts.map((shortcut) => (
-              <button
-                key={`${shortcut.label}-${shortcut.grams}`}
-                type="button"
-                // Renseigne le champ sans valider : l'utilisateur garde la main (FR-9).
-                onClick={() => setRaw(String(shortcut.grams))}
-                aria-pressed={raw === String(shortcut.grams)}
-                className="chip"
-              >
-                {shortcut.label}
-              </button>
-            ))}
-          </div>
-        </>
-      ) : null}
-
-      <label htmlFor="quantity" className="label mt-6 block">
-        Quantité en grammes
-      </label>
-      <div className="field field-accent mt-2 items-baseline gap-2">
-        <input
-          id="quantity"
-          ref={inputRef}
-          name="quantity"
-          type="text"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          autoComplete="off"
-          value={raw}
-          onChange={(event) => setRaw(event.target.value)}
-          aria-invalid={error !== null}
-          aria-describedby={error ? 'quantity-error' : undefined}
-          className="figure w-full min-w-0 border-0 bg-transparent p-0 text-[48px] leading-[1.1] outline-none"
-        />
-        <span aria-hidden className="text-[17px] opacity-50">
-          g
-        </span>
+      <Label htmlFor="quantity">Quantité</Label>
+      <div className="mt-2 flex items-center gap-2.5">
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => step(-STEP_G)}
+          aria-label={`Retirer ${STEP_G} g`}
+        >
+          <MinusIcon className="size-[19px]" />
+        </Button>
+        <div className="relative flex-1">
+          <Input
+            id="quantity"
+            ref={inputRef}
+            name="quantity"
+            type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="off"
+            value={raw}
+            onChange={(event) => setRaw(event.target.value)}
+            aria-invalid={error !== null}
+            aria-describedby={error ? 'quantity-error' : undefined}
+            className="tabular h-11 pr-8 text-center text-[19px] font-semibold md:text-[19px]"
+          />
+          <span
+            aria-hidden
+            className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground"
+          >
+            g
+          </span>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => step(STEP_G)}
+          aria-label={`Ajouter ${STEP_G} g`}
+        >
+          <PlusIcon className="size-[19px]" />
+        </Button>
       </div>
 
       {error ? (
-        <p id="quantity-error" role="alert" className="mt-2 text-[15px]" style={{ color: 'var(--color-danger)' }}>
+        <p id="quantity-error" role="alert" className="mt-2 text-destructive">
           {error}
         </p>
       ) : null}
 
-      {preview ? (
-        <div className="aside-accent mt-6">
-          <p className="kicker kicker-quiet">Soit, dans le journal</p>
-          <p className="figure mt-1 text-[33px] leading-tight">
-            {formatKcal(preview.kcal)} kcal
-          </p>
-          <p className="tabular note mt-0.5">
-            {formatGrams(preview.proteinG)} g P · {formatGrams(preview.carbsG)} g G ·{' '}
-            {formatGrams(preview.fatG)} g L
-          </p>
+      {shortcuts.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Quantités habituelles">
+          {shortcuts.map((shortcut) => {
+            const pressed = raw === String(shortcut.grams);
+            return (
+              <Badge
+                key={`${shortcut.label}-${shortcut.grams}`}
+                asChild
+                variant={pressed ? 'default' : 'outline'}
+                className="tabular h-8 px-3 text-[13px]"
+              >
+                <button
+                  type="button"
+                  // Renseigne le champ sans valider : l'utilisateur garde la main (FR-9).
+                  onClick={() => setRaw(String(shortcut.grams))}
+                  aria-pressed={pressed}
+                >
+                  {pressed ? <CheckIcon /> : null}
+                  {shortcut.label}
+                </button>
+              </Badge>
+            );
+          })}
         </div>
       ) : null}
 
-      {/* Réserve la hauteur de la barre basse, qui ne défile pas. */}
-      <div aria-hidden className="h-[150px]" />
+      <Separator className="mt-5 mb-3.5" />
 
-      <div
-        className="fixed inset-x-0 bottom-0 z-30"
-        style={{
-          background: 'var(--color-bg)',
-          borderTop: '1px solid var(--color-divider)',
-        }}
-      >
-        <div className="mx-auto max-w-lg px-4 pt-4 pb-[calc(18.4px+env(safe-area-inset-bottom,0px))]">
-          <p className="label mb-2 block" id="meal-label">
-            Repas
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <p className="text-[12.5px] text-muted-foreground">Ajouté au journal</p>
+          <p className="tabular mt-px text-[25px] font-semibold tracking-tight">
+            {preview ? `${formatKcal(preview.kcal)} kcal` : '—'}
           </p>
-          <div className="segmented mb-3" role="group" aria-labelledby="meal-label">
-            {MEALS.map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setMeal(value)}
-                aria-pressed={meal === value}
-              >
-                {MEAL_SHORT_LABELS[value]}
-              </button>
-            ))}
-          </div>
-
-          <button type="submit" disabled={!valid || submitting} className="action">
-            {submitting ? 'Enregistrement…' : 'Enregistrer'}
-          </button>
         </div>
+        {preview ? (
+          <p className="tabular text-right text-[12.5px] text-muted-foreground">
+            {formatGrams(preview.proteinG)} g P
+            <br />
+            {formatGrams(preview.carbsG)} g G
+            <br />
+            {formatGrams(preview.fatG)} g L
+          </p>
+        ) : null}
       </div>
+
+      <BottomBar className="flex gap-2.5">
+        <Select value={meal} onValueChange={(value) => isMeal(value) && setMeal(value)}>
+          <SelectTrigger aria-label="Repas" className="h-10 flex-1 data-[size=default]:h-10">
+            <span className="text-muted-foreground">Repas :</span>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {MEALS.map((value) => (
+              <SelectItem key={value} value={value}>
+                {MEAL_LABELS[value]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Button type="submit" disabled={!valid || submitting} className="flex-1">
+          {submitting ? 'Enregistrement…' : 'Enregistrer'}
+        </Button>
+      </BottomBar>
     </form>
   );
 }

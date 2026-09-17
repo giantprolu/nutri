@@ -1,4 +1,4 @@
-import { NavHeader } from '@/components/ScreenHeader';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
 import { currentList } from '@/server/services/shopping';
 import { formatWeekRange, isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
@@ -29,13 +29,13 @@ export default async function ShoppingPage({
 
   return (
     <>
-      <NavHeader label="Cuisine" href="/kitchen" mode="back" />
-
-      <h1 className="display">Courses</h1>
-      <p className="kicker kicker-quiet mt-1">
-        {list === null ? formatWeekRange(weekStart) : formatWeekRange(list.fromDate)}
-      </p>
-      <hr className="rule mt-3" />
+      <NavHeader label="Cuisine" href={`/kitchen?from=${weekStart}`} />
+      <PageTitle
+        title="Courses"
+        description={
+          list === null ? formatWeekRange(weekStart) : formatWeekRange(list.fromDate)
+        }
+      />
 
       <ShoppingList list={list} weekStart={weekStart} />
     </>

@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
-import { NavHeader } from '@/components/ScreenHeader';
-import { EmptyState } from '@/components/EmptyState';
 import { DayBreakdown } from '@/components/DayBreakdown';
+import { EmptyState } from '@/components/EmptyState';
 import { MealJournal } from '@/components/MealJournal';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { journalForDate } from '@/server/services/entries';
 import { requireUserId } from '@/server/guard';
 import { formatJournalDate, formatRelativeJournalDate, isJournalDate } from '@/lib/date';
@@ -31,30 +31,28 @@ export default async function HistoryDayPage({
 
   const { totals, entries } = await journalForDate(await requireUserId(), date);
 
-  // Le titre dit la distance, le surtitre dit la date. « Hier » situe dans la
-  // mémoire, « vendredi 13 septembre » situe dans le calendrier ; il faut les
-  // deux, et pour une date ancienne les deux se confondent.
+  // Le titre dit la date, la ligne dessous dit la distance. « Hier » situe
+  // dans la mémoire, « mardi 16 septembre » dans le calendrier ; pour une date
+  // ancienne les deux se confondent, et la seconde ligne se tait.
   const relative = formatRelativeJournalDate(date);
   const absolute = formatJournalDate(date);
 
   return (
     <>
-      <NavHeader label="Historique" href="/history" mode="back" />
-
-      <div className="pt-3">
-        <p className="kicker first-letter:uppercase">{absolute}</p>
-        <h1 className="display first-letter:uppercase">{relative}</h1>
-      </div>
-      <hr className="rule mt-4" />
+      <NavHeader label="Historique" href="/history" />
+      <PageTitle
+        title={absolute}
+        {...(relative === absolute ? {} : { description: relative })}
+        className="mb-4"
+      />
 
       {entries.length === 0 ? (
         <EmptyState>Aucune entrée ce jour-là.</EmptyState>
       ) : (
         <>
           <DayBreakdown macros={totals.macros} />
-          <hr className="rule" />
           <MealJournal entries={entries} />
-          <p className="note mt-4 text-center">
+          <p className="mt-5 text-center text-[12.5px] text-muted-foreground">
             Journée clôturée. Les valeurs sont figées à l&apos;écriture.
           </p>
         </>

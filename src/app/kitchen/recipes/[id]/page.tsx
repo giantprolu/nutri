@@ -1,7 +1,13 @@
+import { ChefHatIcon, ClockIcon, PencilIcon } from 'lucide-react';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { BottomBar } from '@/components/BottomBar';
 import { NavHeader } from '@/components/ScreenHeader';
-import { KitchenIcon, PencilIcon } from '@/components/icons';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { requireUserId } from '@/server/guard';
 import { basketFor } from '@/server/services/basket';
 import { recipeFor } from '@/server/services/recipes';
@@ -40,101 +46,137 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
 
   const perServing = macrosPerServing(recipe);
   const total = recipeMacros(recipe.ingredients);
+  const hasSteps = recipe.steps.length > 0;
 
   return (
     <>
-      <NavHeader label="Cuisine" href="/kitchen" mode="back" />
-
-      <h1 className="display-sm">{recipe.name}</h1>
-      <p className="kicker kicker-quiet mt-1">
-        {recipe.servings === 1 ? '1 part' : `${recipe.servings} parts`}
-        {recipe.prepMinutes === null ? '' : ` · ${recipe.prepMinutes} min`}
-      </p>
-
-      <div className="mt-5">
-        <p className="figure">
-          {perServing.unresolvedCount > 0 ? '≈ ' : ''}
-          {formatKcal(perServing.macros.kcal)} kcal
-        </p>
-        <p className="entry-meta mt-1">
-          par part · {formatGrams(perServing.macros.proteinG)} P ·{' '}
-          {formatGrams(perServing.macros.carbsG)} G · {formatGrams(perServing.macros.fatG)} L
-        </p>
-      </div>
-
-      {perServing.unresolvedCount > 0 ? (
-        <p className="note mt-3" style={{ color: 'var(--color-danger)' }}>
-          {perServing.unresolvedCount === 1
-            ? "Un ingrédient n'a plus de fiche nutritionnelle : le total est incomplet."
-            : `${perServing.unresolvedCount} ingrédients n'ont plus de fiche nutritionnelle : le total est incomplet.`}
-        </p>
-      ) : null}
-
-      <hr className="rule mt-6" />
-      <p className="kicker mt-4 mb-1">Ingrédients</p>
-
-      <ul>
-        {recipe.ingredients.map((ingredient) => (
-          <li key={ingredient.id} className="entry-row items-center">
-            <span className="min-w-0 flex-1">
-              <span className="entry-name block">{ingredient.label}</span>
-              <span className="entry-meta mt-0.5 block">
-                {formatIngredientQuantity(ingredient)}
-              </span>
-            </span>
-            <span className="entry-kcal flex-none">
-              {ingredient.per100g === null ? (
-                <span style={{ color: 'var(--color-danger)' }}>—</span>
-              ) : (
-                `${formatKcal(scaleMacros(ingredient.per100g, ingredient.quantityG).kcal)} kcal`
-              )}
-            </span>
-          </li>
-        ))}
-      </ul>
-
-      <p className="note mt-3">
-        Recette entière : {total.unresolvedCount > 0 ? '≈ ' : ''}
-        {formatKcal(total.macros.kcal)} kcal
-      </p>
-
-      {recipe.steps.length > 0 ? (
-        <>
-          <hr className="rule mt-6" />
-          <p className="kicker mt-4 mb-2">Préparation</p>
-          <ol className="space-y-3">
-            {recipe.steps.map((step, index) => (
-              <li key={index} className="flex gap-3">
-                <span className="kicker kicker-quiet flex-none pt-1">{index + 1}</span>
-                <span className="text-[17px] leading-[1.5]">{step}</span>
-              </li>
-            ))}
-          </ol>
-        </>
-      ) : null}
-
-      <hr className="rule mt-6" />
-
-      {recipe.steps.length > 0 ? (
-        <Link href={`/kitchen/recipes/${recipe.id}/cook`} className="action mt-4">
-          <KitchenIcon className="h-4 w-4" />
-          Cuisiner pas à pas
-        </Link>
-      ) : null}
-
-      <AddToBasket
-        recipeId={recipe.id}
-        servings={recipe.servings}
-        weekStart={weekStart}
-        alreadyChosen={alreadyChosen}
+      <NavHeader
+        label="Recettes"
+        href="/kitchen/recipes"
+        action={
+          <Button asChild variant="ghost" size="icon">
+            <Link href={`/kitchen/recipes/${recipe.id}/edit`} aria-label="Modifier la recette">
+              <PencilIcon className="size-[19px]" />
+            </Link>
+          </Button>
+        }
       />
 
-      <Link href={`/kitchen/recipes/${recipe.id}/edit`} className="action-quiet mt-3">
-        <PencilIcon className="h-4 w-4" />
-        Modifier
-      </Link>
+      <div aria-hidden className="hatch h-[150px] rounded-xl border" />
+
+      <h1 className="mt-4 text-[22px] font-semibold tracking-tight">{recipe.name}</h1>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {recipe.prepMinutes === null ? null : (
+          <Badge variant="outline" className="tabular">
+            <ClockIcon />
+            {recipe.prepMinutes} min
+          </Badge>
+        )}
+        <Badge variant="outline" className="tabular">
+          {recipe.servings === 1 ? '1 part' : `${recipe.servings} parts`}
+        </Badge>
+        {alreadyChosen ? <Badge variant="secondary">Au panier</Badge> : null}
+      </div>
+
+      <Card className="mt-4 bg-muted">
+        <CardContent className="flex items-end justify-between gap-3">
+          <div>
+            <p className="text-[12.5px] text-muted-foreground">Par part</p>
+            <p className="tabular mt-px text-[26px] font-semibold tracking-tight">
+              {perServing.unresolvedCount > 0 ? '≈ ' : ''}
+              {formatKcal(perServing.macros.kcal)} kcal
+            </p>
+          </div>
+          <p className="tabular text-right text-[12.5px] text-muted-foreground">
+            {formatGrams(perServing.macros.proteinG)} g P · {formatGrams(perServing.macros.carbsG)}{' '}
+            g G · {formatGrams(perServing.macros.fatG)} g L
+          </p>
+        </CardContent>
+      </Card>
+
+      {perServing.unresolvedCount > 0 ? (
+        <Alert variant="destructive" className="mt-3">
+          <AlertDescription>
+            {perServing.unresolvedCount === 1
+              ? "Un ingrédient n'a plus de fiche nutritionnelle : le total est incomplet."
+              : `${perServing.unresolvedCount} ingrédients n'ont plus de fiche nutritionnelle : le total est incomplet.`}
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      <Tabs defaultValue="ingredients" className="mt-4 gap-0">
+        <TabsList className="w-full">
+          <TabsTrigger value="ingredients">Ingrédients</TabsTrigger>
+          <TabsTrigger value="steps" disabled={!hasSteps}>
+            Préparation
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="ingredients" className="mt-2.5">
+          <ul>
+            {recipe.ingredients.map((ingredient) => (
+              <li key={ingredient.id} className="flex items-center gap-3 border-b py-2.5">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14.5px] font-medium tracking-tight">
+                    {ingredient.label}
+                  </span>
+                  <span className="tabular mt-px block text-[12.5px] text-muted-foreground">
+                    {formatIngredientQuantity(ingredient)}
+                  </span>
+                </span>
+                <span className="tabular flex-none text-muted-foreground">
+                  {ingredient.per100g === null ? (
+                    <span className="text-destructive">—</span>
+                  ) : (
+                    `${formatKcal(scaleMacros(ingredient.per100g, ingredient.quantityG).kcal)} kcal`
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+          <p className="tabular mt-3 text-muted-foreground">
+            Recette entière {total.unresolvedCount > 0 ? '≈ ' : ''}
+            {formatKcal(total.macros.kcal)} kcal
+          </p>
+        </TabsContent>
+
+        {hasSteps ? (
+          <TabsContent value="steps" className="mt-3">
+            <ol className="flex flex-col gap-3">
+              {recipe.steps.map((step, index) => (
+                <li key={index} className="flex gap-3">
+                  <span
+                    aria-hidden
+                    className="tabular flex size-6 flex-none items-center justify-center rounded-full bg-muted text-[12px] font-semibold"
+                  >
+                    {index + 1}
+                  </span>
+                  <span className="text-[15px] leading-relaxed">{step}</span>
+                </li>
+              ))}
+            </ol>
+          </TabsContent>
+        ) : null}
+      </Tabs>
 
       <DeleteRecipe id={recipe.id} name={recipe.name} />
+
+      <BottomBar className="flex gap-2.5">
+        <AddToBasket
+          recipeId={recipe.id}
+          servings={recipe.servings}
+          weekStart={weekStart}
+          alreadyChosen={alreadyChosen}
+        />
+        {hasSteps ? (
+          <Button asChild className="flex-[1.4]">
+            <Link href={`/kitchen/recipes/${recipe.id}/cook`}>
+              <ChefHatIcon />
+              Cuisiner pas à pas
+            </Link>
+          </Button>
+        ) : null}
+      </BottomBar>
     </>
   );
 }

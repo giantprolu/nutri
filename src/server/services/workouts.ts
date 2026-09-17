@@ -1,5 +1,5 @@
 import 'server-only';
-import { todayInParis } from '@/lib/date';
+import { shiftDate, startOfWeek, todayInParis } from '@/lib/date';
 import {
   DEFAULT_PREFERENCES,
   isValidReps,
@@ -16,6 +16,13 @@ import {
   type WorkoutTemplate,
 } from '@/lib/workout';
 import { buildProgram } from '@/lib/workout-plan';
+import {
+  exerciseProgress,
+  progressByExercise,
+  weeklyTotals,
+  type ExerciseProgress,
+  type WeekPoint,
+} from '@/lib/workout-progress';
 import {
   bestExerciseMatch,
   parseWorkoutLog,
@@ -47,6 +54,7 @@ import {
   listGyms,
   listSessions,
   listTemplates,
+  progressSets,
   upsertPreferences,
   upsertSet,
 } from '../db/queries/workouts';
@@ -495,4 +503,42 @@ export async function saveWrittenSession(
 
   const id = await insertCompletedSession(userId, sessionDate, sets);
   return { kind: 'saved', id, sets: sets.length };
+}
+
+/** Fenêtre de la vue d'ensemble : un trimestre, assez pour voir une tendance. */
+export const PROGRESS_WEEKS = 12;
+
+export interface ProgressOverview {
+  weeks: WeekPoint[];
+  exercises: ExerciseProgress[];
+}
+
+/**
+ * La progression des douze dernières semaines : le tonnage semaine par
+ * semaine, et chaque exercice travaillé avec son évolution sur la période.
+ *
+ * La fenêtre commence un lundi, pour que la première semaine du graphique
+ * soit complète et ne se lise pas comme une semaine creuse.
+ */
+export async function progressOverview(userId: number): Promise<ProgressOverview> {
+  const today = todayInParis();
+  const sinceDate = shiftDate(startOfWeek(today), -7 * (PROGRESS_WEEKS - 1));
+  const { exercises, sets } = await progressSets(userId, { sinceDate });
+  return {
+    weeks: weeklyTotals(sets, PROGRESS_WEEKS, today),
+    exercises: progressByExercise(exercises, sets),
+  };
+}
+
+/**
+ * Toute l'histoire d'un exercice, sans fenêtre : un record d'il y a six mois
+ * reste le record, et la courbe entière dit si l'on est revenu à son niveau.
+ */
+export async function exerciseProgressFor(
+  userId: number,
+  exerciseId: number,
+): Promise<ExerciseProgress | null> {
+  const { exercises, sets } = await progressSets(userId, { exerciseId });
+  const exercise = exercises[0];
+  return exercise === undefined ? null : exerciseProgress(exercise, sets);
 }

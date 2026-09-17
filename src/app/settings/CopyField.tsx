@@ -1,6 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { CheckIcon, CopyIcon } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 /**
  * Une valeur à recopier ailleurs, et un bouton qui la copie.
@@ -26,6 +30,7 @@ export function CopyField({
   hint?: string;
 }) {
   const [state, setState] = useState<'idle' | 'copied' | 'failed'>('idle');
+  const id = useId();
 
   // La confirmation s'efface d'elle-même : laissée en place, elle décrirait
   // au bout d'une minute une copie qu'on ne se rappelle plus avoir faite.
@@ -47,20 +52,32 @@ export function CopyField({
   }
 
   return (
-    <>
-      <div className="mt-6 flex items-baseline justify-between gap-3">
-        <p className="label mb-0">{label}</p>
-        <button type="button" onClick={() => void copy()} className="kicker link-accent">
-          {state === 'copied' ? 'Copié' : 'Copier'}
-        </button>
+    <div className="mt-5 grid gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <div className="flex gap-2">
+        <Input
+          id={id}
+          readOnly
+          value={value}
+          onFocus={(event) => event.currentTarget.select()}
+          className="font-mono text-[13px] md:text-[13px]"
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="icon"
+          onClick={() => void copy()}
+          aria-label={state === 'copied' ? 'Copié' : 'Copier'}
+        >
+          {state === 'copied' ? <CheckIcon /> : <CopyIcon />}
+        </Button>
       </div>
-      <p className="tabular field mt-2 h-auto break-all py-2 text-[13px]">{value}</p>
       {state === 'failed' ? (
-        <p role="alert" className="note mt-2">
+        <p role="alert" className="text-[12.5px] text-destructive">
           La copie a été refusée par le navigateur. Sélectionne la valeur à la main.
         </p>
       ) : null}
-      {hint ? <p className="note mt-2">{hint}</p> : null}
-    </>
+      {hint ? <p className="text-[12.5px] text-muted-foreground">{hint}</p> : null}
+    </div>
   );
 }

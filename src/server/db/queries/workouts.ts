@@ -1,5 +1,5 @@
 import 'server-only';
-import { and, asc, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import { db, schema } from '../client';
 import {
   isEquipmentPreference,
@@ -15,6 +15,7 @@ import {
   type WorkoutSet,
   type WorkoutTemplate,
 } from '@/lib/workout';
+import type { ProgressExercise, ProgressSet } from '@/lib/workout-progress';
 import type { SeedExercise } from '@/lib/workout-seed';
 
 /**
@@ -802,4 +803,74 @@ export async function lastPerformance(
   }
 
   return byExercise;
+}
+
+/**
+ * Les séries d'un utilisateur, avec leur jour et leur exercice, pour la
+ * progression.
+ *
+ * Une seule requête plate plutôt qu'une agrégation en SQL : la mesure dépend
+ * de l'exercice (charge, répétitions ou durée), et la décider en base
+ * dupliquerait la règle de `@/lib/workout-progress`, qui reste la seule.
+ * Douze semaines à quatre séances et vingt séries tiennent en un millier de
+ * lignes.
+ *
+ * Les deux tables sont filtrées sur l'utilisateur, et non la seule table des
+ * séries : la jointure ne doit pas pouvoir remonter la séance d'un autre.
+ */
+export async function progressSets(
+  userId: number,
+  options: { sinceDate?: string; exerciseId?: number } = {},
+): Promise<{ exercises: ProgressExercise[]; sets: ProgressSet[] }> {
+  const rows = await db()
+    .select({
+      set: schema.workoutSets,
+      sessionDate: schema.workoutSessions.sessionDate,
+      exercise: schema.exercises,
+    })
+    .from(schema.workoutSets)
+    .innerJoin(schema.workoutSessions, eq(schema.workoutSessions.id, schema.workoutSets.sessionId))
+    .innerJoin(schema.exercises, eq(schema.exercises.id, schema.workoutSets.exerciseId))
+    .where(
+      and(
+        eq(schema.workoutSets.userId, userId),
+        eq(schema.workoutSessions.userId, userId),
+        options.sinceDate === undefined
+          ? undefined
+          : gte(schema.workoutSessions.sessionDate, options.sinceDate),
+        options.exerciseId === undefined
+          ? undefined
+          : eq(schema.workoutSets.exerciseId, options.exerciseId),
+      ),
+    )
+    .orderBy(
+      asc(schema.workoutSessions.sessionDate),
+      asc(schema.workoutSessions.id),
+      asc(schema.workoutSets.setIndex),
+    );
+
+  const exercises = new Map<number, ProgressExercise>();
+  const sets: ProgressSet[] = [];
+  for (const row of rows) {
+    if (!exercises.has(row.exercise.id)) {
+      const exercise = toExercise(row.exercise);
+      exercises.set(exercise.id, {
+        id: exercise.id,
+        name: exercise.name,
+        kind: exercise.kind,
+        muscleGroup: exercise.muscleGroup,
+      });
+    }
+    sets.push({
+      sessionId: row.set.sessionId,
+      sessionDate: String(row.sessionDate).slice(0, 10),
+      exerciseId: row.set.exerciseId,
+      weightKg: toNullableNumber(row.set.weightKg),
+      reps: row.set.reps,
+      seconds: row.set.seconds,
+      toFailure: row.set.toFailure,
+    });
+  }
+
+  return { exercises: [...exercises.values()], sets };
 }

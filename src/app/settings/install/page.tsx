@@ -1,4 +1,4 @@
-import { NavHeader } from '@/components/ScreenHeader';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { InstallGuide } from './InstallGuide';
 
 /**
@@ -16,12 +16,11 @@ import { InstallGuide } from './InstallGuide';
 export default function InstallPage() {
   return (
     <>
-      <NavHeader label="Réglages" href="/settings" mode="back" />
-      <h1 className="display-sm mt-3">Installer sur l&apos;écran d&apos;accueil</h1>
-      <p className="note mt-2">
-        Une fois installée, l&apos;application s&apos;ouvre en plein écran, sans barre
-        d&apos;adresse, et garde sa session plus longtemps.
-      </p>
+      <NavHeader label="Réglages" href="/settings" />
+      <PageTitle
+        title="Installer sur l'écran d'accueil"
+        description="Une fois installée, l'application s'ouvre en plein écran, sans barre d'adresse, et garde sa session plus longtemps."
+      />
 
       <InstallGuide />
     </>

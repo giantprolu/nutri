@@ -1,9 +1,12 @@
 'use client';
 
+import { MinusIcon, PlusIcon, ShoppingCartIcon, XIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CartIcon, CloseIcon, PlusIcon } from '@/components/icons';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { removeFromBasket, setBasketServings } from '@/lib/client/basket';
 import { MAX_BASKET_SERVINGS } from '@/lib/basket';
 import type { BasketItem } from '@/server/db/queries/basket';
@@ -72,50 +75,53 @@ export function WeekBasket({
   }
 
   return (
-    <section className="mt-4">
-      <div className="meal-head">
-        <span>Mes repas de la semaine</span>
-        <Link href={`/kitchen/catalog?from=${weekStart}`} className="kicker link-accent">
-          Choisir
-        </Link>
+    <section aria-label="Mes repas de la semaine">
+      <div className="flex items-center justify-between pt-[18px] pb-2">
+        <h2 className="text-[13px] font-semibold tracking-tight">Mes repas de la semaine</h2>
+        <Button asChild variant="link" size="sm" className="-mr-3 h-auto">
+          <Link href={`/kitchen/catalog?from=${weekStart}`}>Choisir</Link>
+        </Button>
       </div>
 
-      {error ? (
-        <p role="alert" className="mt-2 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert className="mt-0 mb-2">{error}</ErrorAlert> : null}
 
       {basket.length === 0 ? (
-        <>
-          <p className="note py-2">
-            Rien de choisi pour cette semaine. Le parcours commence ici : on choisit des plats,
-            on achète de quoi les faire, et on décide du jour au dernier moment.
-          </p>
-          <Link href={`/kitchen/catalog?from=${weekStart}`} className="action mt-2">
-            <PlusIcon className="h-4 w-4" />
-            Choisir mes repas
-          </Link>
-        </>
+        <Card>
+          <div className="px-4">
+            <p className="text-muted-foreground">
+              Rien de choisi pour cette semaine. Le parcours commence ici : on choisit des plats,
+              on achète de quoi les faire, et on décide du jour au dernier moment.
+            </p>
+            <Button asChild className="mt-3 w-full">
+              <Link href={`/kitchen/catalog?from=${weekStart}`}>
+                <PlusIcon />
+                Choisir mes repas
+              </Link>
+            </Button>
+          </div>
+        </Card>
       ) : (
         <>
-          <ul>
-            {basket.map((item) => {
-              // Ce qu'il reste à mettre à table. Négatif quand on a prévu plus
-              // de parts qu'on n'en a acheté : c'est dit, pas ramené à zéro.
-              const remaining = Math.round((item.servings - item.plannedServings) * 10) / 10;
+          <Card className="gap-0 overflow-hidden py-0">
+            <ul>
+              {basket.map((item) => {
+                // Ce qu'il reste à mettre à table. Négatif quand on a prévu plus
+                // de parts qu'on n'en a acheté : c'est dit, pas ramené à zéro.
+                const remaining = Math.round((item.servings - item.plannedServings) * 10) / 10;
 
-              return (
-                <li key={item.id} className="py-2">
-                  <div className="flex items-center gap-3">
+                return (
+                  <li
+                    key={item.id}
+                    className="flex items-center gap-2 border-b py-2.5 pr-2 pl-4 last:border-b-0"
+                  >
                     <div className="min-w-0 flex-1">
                       <Link
                         href={`/kitchen/recipes/${item.recipeId}`}
-                        className="entry-name block"
+                        className="block truncate text-[14.5px] font-medium tracking-tight"
                       >
                         {item.recipeName}
                       </Link>
-                      <p className="entry-meta mt-0.5">
+                      <p className="tabular mt-px text-[12.5px] text-muted-foreground">
                         {formatServings(item.servings)} prévues
                         {' · '}
                         {remaining <= 0
@@ -124,52 +130,60 @@ export function WeekBasket({
                       </p>
                     </div>
 
-                    <div className="flex flex-none items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => void adjust(item, -STEP)}
-                        disabled={busy || item.servings <= STEP}
-                        aria-label={`Retirer une demi-part de ${item.recipeName}`}
-                        className="tap-target flex items-center justify-center text-[19px]"
-                      >
-                        −
-                      </button>
-                      <span className="tabular w-[46px] text-center text-[15px]">
-                        {item.servings.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void adjust(item, STEP)}
-                        disabled={busy || item.servings >= MAX_BASKET_SERVINGS}
-                        aria-label={`Ajouter une demi-part à ${item.recipeName}`}
-                        className="tap-target flex items-center justify-center text-[19px]"
-                      >
-                        +
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void drop(item)}
-                        disabled={busy}
-                        aria-label={`Retirer ${item.recipeName} du panier`}
-                        className="tap-target flex items-center justify-center"
-                      >
-                        <CloseIcon className="h-4 w-4" />
-                      </button>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => void adjust(item, -STEP)}
+                      disabled={busy || item.servings <= STEP}
+                      aria-label={`Retirer une demi-part de ${item.recipeName}`}
+                    >
+                      <MinusIcon />
+                    </Button>
+                    <span className="tabular w-8 text-center font-medium">
+                      {item.servings.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
+                    </span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon-sm"
+                      onClick={() => void adjust(item, STEP)}
+                      disabled={busy || item.servings >= MAX_BASKET_SERVINGS}
+                      aria-label={`Ajouter une demi-part à ${item.recipeName}`}
+                    >
+                      <PlusIcon />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => void drop(item)}
+                      disabled={busy}
+                      aria-label={`Retirer ${item.recipeName} du panier`}
+                      className="text-muted-foreground"
+                    >
+                      <XIcon />
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          </Card>
 
-          <Link href={`/kitchen/shopping?from=${weekStart}`} className="action mt-3">
-            <CartIcon className="h-4 w-4" />
-            Faire la liste de courses
-          </Link>
-          <Link href={`/kitchen/catalog?from=${weekStart}`} className="action-quiet mt-2">
-            <PlusIcon className="h-4 w-4" />
-            Ajouter d’autres plats
-          </Link>
+          <div className="mt-2.5 flex gap-2">
+            <Button asChild className="flex-[1.4]">
+              <Link href={`/kitchen/shopping?from=${weekStart}`}>
+                <ShoppingCartIcon />
+                Liste de courses
+              </Link>
+            </Button>
+            <Button asChild variant="outline" className="flex-1">
+              <Link href={`/kitchen/catalog?from=${weekStart}`}>
+                <PlusIcon />
+                D’autres plats
+              </Link>
+            </Button>
+          </div>
         </>
       )}
     </section>

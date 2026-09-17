@@ -1,4 +1,4 @@
-/** État vide : une phrase, pas d'illustration, pas d'appel à l'action (DESIGN.md). */
+/** État vide : une phrase, pas d'illustration, pas d'appel à l'action. */
 export function EmptyState({ children }: { children: React.ReactNode }) {
-  return <p className="note py-10 text-center">{children}</p>;
+  return <p className="py-10 text-center text-muted-foreground">{children}</p>;
 }

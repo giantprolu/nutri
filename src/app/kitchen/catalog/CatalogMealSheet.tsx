@@ -1,5 +1,14 @@
-import { useEffect, useRef } from 'react';
-import { CloseIcon } from '@/components/icons';
+import { ClockIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { MEAL_LABELS } from '@/lib/meal';
 import { formatIngredientQuantity } from '@/lib/recipe';
 import type { CatalogCard } from './CatalogPicker';
@@ -12,10 +21,6 @@ import type { CatalogCard } from './CatalogPicker';
  * nom ne suffit pas à décider — « Bowl pois chiches et patate douce » ne dit ni
  * ce qu'il faut acheter ni combien de temps il prend. Le détail est donc à un
  * toucher, et non absent.
- *
- * Rendu dans un `<dialog>` natif, comme les autres feuilles : le navigateur
- * fournit la couche supérieure, le piège à focus et la fermeture par la touche
- * d'échappement.
  *
  * Pas de directive `use client` : ce composant n'est monté que depuis
  * `CatalogPicker`, qui la porte déjà.
@@ -35,104 +40,97 @@ export function CatalogMealSheet({
   onClose: () => void;
   onToggle: (slug: string) => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (card !== null && !dialog.open) {
-      dialog.showModal();
-    } else if (card === null && dialog.open) {
-      dialog.close();
-    }
-  }, [card]);
-
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === ref.current) {
-          onClose();
-        }
-      }}
-      aria-label={card?.name ?? 'Détail du plat'}
-      className="sheet"
-    >
-      {card === null ? null : (
-        <>
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="min-w-0">
-              <p className="kicker">{MEAL_LABELS[card.slot]}</p>
-              <h2 className="display-sm mt-1">{card.name}</h2>
+    <Sheet open={card !== null} onOpenChange={(next) => (next ? undefined : onClose())}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
+        {card === null ? (
+          <SheetTitle className="sr-only">Détail du plat</SheetTitle>
+        ) : (
+          <>
+            <SheetHeader className="p-0 pr-10">
+              <SheetTitle className="text-[17px]">{card.name}</SheetTitle>
+              <SheetDescription>{MEAL_LABELS[card.slot]}</SheetDescription>
+            </SheetHeader>
+
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <Badge variant="outline" className="tabular">
+                <ClockIcon />
+                {card.prepMinutes} min
+              </Badge>
+              <Badge variant="outline" className="tabular">
+                {card.servings === 1 ? '1 part' : `${card.servings} parts`}
+              </Badge>
+              <Badge variant="secondary" className="tabular">
+                ≈ {card.kcal} kcal · {card.proteinG} g P par part
+              </Badge>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fermer"
-              className="tap-target -mr-2 flex flex-none items-center justify-center opacity-55"
-            >
-              <CloseIcon className="h-5 w-5" />
-            </button>
-          </div>
+            {/*
+              L'estimation est dite estimation. Les valeurs justes arrivent avec
+              la recette installée, calculées depuis Ciqual comme partout : un
+              chiffre de catalogue sert à départager deux plats, pas à compter
+              une journée.
+            */}
+            <p className="mt-2 text-[12.5px] text-muted-foreground">
+              Ordre de grandeur, pour départager deux plats.
+            </p>
 
-          <p className="entry-meta mt-2">
-            {card.prepMinutes} min
-            {' · '}
-            {card.servings === 1 ? '1 part' : `${card.servings} parts`}
-            {' · '}≈ {card.kcal} kcal et {card.proteinG} g de protéines par part
-          </p>
-          {/*
-            L'estimation est dite estimation. Les valeurs justes arrivent avec
-            la recette installée, calculées depuis Ciqual comme partout : un
-            chiffre de catalogue sert à départager deux plats, pas à compter
-            une journée.
-          */}
-          <p className="note mt-1">Ordre de grandeur, pour départager deux plats.</p>
+            <Separator className="mt-4" />
+            <h3 className="mt-4 mb-1 text-[13px] font-semibold tracking-tight">Ingrédients</h3>
+            <ul>
+              {card.ingredients.map((ingredient) => (
+                <li
+                  key={ingredient.label}
+                  className="flex items-center gap-3 border-b py-2.5 last:border-b-0"
+                >
+                  <span className="min-w-0 flex-1 truncate">{ingredient.label}</span>
+                  <span className="tabular flex-none text-muted-foreground">
+                    {formatIngredientQuantity(ingredient)}
+                  </span>
+                </li>
+              ))}
+            </ul>
 
-          <hr className="rule mt-4" />
-          <p className="kicker mt-4 mb-1">Ingrédients</p>
-          <ul>
-            {card.ingredients.map((ingredient) => (
-              <li key={ingredient.label} className="entry-row items-center">
-                <span className="entry-name">{ingredient.label}</span>
-                <span className="entry-meta flex-none">
-                  {formatIngredientQuantity(ingredient)}
-                </span>
-              </li>
-            ))}
-          </ul>
+            {card.steps.length > 0 ? (
+              <>
+                <h3 className="mt-5 mb-2 text-[13px] font-semibold tracking-tight">Préparation</h3>
+                <ol className="flex flex-col gap-3">
+                  {card.steps.map((step, index) => (
+                    <li key={step} className="flex gap-3">
+                      <span
+                        aria-hidden
+                        className="tabular flex size-6 flex-none items-center justify-center rounded-full bg-muted text-[12px] font-semibold"
+                      >
+                        {index + 1}
+                      </span>
+                      <span className="leading-relaxed">{step}</span>
+                    </li>
+                  ))}
+                </ol>
+              </>
+            ) : null}
 
-          {card.steps.length > 0 ? (
-            <>
-              <p className="kicker mt-5 mb-2">Préparation</p>
-              <ol className="space-y-3">
-                {card.steps.map((step, index) => (
-                  <li key={step} className="flex gap-3">
-                    <span className="kicker kicker-quiet flex-none pt-1">{index + 1}</span>
-                    <span className="text-[16px] leading-[1.5]">{step}</span>
-                  </li>
-                ))}
-              </ol>
-            </>
-          ) : null}
-
-          {card.inBasket ? (
-            <p className="note mt-6 text-center">Ce plat est déjà au panier de la semaine.</p>
-          ) : (
-            <button
-              type="button"
-              onClick={() => onToggle(card.slug)}
-              disabled={busy}
-              className="action mt-6"
-            >
-              {picked ? 'Retirer de ma sélection' : 'Choisir ce plat'}
-            </button>
-          )}
-        </>
-      )}
-    </dialog>
+            {card.inBasket ? (
+              <p className="mt-6 text-center text-muted-foreground">
+                Ce plat est déjà au panier de la semaine.
+              </p>
+            ) : (
+              <Button
+                type="button"
+                variant={picked ? 'outline' : 'default'}
+                onClick={() => onToggle(card.slug)}
+                disabled={busy}
+                className="mt-6 w-full"
+              >
+                {picked ? 'Retirer de ma sélection' : 'Choisir ce plat'}
+              </Button>
+            )}
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

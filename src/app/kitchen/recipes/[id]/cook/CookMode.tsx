@@ -1,9 +1,22 @@
 'use client';
 
+import { ChevronLeftIcon, ChevronRightIcon, TimerIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
 import { NavHeader } from '@/components/ScreenHeader';
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from '@/components/ui/accordion';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { journalMeal, planMeal } from '@/lib/client/plan';
 import { formatIngredientQuantity, stepDurationSeconds, type Recipe } from '@/lib/recipe';
 import { MEAL_LABELS, mealForHour, type Meal } from '@/lib/meal';
@@ -135,13 +148,13 @@ export function CookMode({
   if (steps.length === 0) {
     return (
       <>
-        <NavHeader label={recipe.name} href={`/kitchen/recipes/${recipe.id}`} mode="back" />
-        <p className="note py-10 text-center">
+        <NavHeader label={recipe.name} href={`/kitchen/recipes/${recipe.id}`} />
+        <p className="py-10 text-center text-muted-foreground">
           Cette recette n’a pas d’étapes. Ajoute-les pour la cuisiner pas à pas.
         </p>
-        <Link href={`/kitchen/recipes/${recipe.id}/edit`} className="action">
-          Écrire les étapes
-        </Link>
+        <Button asChild className="w-full">
+          <Link href={`/kitchen/recipes/${recipe.id}/edit`}>Écrire les étapes</Link>
+        </Button>
       </>
     );
   }
@@ -150,113 +163,69 @@ export function CookMode({
     <>
       <NavHeader label={recipe.name} href={`/kitchen/recipes/${recipe.id}`} mode="close" />
 
-      <p className="kicker">
-        Étape {index + 1} sur {steps.length}
-        {plannedServings === null ? '' : ` · ${plannedServings} part${plannedServings > 1 ? 's' : ''}`}
-      </p>
+      <div className="flex items-center justify-between gap-3">
+        <p className="tabular text-muted-foreground">
+          Étape {index + 1} sur {steps.length}
+        </p>
+        {plannedServings === null ? null : (
+          <Badge variant="outline" className="tabular">
+            {plannedServings} part{plannedServings > 1 ? 's' : ''}
+          </Badge>
+        )}
+      </div>
 
-      {/* Piste de progression : une barre par étape, remplie jusqu'à la courante. */}
-      <div aria-hidden className="mt-2 flex gap-1">
+      {/* Piste de progression : un segment par étape, rempli jusqu'à la courante. */}
+      <div aria-hidden className="mt-2.5 flex gap-1">
         {steps.map((_, position) => (
           <span
             key={position}
-            className="h-[3px] flex-1 rounded-full"
-            style={{
-              background:
-                position <= index ? 'var(--color-accent)' : 'var(--color-divider)',
-            }}
+            className={cn('h-1.5 flex-1 rounded-full', position <= index ? 'bg-primary' : 'bg-muted')}
           />
         ))}
       </div>
 
-      <p className="mt-6 text-[26px] leading-[1.32] font-semibold">{step}</p>
+      <p className="mt-6 text-[24px] leading-[1.35] font-semibold tracking-tight">{step}</p>
 
       {duration !== null ? (
-        <div className="mt-6">
-          {ringing ? (
-            <p
-              role="status"
-              className="figure text-center"
-              style={{ color: 'var(--color-accent)' }}
-            >
-              C’est prêt.
-            </p>
-          ) : remaining !== null ? (
-            <>
-              <p className="figure tabular text-center">{formatCountdown(remaining)}</p>
-              <button
+        <Card className="mt-6">
+          <CardContent>
+            {ringing ? (
+              <p role="status" className="text-center text-[28px] font-semibold tracking-tight">
+                C’est prêt.
+              </p>
+            ) : remaining !== null ? (
+              <>
+                <p className="tabular text-center text-[40px] font-semibold tracking-tight">
+                  {formatCountdown(remaining)}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setRemaining(null)}
+                  className="mt-3 w-full"
+                >
+                  Arrêter le minuteur
+                </Button>
+              </>
+            ) : (
+              <Button
                 type="button"
-                onClick={() => setRemaining(null)}
-                className="action-quiet mt-3"
+                variant="outline"
+                onClick={() => setRemaining(duration)}
+                className="w-full"
               >
-                Arrêter le minuteur
-              </button>
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setRemaining(duration)}
-              className="action-quiet"
-            >
-              Lancer un minuteur de{' '}
-              {duration >= 60 ? `${Math.round(duration / 60)} min` : `${duration} s`}
-            </button>
-          )}
-        </div>
+                <TimerIcon />
+                Lancer un minuteur de{' '}
+                {duration >= 60 ? `${Math.round(duration / 60)} min` : `${duration} s`}
+              </Button>
+            )}
+          </CardContent>
+        </Card>
       ) : null}
 
-      <hr className="rule mt-8" />
-
-      <div className="mt-4 flex gap-3">
-        <button
-          type="button"
-          onClick={() => setIndex((value) => Math.max(0, value - 1))}
-          disabled={index === 0}
-          className="action-quiet flex-1"
-        >
-          Précédente
-        </button>
-        {last ? null : (
-          <button
-            type="button"
-            onClick={() => setIndex((value) => Math.min(steps.length - 1, value + 1))}
-            className="action flex-1"
-          >
-            Suivante
-          </button>
-        )}
-      </div>
-
-      {last ? (
-        <>
-          {notice === null ? (
-            <button
-              type="button"
-              onClick={() => void journal()}
-              disabled={busy}
-              className="action mt-3"
-            >
-              {busy
-                ? 'Enregistrement…'
-                : plannedId === null
-                  ? `C’est mangé — ${MEAL_LABELS[mealForHour(hourInParis())].toLowerCase()}`
-                  : 'C’est mangé'}
-            </button>
-          ) : (
-            <Link href="/" className="action mt-3">
-              Voir le journal
-            </Link>
-          )}
-        </>
-      ) : null}
-
-      {error ? (
-        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       {notice !== null ? (
-        <p role="status" className="note mt-4 text-center">
+        <p role="status" className="mt-4 text-center text-muted-foreground">
           {notice}
         </p>
       ) : null}
@@ -266,19 +235,63 @@ export function CookMode({
         une quantité au milieu d'une recette, et revenir à la fiche ferait
         perdre le fil.
       */}
-      <details className="mt-8">
-        <summary className="kicker kicker-quiet cursor-pointer">Les ingrédients</summary>
-        <ul className="mt-2">
-          {recipe.ingredients.map((ingredient) => (
-            <li key={ingredient.id} className="flex items-baseline justify-between py-1">
-              <span className="text-[17px]">{ingredient.label}</span>
-              <span className="entry-meta tabular">
-                {formatIngredientQuantity(ingredient)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </details>
+      <Accordion type="single" collapsible className="mt-6">
+        <AccordionItem value="ingredients">
+          <AccordionTrigger>Les ingrédients</AccordionTrigger>
+          <AccordionContent>
+            <ul>
+              {recipe.ingredients.map((ingredient) => (
+                <li key={ingredient.id} className="flex items-baseline justify-between gap-3 py-1.5">
+                  <span className="text-[15px]">{ingredient.label}</span>
+                  <span className="tabular text-muted-foreground">
+                    {formatIngredientQuantity(ingredient)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </AccordionContent>
+        </AccordionItem>
+      </Accordion>
+
+      <BottomBar className="flex gap-2.5">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setIndex((value) => Math.max(0, value - 1))}
+          disabled={index === 0}
+          className="flex-1"
+        >
+          <ChevronLeftIcon />
+          Précédente
+        </Button>
+        {!last ? (
+          <Button
+            type="button"
+            onClick={() => setIndex((value) => Math.min(steps.length - 1, value + 1))}
+            className="flex-1"
+          >
+            Suivante
+            <ChevronRightIcon />
+          </Button>
+        ) : notice === null ? (
+          <Button
+            type="button"
+            onClick={() => void journal()}
+            disabled={busy}
+            className="flex-[1.4]"
+          >
+            {busy
+              ? 'Enregistrement…'
+              : plannedId === null
+                ? `C’est mangé — ${MEAL_LABELS[mealForHour(hourInParis())].toLowerCase()}`
+                : 'C’est mangé'}
+          </Button>
+        ) : (
+          <Button asChild className="flex-1">
+            <Link href="/">Voir le journal</Link>
+          </Button>
+        )}
+      </BottomBar>
     </>
   );
 }

@@ -1,6 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { CloseIcon } from '@/components/icons';
+import { useEffect, useState } from 'react';
 import { ScannerView } from '@/app/add/scan/ScannerView';
+import { Button } from '@/components/ui/button';
+import { Separator } from '@/components/ui/separator';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
+import { Skeleton } from '@/components/ui/skeleton';
 import { resolveBarcode } from '@/lib/client/products';
 import { bestMatch, type MatchableItem } from '@/lib/shopping';
 import type { ShoppingItem } from '@/server/db/queries/shopping';
@@ -11,7 +20,8 @@ import type { ShoppingItem } from '@/server/db/queries/shopping';
  * Le viseur est celui du parcours d'ajout au journal, monté ici tel quel : il
  * porte déjà le zoom, la torche, la mise au point continue et la saisie
  * manuelle en repli, qui font la différence entre un décodage en une seconde
- * et un échec attribué à l'application.
+ * et un échec attribué à l'application. Il occupe tout l'écran ; le choix de
+ * l'article, lui, s'ouvre en feuille une fois le code lu.
  *
  * Le rapprochement est proposé, jamais appliqué d'office. Le score de
  * similarité suffit à écarter le bruit mais pas à trancher : « Riz » couvre
@@ -40,19 +50,12 @@ export function ScanToCheck({
   onClose: () => void;
   onCheck: (item: ShoppingItem, barcode: string) => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [step, setStep] = useState<Step>({ name: 'scanning' });
 
+  // Chaque ouverture repart du viseur, quel que soit l'état où l'on a quitté.
   useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (open && !dialog.open) {
-      dialog.showModal();
+    if (open) {
       setStep({ name: 'scanning' });
-    } else if (!open && dialog.open) {
-      dialog.close();
     }
   }, [open]);
 
@@ -77,108 +80,102 @@ export function ScanToCheck({
     });
   }
 
+  if (!open) {
+    return null;
+  }
+
+  if (step.name === 'scanning') {
+    return (
+      <ScannerView
+        title="En rayon"
+        onClose={onClose}
+        onBarcode={(barcode) => void handleBarcode(barcode)}
+      />
+    );
+  }
+
   const pending = items.filter((item) => item.checkedAt === null);
 
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === ref.current) {
-          onClose();
-        }
-      }}
-      aria-label="Scanner un produit"
-      className="sheet"
-    >
-      <div className="flex items-baseline justify-between">
-        <div>
-          <p className="kicker">En rayon</p>
-          <h2 className="display-sm mt-1">Scanner un produit</h2>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Fermer"
-          className="tap-target -mr-2 flex items-center justify-center opacity-55"
-        >
-          <CloseIcon className="h-5 w-5" />
-        </button>
-      </div>
+    <Sheet open onOpenChange={(next) => (next ? undefined : onClose())}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
 
-      <hr className="rule mt-3" />
+        {step.name === 'resolving' ? (
+          <>
+            <SheetHeader className="p-0 pr-10">
+              <SheetTitle className="text-[17px]">Lecture de la fiche…</SheetTitle>
+              <SheetDescription>Le produit est recherché par son code-barres.</SheetDescription>
+            </SheetHeader>
+            <Skeleton className="mt-4 h-12" />
+            <Skeleton className="mt-2.5 h-12" />
+          </>
+        ) : (
+          <>
+            <SheetHeader className="p-0 pr-10">
+              <SheetTitle className="text-[17px]">
+                {step.name === 'matched' ? step.productName : 'Produit inconnu'}
+              </SheetTitle>
+              <SheetDescription>
+                {step.name === 'matched'
+                  ? step.suggested === null
+                    ? 'Aucun article ne lui ressemble. Choisis celui qu’il coche.'
+                    : 'Article proposé, à confirmer.'
+                  : 'Aucune fiche pour ce code-barres. Coche quand même l’article qu’il concerne.'}
+              </SheetDescription>
+            </SheetHeader>
 
-      {step.name === 'scanning' ? (
-        <div className="mt-3">
-          <ScannerView onBarcode={(barcode) => void handleBarcode(barcode)} />
-        </div>
-      ) : null}
+            {step.name === 'matched' && step.suggested !== null ? (
+              <Button
+                type="button"
+                onClick={() => onCheck(step.suggested as ShoppingItem, step.barcode)}
+                className="mt-4 w-full"
+              >
+                Cocher « {step.suggested.label} »
+              </Button>
+            ) : null}
 
-      {step.name === 'resolving' ? (
-        <p className="kicker kicker-quiet py-6 text-center">Lecture de la fiche…</p>
-      ) : null}
+            <h3 className="mt-5 mb-1 text-[12.5px] text-muted-foreground">
+              {step.name === 'matched' && step.suggested !== null
+                ? 'Ou un autre article'
+                : 'Articles à prendre'}
+            </h3>
+            <Separator />
 
-      {step.name === 'matched' || step.name === 'unknown' ? (
-        <>
-          <p className="mt-4 text-[19px] leading-[1.3] font-semibold">
-            {step.name === 'matched' ? step.productName : 'Produit inconnu'}
-          </p>
-          <p className="note mt-1">
-            {step.name === 'matched'
-              ? step.suggested === null
-                ? 'Aucun article ne lui ressemble. Choisis celui qu’il coche.'
-                : 'Article proposé, à confirmer.'
-              : 'Aucune fiche pour ce code-barres. Coche quand même l’article qu’il concerne.'}
-          </p>
+            {pending.length === 0 ? (
+              <p className="py-4 text-muted-foreground">Tout est déjà coché.</p>
+            ) : (
+              <ul>
+                {pending
+                  .filter((item) => !(step.name === 'matched' && item.id === step.suggested?.id))
+                  .map((item) => (
+                    <li key={item.id}>
+                      <button
+                        type="button"
+                        onClick={() => onCheck(item, step.barcode)}
+                        className="flex min-h-11 w-full items-center border-b py-2.5 text-left text-[14.5px] font-medium tracking-tight transition-colors active:bg-accent"
+                      >
+                        {item.label}
+                      </button>
+                    </li>
+                  ))}
+              </ul>
+            )}
 
-          {step.name === 'matched' && step.suggested !== null ? (
-            <button
+            <Button
               type="button"
-              onClick={() => onCheck(step.suggested as ShoppingItem, step.barcode)}
-              className="action mt-4"
+              variant="outline"
+              onClick={() => setStep({ name: 'scanning' })}
+              className="mt-4 w-full"
             >
-              Cocher « {step.suggested.label} »
-            </button>
-          ) : null}
-
-          <p className="kicker kicker-quiet mt-5 mb-1">
-            {step.name === 'matched' && step.suggested !== null
-              ? 'Ou un autre article'
-              : 'Articles à prendre'}
-          </p>
-          <hr className="rule" />
-
-          {pending.length === 0 ? (
-            <p className="note py-4">Tout est déjà coché.</p>
-          ) : (
-            <ul>
-              {pending
-                .filter(
-                  (item) => !(step.name === 'matched' && item.id === step.suggested?.id),
-                )
-                .map((item) => (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => onCheck(item, step.barcode)}
-                      className="entry-row items-center"
-                    >
-                      <span className="entry-name flex-1">{item.label}</span>
-                    </button>
-                  </li>
-                ))}
-            </ul>
-          )}
-
-          <button
-            type="button"
-            onClick={() => setStep({ name: 'scanning' })}
-            className="action-quiet mt-4"
-          >
-            Scanner un autre produit
-          </button>
-        </>
-      ) : null}
-    </dialog>
+              Scanner un autre produit
+            </Button>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

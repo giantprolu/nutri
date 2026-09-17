@@ -2,20 +2,35 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { ChevronDownIcon } from '@/components/icons';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Separator } from '@/components/ui/separator';
+import { Switch } from '@/components/ui/switch';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { formatKcal } from '@/lib/nutrition';
 
 /**
  * Questionnaire corporel (FR-26).
  *
- * La cible passe en tête et non plus en pied : c'est la réponse à la question
- * que l'utilisateur se pose, et elle doit être lisible sans faire défiler.
- * Les mesures qui l'ont produite viennent ensuite, pour la corriger.
+ * Les mesures d'abord, la cible ensuite, et le bouton qui la recalcule dans la
+ * barre basse : l'écran se lit dans l'ordre où il se remplit.
  *
  * Les étapes intermédiaires restent affichées. Montrer le métabolisme de base
- * et la dépense avant la cible n'est pas de la décoration : un chiffre unique
- * et sans provenance ne se conteste pas, or ces équations sont des estimations
- * de population qu'il faut corriger à l'usage.
+ * et la dépense à côté de la cible n'est pas de la décoration : un chiffre
+ * unique et sans provenance ne se conteste pas, or ces équations sont des
+ * estimations de population qu'il faut corriger à l'usage.
  */
 
 interface Target {
@@ -46,11 +61,11 @@ export interface ProfileFormValues {
 }
 
 const ACTIVITY_LABELS: Record<string, string> = {
-  sedentary: 'Sédentaire, travail assis, pas de sport',
-  light: 'Léger, une à trois séances par semaine',
-  moderate: 'Modéré, trois à cinq séances par semaine',
-  active: 'Actif, six à sept séances par semaine',
-  veryActive: 'Très actif, métier physique ou deux séances par jour',
+  sedentary: 'Sédentaire, pas de sport',
+  light: 'Léger, 1 à 3 séances',
+  moderate: 'Modéré, 3 à 5 séances',
+  active: 'Actif, 6 à 7 séances',
+  veryActive: 'Très actif, métier physique',
 };
 
 /** Plafond d'une cible saisie à la main, aligné sur `MANUAL_TARGET_MAX_KCAL`. */
@@ -59,26 +74,30 @@ const MANUAL_TARGET_MAX = 6000;
 /** Chiffre proposé quand l'utilisateur bascule en manuel sans cible calculée. */
 const MANUAL_TARGET_SUGGESTION = 2000;
 
-const GOAL_LABELS: Record<string, string> = {
-  lose: 'Perdre du poids',
-  maintain: 'Maintenir',
-  gain: 'Prendre de la masse',
-};
+const GOALS = [
+  { value: 'lose', label: 'Perdre' },
+  { value: 'maintain', label: 'Maintenir' },
+  { value: 'gain', label: 'Prendre' },
+] as const;
 
-/** Un champ numérique avec son unité, sur le filet du système. */
+function isGoal(value: string): value is ProfileFormValues['goal'] {
+  return value === 'lose' || value === 'maintain' || value === 'gain';
+}
+
+/** Un champ numérique, son intitulé porte l'unité. */
 function NumberField({
   id,
   label,
-  unit,
   value,
   onChange,
+  hint,
   ...rest
 }: {
   id: string;
   label: string;
-  unit: string;
   value: string;
   onChange: (value: string) => void;
+  hint?: React.ReactNode;
   min?: number;
   max?: number;
   step?: string;
@@ -86,157 +105,78 @@ function NumberField({
   placeholder?: string;
 }) {
   return (
-    <div>
-      <label htmlFor={id} className="label">
-        {label}
-      </label>
-      <div className="field mt-1.5 items-baseline">
-        <input
-          id={id}
-          type="number"
-          inputMode="decimal"
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="tabular w-full min-w-0 border-0 bg-transparent p-0 outline-none"
-          {...rest}
-        />
-        <span aria-hidden className="flex-none text-[14px] opacity-45">
-          {unit}
-        </span>
-      </div>
+    <div className="grid min-w-0 gap-2">
+      <Label htmlFor={id}>{label}</Label>
+      <Input
+        id={id}
+        type="number"
+        inputMode="decimal"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="tabular"
+        {...rest}
+      />
+      {hint ? <p className="text-[12.5px] text-muted-foreground">{hint}</p> : null}
     </div>
   );
 }
 
-/** Une liste déroulante, habillée du même filet que les champs. */
-function SelectField({
-  id,
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  options: Record<string, string>;
-}) {
-  return (
-    <div>
-      <label htmlFor={id} className="label">
-        {label}
-      </label>
-      <div className="field mt-1.5 relative">
-        <select
-          id={id}
-          value={value}
-          onChange={(event) => onChange(event.target.value)}
-          className="w-full min-w-0 appearance-none border-0 bg-transparent p-0 pr-6 text-[16px] outline-none"
-        >
-          {Object.entries(options).map(([key, text]) => (
-            <option key={key} value={key}>
-              {text}
-            </option>
-          ))}
-        </select>
-        <ChevronDownIcon className="pointer-events-none absolute right-0 h-4 w-4 opacity-40" />
-      </div>
-    </div>
-  );
-}
-
-function TargetBlock({ target }: { target: Target }) {
+function TargetCard({ target }: { target: Target }) {
   const sign = target.adjustmentKcal > 0 ? '+' : target.adjustmentKcal < 0 ? '−' : '';
 
   return (
-    <>
-      <div className="aside-accent">
-        <p className="kicker kicker-quiet">Cible quotidienne</p>
-        <p className="figure mt-0.5 text-[54px]">
-          {formatKcal(target.targetKcal)}{' '}
-          <span className="text-[20px] opacity-50">kcal</span>
+    <Card className="mt-4 bg-muted">
+      <CardContent>
+        <p className="text-[12.5px] text-muted-foreground">Ta cible quotidienne</p>
+        <p className="tabular mt-0.5 text-[32px] font-semibold tracking-tight">
+          {formatKcal(target.targetKcal)} kcal
         </p>
-        <p className="tabular note mt-1">
+        <p className="tabular mt-0.5 text-[12.5px] text-muted-foreground">
           {target.proteinG} g P · {target.carbsG} g G · {target.fatG} g L
         </p>
-      </div>
 
-      {target.floored ? (
-        <p role="alert" className="note mt-3" style={{ color: 'var(--color-danger)', opacity: 1 }}>
-          Le rythme demandé passerait sous ton métabolisme de base ou sous le minimum
-          acceptable. La cible a été relevée. Vise un rythme plus lent, ou bouge davantage.
+        <Separator className="my-3.5" />
+
+        <dl className="tabular flex flex-col gap-2 text-[13px]">
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">Métabolisme de base</dt>
+            <dd>{formatKcal(target.bmrKcal)} kcal</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">
+              {target.basis === 'measured' ? 'Dépense mesurée, 14 j' : "Dépense avec l'activité"}
+            </dt>
+            <dd>{formatKcal(target.maintenanceKcal)} kcal</dd>
+          </div>
+          <div className="flex justify-between gap-3">
+            <dt className="text-muted-foreground">
+              {target.basis === 'manual' ? 'Écart obtenu' : "Écart pour l'objectif"}
+            </dt>
+            <dd>
+              {sign} {formatKcal(Math.abs(target.adjustmentKcal))} kcal
+            </dd>
+          </div>
+        </dl>
+
+        <p className="mt-3.5 text-[12.5px] text-muted-foreground">
+          {target.basis === 'manual' ? (
+            <>
+              Cible fixée par toi. Le calcul reste affiché pour situer l&apos;écart que tu te
+              donnes ; il ne décide plus de rien.
+            </>
+          ) : (
+            <>
+              Calcul par{' '}
+              {target.equation === 'katch-mcardle'
+                ? 'Katch-McArdle, sur ta masse maigre'
+                : 'Mifflin-St Jeor'}
+              . Une estimation de population, pas une mesure : corrige-la après trois semaines
+              selon ton poids réel.
+            </>
+          )}
         </p>
-      ) : null}
-
-      {target.activityCapped ? (
-        <p role="alert" className="note mt-3" style={{ color: 'var(--color-danger)', opacity: 1 }}>
-          La dépense remontée par Santé dépasse ce qu&apos;un corps humain soutient. Elle a été
-          ramenée à son plafond, et ton raccourci est probablement à revoir.
-        </p>
-      ) : null}
-
-      <dl className="mt-4">
-        <Line label="Métabolisme de base" value={`${formatKcal(target.bmrKcal)} kcal`} />
-        <Line
-          label={
-            target.basis === 'measured' ? 'Dépense mesurée, 14 j' : "Dépense avec l'activité"
-          }
-          value={`${formatKcal(target.maintenanceKcal)} kcal`}
-        />
-        <Line
-          label={target.basis === 'manual' ? 'Écart obtenu' : "Écart pour l'objectif"}
-          value={`${sign} ${formatKcal(Math.abs(target.adjustmentKcal))} kcal`}
-          accent
-          last
-        />
-      </dl>
-
-      <p className="note mt-3">
-        {target.basis === 'manual' ? (
-          <>
-            Cible fixée par toi. Le calcul reste affiché au-dessus pour situer l&apos;écart que
-            tu te donnes ; il ne décide plus de rien.
-          </>
-        ) : (
-          <>
-            Calcul par{' '}
-            {target.equation === 'katch-mcardle'
-              ? 'Katch-McArdle, sur ta masse maigre'
-              : 'Mifflin-St Jeor'}
-            . Une estimation de population, pas une mesure : corrige-la après trois semaines
-            selon ton poids réel.
-          </>
-        )}
-      </p>
-    </>
-  );
-}
-
-function Line({
-  label,
-  value,
-  accent = false,
-  last = false,
-}: {
-  label: string;
-  value: string;
-  accent?: boolean;
-  last?: boolean;
-}) {
-  return (
-    <div
-      className="flex items-baseline justify-between gap-3 py-[11px]"
-      style={last ? undefined : { borderBottom: '1px solid var(--color-divider)' }}
-    >
-      <dt className="text-[15px] opacity-70">{label}</dt>
-      <dd
-        className="tabular text-[15px]"
-        style={accent ? { color: 'var(--color-accent-ink)' } : undefined}
-      >
-        {value}
-      </dd>
-    </div>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -281,6 +221,16 @@ export function ProfileForm({
   const manualEnabled = values.manualTargetKcal !== null;
   const manualFloor = values.sex === 'male' ? 1500 : 1200;
 
+  function changeGoal(goal: ProfileFormValues['goal']) {
+    set('goal', goal);
+    // Le rythme précédent peut dépasser le plafond du nouvel objectif.
+    const cap = goal === 'lose' ? 1 : 0.5;
+    set(
+      'ratePercentPerWeek',
+      goal === 'maintain' ? 0 : Math.min(values.ratePercentPerWeek || 0.5, cap),
+    );
+  }
+
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setPending(true);
@@ -312,31 +262,25 @@ export function ProfileForm({
   }
 
   return (
-    <>
-      {target ? <TargetBlock target={target} /> : null}
-
-      <hr className="rule my-4" />
-      <p className="kicker kicker-quiet mb-3 block">Tes mesures</p>
-
-      <form onSubmit={submit}>
-        <div className="segmented mb-4" role="group" aria-label="Sexe">
-          {(['male', 'female'] as const).map((value) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => set('sex', value)}
-              aria-pressed={values.sex === value}
-            >
-              {value === 'male' ? 'Homme' : 'Femme'}
-            </button>
-          ))}
+    <form onSubmit={submit}>
+      <div className="flex flex-col gap-3.5">
+        <div className="grid gap-2">
+          <Label id="sex-label">Sexe</Label>
+          <Tabs
+            value={values.sex}
+            onValueChange={(value) => (value === 'male' || value === 'female') && set('sex', value)}
+          >
+            <TabsList aria-labelledby="sex-label" className="w-full">
+              <TabsTrigger value="male">Homme</TabsTrigger>
+              <TabsTrigger value="female">Femme</TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
 
-        <div className="grid grid-cols-2 gap-x-4 gap-y-4">
+        <div className="grid grid-cols-2 gap-3">
           <NumberField
             id="heightCm"
-            label="Taille"
-            unit="cm"
+            label="Taille (cm)"
             min={120}
             max={250}
             required
@@ -345,8 +289,7 @@ export function ProfileForm({
           />
           <NumberField
             id="weightKg"
-            label="Poids"
-            unit="kg"
+            label="Poids (kg)"
             step="0.1"
             min={30}
             max={300}
@@ -356,152 +299,154 @@ export function ProfileForm({
           />
         </div>
 
-        <div className="mt-4">
-          <label htmlFor="birthDate" className="label">
-            Date de naissance
-          </label>
-          <input
+        <div className="grid gap-2">
+          <Label htmlFor="birthDate">Date de naissance</Label>
+          <Input
             id="birthDate"
             type="date"
             required
             value={values.birthDate}
             onChange={(event) => set('birthDate', event.target.value)}
-            className="tabular field mt-1.5"
+            className="tabular"
           />
         </div>
 
-        <div className="mt-4">
-          <NumberField
-            id="bodyFat"
-            label="Masse grasse, si connue"
-            unit="%"
-            step="0.1"
-            min={3}
-            max={70}
-            placeholder="Laisser vide"
-            value={values.bodyFatPercent === null ? '' : String(values.bodyFatPercent)}
-            onChange={(value) =>
-              set('bodyFatPercent', value === '' ? null : Number(value))
-            }
-          />
-          <p className="note mt-1.5">
-            Renseignée, elle fait passer le calcul sur la masse maigre, plus fidèle si tu es
-            très musclé ou très gras.
-          </p>
+        <NumberField
+          id="bodyFat"
+          label="Masse grasse, si connue (%)"
+          step="0.1"
+          min={3}
+          max={70}
+          placeholder="Laisser vide"
+          value={values.bodyFatPercent === null ? '' : String(values.bodyFatPercent)}
+          onChange={(value) => set('bodyFatPercent', value === '' ? null : Number(value))}
+          hint="Renseignée, elle fait passer le calcul sur la masse maigre, plus fidèle si tu es très musclé ou très gras."
+        />
+
+        <div className="grid gap-2">
+          <Label htmlFor="activity">Activité</Label>
+          <Select value={values.activity} onValueChange={(value) => set('activity', value)}>
+            <SelectTrigger id="activity" className="w-full data-[size=default]:h-10">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {Object.entries(ACTIVITY_LABELS).map(([key, text]) => (
+                <SelectItem key={key} value={key}>
+                  {text}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
-        <div className="mt-4">
-          <SelectField
-            id="activity"
-            label="Activité"
-            value={values.activity}
-            onChange={(value) => set('activity', value)}
-            options={ACTIVITY_LABELS}
-          />
-        </div>
-
-        <div className="mt-4">
-          <SelectField
-            id="goal"
-            label="Objectif"
-            value={values.goal}
-            onChange={(value) => {
-              const goal = value as ProfileFormValues['goal'];
-              set('goal', goal);
-              // Le rythme précédent peut dépasser le plafond du nouvel objectif.
-              const cap = goal === 'lose' ? 1 : 0.5;
-              set(
-                'ratePercentPerWeek',
-                goal === 'maintain' ? 0 : Math.min(values.ratePercentPerWeek || 0.5, cap),
-              );
-            }}
-            options={GOAL_LABELS}
-          />
+        <div className="grid gap-2">
+          <Label id="goal-label">Objectif</Label>
+          <Tabs value={values.goal} onValueChange={(value) => isGoal(value) && changeGoal(value)}>
+            <TabsList aria-labelledby="goal-label" className="w-full">
+              {GOALS.map((goal) => (
+                <TabsTrigger key={goal.value} value={goal.value}>
+                  {goal.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
         </div>
 
         {rateDisabled ? null : (
-          <div className="mt-4">
-            <NumberField
-              id="rate"
-              label="Rythme visé, par semaine"
-              unit="%"
-              step="0.05"
-              min={0.05}
-              max={maxRate}
-              required
-              value={String(values.ratePercentPerWeek)}
-              onChange={(value) => set('ratePercentPerWeek', Number(value))}
-            />
-            <p className="note mt-1.5">
-              Soit {Math.round(values.weightKg * values.ratePercentPerWeek * 10) / 1000} kg par
-              semaine. Plafond de {maxRate} % :{' '}
-              {values.goal === 'lose'
-                ? 'au-delà, la masse maigre part avec la graisse.'
-                : 'au-delà, le surplus se stocke sans servir.'}
-            </p>
-          </div>
-        )}
-
-        <hr className="rule my-5" />
-
-        <div className="flex items-baseline justify-between gap-3">
-          <span className="label">Fixer la cible moi-même</span>
-          <button
-            type="button"
-            className="link-accent flex-none text-[15px]"
-            aria-pressed={manualEnabled}
-            onClick={() =>
-              set(
-                'manualTargetKcal',
-                manualEnabled ? null : (target?.targetKcal ?? MANUAL_TARGET_SUGGESTION),
-              )
+          <NumberField
+            id="rate"
+            label="Rythme visé, par semaine (%)"
+            step="0.05"
+            min={0.05}
+            max={maxRate}
+            required
+            value={String(values.ratePercentPerWeek)}
+            onChange={(value) => set('ratePercentPerWeek', Number(value))}
+            hint={
+              <>
+                Soit {Math.round(values.weightKg * values.ratePercentPerWeek * 10) / 1000} kg par
+                semaine. Plafond de {maxRate} % :{' '}
+                {values.goal === 'lose'
+                  ? 'au-delà, la masse maigre part avec la graisse.'
+                  : 'au-delà, le surplus se stocke sans servir.'}
+              </>
             }
-          >
-            {manualEnabled ? 'Rendre la main au calcul' : 'Choisir mon chiffre'}
-          </button>
-        </div>
-
-        {manualEnabled ? (
-          <div className="mt-3">
-            <NumberField
-              id="manualTarget"
-              label="Ma cible quotidienne"
-              unit="kcal"
-              step="10"
-              min={manualFloor}
-              max={MANUAL_TARGET_MAX}
-              required
-              value={String(values.manualTargetKcal ?? '')}
-              onChange={(value) =>
-                set('manualTargetKcal', value === '' ? null : Math.round(Number(value)))
-              }
-            />
-            <p className="note mt-1.5">
-              Entre {manualFloor} et {MANUAL_TARGET_MAX} kcal. Ce chiffre remplace le calcul,
-              mesure d&apos;activité comprise. Les macronutriments sont répartis dessus.
-            </p>
-          </div>
-        ) : (
-          <p className="note mt-2">
-            Trois semaines de pesée en disent plus qu&apos;une équation. Si ton poids ne bouge
-            pas comme prévu, corrige la cible ici plutôt que de fausser tes mesures.
-          </p>
+          />
         )}
 
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        <Card>
+          <CardContent>
+            <div className="flex items-center gap-3.5">
+              <div className="min-w-0 flex-1">
+                <Label htmlFor="manual-toggle" className="text-[14.5px]">
+                  Fixer la cible moi-même
+                </Label>
+                <p className="mt-0.5 text-[12.5px] text-muted-foreground">
+                  {manualEnabled
+                    ? 'Ce chiffre remplace le calcul, mesure d’activité comprise.'
+                    : 'Trois semaines de pesée en disent plus qu’une équation.'}
+                </p>
+              </div>
+              <Switch
+                id="manual-toggle"
+                checked={manualEnabled}
+                onCheckedChange={(checked) =>
+                  set(
+                    'manualTargetKcal',
+                    checked ? (target?.targetKcal ?? MANUAL_TARGET_SUGGESTION) : null,
+                  )
+                }
+              />
+            </div>
 
-        <button
-          type="submit"
-          disabled={pending || values.birthDate === ''}
-          className="action mt-6"
-        >
+            {manualEnabled ? (
+              <div className="mt-3.5">
+                <NumberField
+                  id="manualTarget"
+                  label="Ma cible quotidienne (kcal)"
+                  step="10"
+                  min={manualFloor}
+                  max={MANUAL_TARGET_MAX}
+                  required
+                  value={String(values.manualTargetKcal ?? '')}
+                  onChange={(value) =>
+                    set('manualTargetKcal', value === '' ? null : Math.round(Number(value)))
+                  }
+                  hint={`Entre ${manualFloor} et ${MANUAL_TARGET_MAX} kcal. Les macronutriments sont répartis dessus.`}
+                />
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
+
+      {target ? <TargetCard target={target} /> : null}
+
+      {target?.floored ? (
+        <Alert variant="destructive" className="mt-3">
+          <AlertDescription>
+            Le rythme demandé passerait sous ton métabolisme de base ou sous le minimum
+            acceptable. La cible a été relevée. Vise un rythme plus lent, ou bouge davantage.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {target?.activityCapped ? (
+        <Alert variant="destructive" className="mt-3">
+          <AlertDescription>
+            La dépense remontée par Santé dépasse ce qu&apos;un corps humain soutient. Elle a été
+            ramenée à son plafond, et ton raccourci est probablement à revoir.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
+
+      <BottomBar>
+        <Button type="submit" disabled={pending || values.birthDate === ''} className="w-full">
           {pending ? 'Calcul…' : target ? 'Recalculer ma cible' : 'Calculer ma cible'}
-        </button>
-      </form>
-    </>
+        </Button>
+      </BottomBar>
+    </form>
   );
 }

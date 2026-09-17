@@ -1,23 +1,36 @@
 'use client';
 
+import { Trash2Icon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Button } from '@/components/ui/button';
 import { deleteRecipe } from '@/lib/client/recipes';
 
 /**
- * Suppression d'une recette, en deux temps.
+ * Suppression d'une recette, confirmée dans l'AlertDialog de shadcn/ui.
  *
- * Le premier appui arme, le second supprime. Pas de fenêtre de confirmation
- * du navigateur : sur une application installée sur l'écran d'accueil, elle
- * apparaît comme un avertissement de page web et rompt l'illusion — sans
- * compter qu'elle bloque tout le reste tant qu'on ne l'a pas fermée.
+ * Pas de fenêtre de confirmation du navigateur : sur une application installée
+ * sur l'écran d'accueil, elle apparaît comme un avertissement de page web et
+ * rompt l'illusion — sans compter qu'elle bloque tout le reste tant qu'on ne
+ * l'a pas fermée.
  *
  * Supprimer une recette ne touche à aucune entrée déjà journalisée : celles-ci
  * portent leurs propres macros (AD-1) et ne référencent pas la recette.
  */
 export function DeleteRecipe({ id, name }: { id: number; name: string }) {
   const router = useRouter();
-  const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -32,31 +45,43 @@ export function DeleteRecipe({ id, name }: { id: number; name: string }) {
       return;
     }
     setBusy(false);
-    setArmed(false);
     setFailed(true);
   }
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => (armed ? void confirm() : setArmed(true))}
-        onBlur={() => setArmed(false)}
-        disabled={busy}
-        className="action-danger mt-3"
-      >
-        {busy
-          ? 'Suppression…'
-          : armed
-            ? `Confirmer la suppression de ${name}`
-            : 'Supprimer la recette'}
-      </button>
+      <AlertDialog>
+        <AlertDialogTrigger asChild>
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={busy}
+            className="mt-6 w-full text-destructive hover:text-destructive"
+          >
+            <Trash2Icon />
+            {busy ? 'Suppression…' : 'Supprimer la recette'}
+          </Button>
+        </AlertDialogTrigger>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Supprimer « {name} » ?</AlertDialogTitle>
+            <AlertDialogDescription>
+              La fiche disparaît du carnet. Les repas déjà inscrits au journal ne changent pas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuler</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => void confirm()}
+              className="bg-destructive text-white hover:bg-destructive/90"
+            >
+              Supprimer
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      {failed ? (
-        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          Suppression impossible.
-        </p>
-      ) : null}
+      {failed ? <ErrorAlert>Suppression impossible.</ErrorAlert> : null}
     </>
   );
 }

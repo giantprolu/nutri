@@ -3,7 +3,11 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import { ScannerView } from './ScannerView';
-import { NavHeader } from '@/components/ScreenHeader';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { QuantityPad } from '@/components/QuantityPad';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
@@ -16,7 +20,7 @@ import type { OffPartialProduct, ReferenceFood } from '@/lib/types';
  * Chemin de scan complet (FR-11 à FR-16).
  *
  * Le parcours vise trois interactions depuis l'ouverture pour un produit en
- * cache : la pilule d'ajout, la ligne « Scanner », puis un raccourci de
+ * cache : le bouton d'ajout, la ligne « Scanner », puis un raccourci de
  * quantité suivi de la validation (UX-DR-4).
  *
  * Chaque étape porte son propre en-tête : la sortie ferme le parcours tant
@@ -130,7 +134,7 @@ export function ScanFlow() {
   if (step.name === 'quantity') {
     return (
       <>
-        <NavHeader label="Quantité" mode="back" onDismiss={restart} />
+        <NavHeader label="Scanner" onDismiss={restart} />
         <QuantityPad
           foodLabel={step.product.name}
           sourceLabel="Produit scanné"
@@ -139,11 +143,7 @@ export function ScanFlow() {
           submitting={submitting}
           onSubmit={save}
         />
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       </>
     );
   }
@@ -151,9 +151,13 @@ export function ScanFlow() {
   if (step.name === 'resolving') {
     return (
       <>
-        <NavHeader label="Scanner" href="/" />
-        <p className="tabular kicker kicker-quiet mt-6">{step.barcode}</p>
-        <p className="display-sm mt-2">Recherche du produit…</p>
+        <NavHeader label="Journal" href="/" />
+        <Badge variant="outline" className="tabular font-mono">
+          {step.barcode}
+        </Badge>
+        <p className="mt-3 text-[17px] font-semibold tracking-tight">Recherche du produit…</p>
+        <Skeleton className="mt-5 h-14" />
+        <Skeleton className="mt-2.5 h-14" />
       </>
     );
   }
@@ -162,13 +166,14 @@ export function ScanFlow() {
     const barcode = step.barcode;
     return (
       <>
-        <NavHeader label="Scanner" mode="back" onDismiss={restart} />
+        <NavHeader label="Scanner" onDismiss={restart} />
 
-        <div role="alert" className="pt-2">
-          <p className="tabular kicker kicker-quiet">{barcode}</p>
-          <p className="display-sm mt-1.5">{step.message}</p>
+        <div role="alert">
+          <Badge variant="outline" className="tabular font-mono">
+            {barcode}
+          </Badge>
+          <PageTitle title={step.message} className="mt-2 mb-5" />
         </div>
-        <hr className="rule my-4" />
 
         <ProductForm
           initialName={step.partial?.name ?? null}
@@ -178,23 +183,16 @@ export function ScanFlow() {
           onSubmit={(values) => saveProduct(barcode, values)}
         />
 
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
 
-        <button type="button" onClick={restart} className="action action-quiet mt-3">
+        <Button type="button" variant="outline" onClick={restart} className="mt-2.5 w-full">
           Scanner un autre code
-        </button>
+        </Button>
       </>
     );
   }
 
   return (
-    <>
-      <NavHeader label="Scanner" href="/" />
-      <ScannerView onBarcode={(barcode) => void handleBarcode(barcode)} />
-    </>
+<ScannerView onBarcode={(barcode) => void handleBarcode(barcode)} />
   );
 }

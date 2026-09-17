@@ -1,11 +1,18 @@
 'use client';
 
+import { CameraIcon, ChevronRightIcon, SearchIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useId, useState } from 'react';
-import { NavHeader } from '@/components/ScreenHeader';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
-import { CameraIcon, SearchIcon } from '@/components/icons';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Skeleton } from '@/components/ui/skeleton';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { prepareImage } from '@/lib/client/image';
@@ -47,7 +54,7 @@ type Step =
     };
 
 const SOURCE_LABEL: Record<Candidate['kind'], string> = {
-  ciqual: 'Ciqual',
+  ciqual: 'CIQUAL',
   product: 'Scanné',
 };
 
@@ -79,13 +86,20 @@ function CandidateRow({
   onPick: () => void;
 }) {
   return (
-    <li>
-      <button type="button" onClick={onPick} className="entry-row items-center">
+    <li className="border-b last:border-b-0">
+      <button
+        type="button"
+        onClick={onPick}
+        className="flex w-full items-center gap-3 py-2.5 text-left transition-colors active:bg-accent"
+      >
         <span className="min-w-0 flex-1">
-          <span className="entry-name block">{name}</span>
-          <span className="entry-meta mt-0.5 block">{formatKcal(kcal)} kcal / 100 g</span>
+          <span className="block truncate text-[14.5px] font-medium tracking-tight">{name}</span>
+          <span className="tabular mt-px block text-[12.5px] text-muted-foreground">
+            {formatKcal(kcal)} kcal / 100 g
+          </span>
         </span>
-        {badge ? <span className="kicker flex-none">{badge}</span> : null}
+        {badge ? <Badge variant="secondary">{badge}</Badge> : null}
+        <ChevronRightIcon aria-hidden className="size-4 flex-none text-muted-foreground" />
       </button>
     </li>
   );
@@ -142,83 +156,90 @@ function NameCard({
   }, [term, searching]);
 
   return (
-    <section className="pt-4">
-      <div className="flex items-baseline justify-between gap-3">
-        <h2 className="display-sm text-[23px]">«&nbsp;{entry.name}&nbsp;»</h2>
-        <button type="button" onClick={onSkip} className="kicker kicker-quiet tap-target flex-none">
-          Ignorer
-        </button>
-      </div>
-
-      {empty ? (
-        <p className="note mt-2">
-          Aucun aliment correspondant. Cherche-le sous un autre nom.
-        </p>
-      ) : (
-        <ul className="mt-2">
-          {entry.candidates.map((candidate) => (
-            <CandidateRow
-              key={`${candidate.kind}-${candidate.ref}`}
-              name={candidate.name}
-              kcal={candidate.per100g.kcal}
-              {...(candidate.fromAlias ? { badge: 'Déjà choisi' } : {})}
-              onPick={() => onPick(entry.name, candidate)}
-            />
-          ))}
-        </ul>
-      )}
-
-      {searching ? (
-        <div className="mt-3">
-          <label htmlFor={fieldId} className="label">
-            Chercher un autre nom
-          </label>
-          <div className="field field-accent mt-1.5 text-[17px]">
-            <SearchIcon className="h-[17px] w-[17px] flex-none" />
-            <input
-              id={fieldId}
-              type="search"
-              autoComplete="off"
-              value={term}
-              onChange={(event) => setTerm(event.target.value)}
-              placeholder="Ex. : riz, poulet, pain complet"
-              className="w-full min-w-0 border-0 bg-transparent p-0 text-[17px] outline-none"
-            />
-          </div>
-
-          {pendingSearch ? <p className="kicker kicker-quiet mt-2">Recherche…</p> : null}
-
-          {searchError ? (
-            <p role="alert" className="note mt-2" style={{ color: 'var(--color-danger)' }}>
-              Recherche indisponible.
-            </p>
-          ) : null}
-
-          {hits !== null && hits.length === 0 && !pendingSearch && !searchError ? (
-            <p className="note mt-2">Aucun aliment trouvé.</p>
-          ) : null}
-
-          {hits !== null && hits.length > 0 ? (
-            <ul className="mt-1">
-              {hits.map((hit) => (
-                <CandidateRow
-                  key={`hit-${hit.kind}-${hit.ref}`}
-                  name={hit.name}
-                  kcal={hit.per100g.kcal}
-                  onPick={() => onPick(entry.name, { ...hit, fromAlias: false })}
-                />
-              ))}
-            </ul>
-          ) : null}
+    <Card>
+      <CardContent>
+        <div className="flex items-center justify-between gap-3">
+          <CardTitle>«&nbsp;{entry.name}&nbsp;»</CardTitle>
+          <Button type="button" variant="ghost" size="sm" onClick={onSkip} className="-mr-2">
+            Ignorer
+          </Button>
         </div>
-      ) : (
-        <p className="note mt-3">
-          <button type="button" onClick={() => setSearching(true)} className="link-accent">
+
+        {empty ? (
+          <CardDescription className="mt-1">
+            Aucun aliment correspondant. Cherche-le sous un autre nom.
+          </CardDescription>
+        ) : (
+          <ul className="mt-1">
+            {entry.candidates.map((candidate) => (
+              <CandidateRow
+                key={`${candidate.kind}-${candidate.ref}`}
+                name={candidate.name}
+                kcal={candidate.per100g.kcal}
+                {...(candidate.fromAlias ? { badge: 'Déjà choisi' } : {})}
+                onPick={() => onPick(entry.name, candidate)}
+              />
+            ))}
+          </ul>
+        )}
+
+        {searching ? (
+          <div className="mt-3 grid gap-2">
+            <Label htmlFor={fieldId}>Chercher un autre nom</Label>
+            <div className="relative">
+              <SearchIcon
+                aria-hidden
+                className="pointer-events-none absolute top-1/2 left-3 size-[17px] -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                id={fieldId}
+                type="search"
+                autoComplete="off"
+                value={term}
+                onChange={(event) => setTerm(event.target.value)}
+                placeholder="Ex. : riz, poulet, pain complet"
+                className="pl-9"
+              />
+            </div>
+
+            {pendingSearch ? <Skeleton aria-label="Recherche…" className="h-12" /> : null}
+
+            {searchError ? (
+              <p role="alert" className="text-destructive">
+                Recherche indisponible.
+              </p>
+            ) : null}
+
+            {hits !== null && hits.length === 0 && !pendingSearch && !searchError ? (
+              <p className="text-muted-foreground">Aucun aliment trouvé.</p>
+            ) : null}
+
+            {hits !== null && hits.length > 0 ? (
+              <ul>
+                {hits.map((hit) => (
+                  <CandidateRow
+                    key={`hit-${hit.kind}-${hit.ref}`}
+                    name={hit.name}
+                    kcal={hit.per100g.kcal}
+                    onPick={() => onPick(entry.name, { ...hit, fromAlias: false })}
+                  />
+                ))}
+              </ul>
+            ) : null}
+          </div>
+        ) : (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setSearching(true)}
+            className="mt-3 w-full"
+          >
+            <SearchIcon />
             Aucun ne convient, chercher moi-même
-          </button>
-        </p>
-      )}
-    </section>
+          </Button>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -371,17 +392,27 @@ export function PhotoFlow() {
   if (step.name === 'capture') {
     return (
       <>
-        <NavHeader label="Photo" href="/" />
-        <label
-          htmlFor="photo"
-          className="action mt-6 min-h-32 cursor-pointer flex-col gap-2 py-6 text-center"
+        <NavHeader label="Ajouter" href="/add" />
+        <div className="mb-5 flex items-start justify-between gap-3">
+          <PageTitle
+            title="Photo du repas"
+            description="Le modèle nomme les aliments. Tu choisis et tu pèses."
+          />
+          <Badge variant="outline" className="mt-1.5">
+            Bêta
+          </Badge>
+        </div>
+        <Card
+          asChild
+          className="hatch h-44 cursor-pointer items-center justify-center gap-2.5 text-center"
         >
-          <CameraIcon className="h-6 w-6" />
-          Prendre une photo du repas
-        </label>
-        <p className="note mt-3 text-center">
-          Le modèle nomme les aliments. Tu choisis et tu pèses.
-        </p>
+          <label htmlFor="photo">
+            <span className="flex size-12 items-center justify-center rounded-full bg-primary text-primary-foreground">
+              <CameraIcon aria-hidden className="size-5" />
+            </span>
+            <span className="font-medium">Prendre une photo</span>
+          </label>
+        </Card>
         <input
           id="photo"
           type="file"
@@ -395,11 +426,7 @@ export function PhotoFlow() {
             }
           }}
         />
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       </>
     );
   }
@@ -407,7 +434,7 @@ export function PhotoFlow() {
   if (step.name === 'quantity') {
     return (
       <>
-        <NavHeader label="Quantité" mode="back" onDismiss={cancelQuantity} />
+        <NavHeader label="Photo" onDismiss={cancelQuantity} />
         <QuantityPad
           foodLabel={step.candidate.name}
           sourceLabel={SOURCE_LABEL[step.candidate.kind]}
@@ -416,11 +443,7 @@ export function PhotoFlow() {
           submitting={submitting}
           onSubmit={save}
         />
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       </>
     );
   }
@@ -429,68 +452,75 @@ export function PhotoFlow() {
 
   return (
     <>
-      <NavHeader label="Photo" href="/" />
+      <NavHeader label="Ajouter" href="/add" />
 
       {/* La photo reste affichée pendant tout le parcours, y compris en échec. */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={step.preview}
         alt="Photo du repas"
-        className="plate mt-2 max-h-56 w-full object-cover"
+        className="h-[168px] w-full rounded-xl border object-cover"
       />
 
-      {step.name === 'working' ? <p className="note mt-3">{step.label}</p> : null}
+      {step.name === 'working' ? (
+        <div className="mt-4">
+          <p className="text-muted-foreground">{step.label}</p>
+          <Skeleton className="mt-3 h-16" />
+          <Skeleton className="mt-2.5 h-16" />
+        </div>
+      ) : null}
 
       {step.name === 'failed' ? (
-        <div role="alert" className="pt-4">
-          <p className="text-[16px]">{step.message}</p>
-          <div className="mt-4 flex flex-col gap-2">
+        <div role="alert" className="mt-4">
+          <p className="text-[15px] font-semibold tracking-tight">{step.message}</p>
+          <div className="mt-4 flex flex-col gap-2.5">
             {step.retryable ? (
-              <button
-                type="button"
-                onClick={() => void analyze(step.preview)}
-                className="action action-quiet"
-              >
+              <Button type="button" variant="outline" onClick={() => void analyze(step.preview)}>
                 Réessayer
-              </button>
+              </Button>
             ) : null}
-            <Link href="/add/search" className="action">
-              Chercher par nom
-            </Link>
+            <Button asChild>
+              <Link href="/add/search">Chercher par nom</Link>
+            </Button>
           </div>
         </div>
       ) : null}
 
       {step.name === 'resolving' ? (
         <>
-          <p className="note mt-3">
-            <span className="tabular">{remaining}</span>
-            {remaining === 1 ? ' aliment à traiter' : ' aliments à traiter'}
-            {step.done > 0 ? (
-              <>
-                {' · '}
-                <span className="tabular">{step.done}</span>
-                {step.done === 1 ? ' déjà enregistré' : ' déjà enregistrés'}
-              </>
-            ) : null}
-          </p>
-          <hr className="rule mt-4" />
-          {step.pending.map((entry) => (
-            <NameCard
-              key={entry.name}
-              entry={entry}
-              onPick={(name, candidate) => void pick(name, candidate)}
-              onSkip={() => skip(entry)}
-            />
-          ))}
+          <div className="mt-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[15px] font-semibold tracking-tight">
+                <span className="tabular">{remaining}</span>
+                {remaining === 1 ? ' aliment à traiter' : ' aliments à traiter'}
+              </p>
+              <p className="mt-0.5 text-[13px] text-muted-foreground">
+                {step.done > 0 ? (
+                  <>
+                    <span className="tabular">{step.done}</span>
+                    {step.done === 1 ? ' déjà enregistré' : ' déjà enregistrés'}
+                  </>
+                ) : (
+                  'Choisis la bonne fiche, ou ignore le nom.'
+                )}
+              </p>
+            </div>
+            <Badge variant="outline">Bêta</Badge>
+          </div>
+          <div className="mt-3.5 flex flex-col gap-2.5">
+            {step.pending.map((entry) => (
+              <NameCard
+                key={entry.name}
+                entry={entry}
+                onPick={(name, candidate) => void pick(name, candidate)}
+                onSkip={() => skip(entry)}
+              />
+            ))}
+          </div>
         </>
       ) : null}
 
-      {error ? (
-        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
     </>
   );
 }

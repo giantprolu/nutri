@@ -1,21 +1,22 @@
 import Link from 'next/link';
-import { ChevronLeftIcon, CloseIcon } from './icons';
+import { ChevronLeftIcon, XIcon } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * Les deux en-têtes de l'application.
  *
- * `ScreenHeader` coiffe les destinations de la barre d'onglets : un surtitre,
- * un titre au corps d'affichage, un filet.
+ * `ScreenHeader` coiffe les destinations de la barre d'onglets : un titre, une
+ * ligne de contexte en dessous, et une action secondaire à droite.
  *
  * Il accepte une destination secondaire, et une seule. UX-DR-3 écarte du tiers
  * supérieur les contrôles *fréquents*, pas toute cible : ce qu'on touche
  * plusieurs fois par jour appartient à la barre basse, ce qu'on ouvre une fois
- * par semaine n'y a pas sa place et prendrait un onglet à un geste quotidien.
- * L'historique est exactement de ce second genre. La cible garde ses 44 px.
+ * par semaine n'y a pas sa place. L'historique est exactement de ce second
+ * genre.
  *
- * `NavHeader` coiffe les écrans qu'on ouvre puis qu'on quitte. Il ne porte que
- * la sortie, à gauche, et le nom de l'écran au centre — jamais de titre au
- * corps d'affichage : le titre d'un tel écran, c'est son contenu.
+ * `NavHeader` coiffe les écrans qu'on ouvre puis qu'on quitte. Il porte la
+ * sortie et le nom de l'écran d'où l'on vient, jamais le titre : celui-ci est
+ * rendu par le contenu, qui sait mieux ce qu'il montre.
  */
 
 export function ScreenHeader({
@@ -25,29 +26,41 @@ export function ScreenHeader({
 }: {
   title: string;
   kicker?: string;
-  /** Destination secondaire, posée en regard du titre. Jamais un geste fréquent. */
-  action?: { href: string; label: string; icon: React.ReactNode };
+  /** Action secondaire, posée en regard du titre. Jamais un geste fréquent. */
+  action?: React.ReactNode;
 }) {
   return (
-    <header>
-      <div className="flex items-end justify-between gap-3 pt-4 pb-3">
-        <div className="min-w-0">
-          {kicker ? <p className="kicker first-letter:uppercase">{kicker}</p> : null}
-          <h1 className="display">{title}</h1>
-        </div>
-
-        {action ? (
-          <Link
-            href={action.href}
-            aria-label={action.label}
-            className="tap-target -mr-3 flex flex-none items-center justify-center"
-          >
-            <span aria-hidden>{action.icon}</span>
-          </Link>
+    <header className="flex items-start justify-between gap-3 pt-3 pb-3">
+      <div className="min-w-0">
+        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        {kicker ? (
+          <p className="mt-0.5 text-[13.5px] text-muted-foreground first-letter:uppercase">
+            {kicker}
+          </p>
         ) : null}
       </div>
-      <hr className="rule" />
+      {action}
     </header>
+  );
+}
+
+/** Titre d'un écran ouvert depuis un autre, avec sa ligne de contexte. */
+export function PageTitle({
+  title,
+  description,
+  className,
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={className}>
+      <h1 className="text-[22px] font-semibold tracking-tight first-letter:uppercase">{title}</h1>
+      {description ? (
+        <p className="mt-1 text-muted-foreground first-letter:uppercase">{description}</p>
+      ) : null}
+    </div>
   );
 }
 
@@ -60,45 +73,45 @@ export function NavHeader({
   label,
   href,
   onDismiss,
-  mode = 'close',
+  mode = 'back',
+  action,
 }: {
-  /** Nom de l'écran, ou de celui d'où l'on vient. */
+  /** Nom de l'écran d'où l'on vient. */
   label: string;
   /** Destination de la sortie. Ignorée quand `onDismiss` est fourni. */
   href?: string;
   /** Sortie confiée à l'appelant, pour un retour à l'étape précédente. */
   onDismiss?: () => void;
   mode?: 'close' | 'back';
+  /** Action secondaire, à droite. */
+  action?: React.ReactNode;
 }) {
-  const icon =
-    mode === 'back' ? <ChevronLeftIcon className="h-5 w-5" /> : <CloseIcon className="h-5 w-5" />;
+  const icon = mode === 'back' ? <ChevronLeftIcon className="size-5" /> : <XIcon className="size-5" />;
   const accessibleLabel = mode === 'back' ? 'Revenir en arrière' : 'Fermer';
 
   return (
-    <header className="flex items-center justify-between py-3">
-      {onDismiss ? (
-        <button
-          type="button"
-          onClick={onDismiss}
-          aria-label={accessibleLabel}
-          className="tap-target -ml-3 flex items-center justify-center"
-        >
-          {icon}
-        </button>
-      ) : (
-        <Link
-          href={href ?? '/'}
-          aria-label={accessibleLabel}
-          className="tap-target -ml-3 flex items-center justify-center"
-        >
-          {icon}
-        </Link>
-      )}
-
-      <p className="kicker kicker-quiet">{label}</p>
-
-      {/* Contrepoids de la sortie : le nom de l'écran reste centré. */}
-      <span aria-hidden className="w-11" />
+    <header className="flex h-14 items-center justify-between gap-2">
+      <div className="-ml-2.5 flex min-w-0 items-center gap-1">
+        {onDismiss ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="icon-lg"
+            onClick={onDismiss}
+            aria-label={accessibleLabel}
+          >
+            {icon}
+          </Button>
+        ) : (
+          <Button asChild variant="ghost" size="icon-lg">
+            <Link href={href ?? '/'} aria-label={accessibleLabel}>
+              {icon}
+            </Link>
+          </Button>
+        )}
+        <span className="truncate text-[14.5px] font-medium">{label}</span>
+      </div>
+      {action ? <div className="-mr-2 flex items-center">{action}</div> : null}
     </header>
   );
 }

@@ -1,4 +1,4 @@
-import { NavHeader } from '@/components/ScreenHeader';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
 import { basketFor, installedFor } from '@/server/services/basket';
 import { profileFor } from '@/server/services/profile';
@@ -89,11 +89,8 @@ export default async function CatalogPage({
 
   return (
     <>
-      <NavHeader label="Cuisine" href={`/kitchen?from=${weekStart}`} mode="back" />
-
-      <h1 className="display">Choisir mes repas</h1>
-      <p className="kicker kicker-quiet mt-1">{formatWeekRange(weekStart)}</p>
-      <hr className="rule mt-3" />
+      <NavHeader label="Cuisine" href={`/kitchen?from=${weekStart}`} />
+      <PageTitle title="Choisir mes repas" description={formatWeekRange(weekStart)} />
 
       <CatalogPicker
         weekStart={weekStart}

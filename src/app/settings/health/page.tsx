@@ -1,4 +1,4 @@
-import { NavHeader } from '@/components/ScreenHeader';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { currentUserId } from '@/server/guard';
 import { hasIngestToken } from '@/server/db/queries/users';
 import { bridgeStatus } from '@/server/services/profile';
@@ -29,8 +29,8 @@ export default async function HealthPage() {
 
   return (
     <>
-      <NavHeader label="Réglages" href="/settings" mode="back" />
-      <h1 className="display-sm mt-3">Activité depuis Santé</h1>
+      <NavHeader label="Réglages" href="/settings" />
+      <PageTitle title="Activité depuis Santé" />
       <HealthBridge
         hasToken={tokenExists}
         status={status}

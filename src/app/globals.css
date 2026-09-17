@@ -1,713 +1,199 @@
 @import 'tailwindcss';
+@import 'tw-animate-css';
 
 /*
- * Système « Classical », importé depuis le projet Claude Design
- * « NutriPerso — Refonte mobile ». Les cartes bordées ont disparu : ce sont les
- * filets et la typographie qui portent la structure.
+ * Système shadcn/ui, importé depuis le projet Claude Design
+ * « NutriPerso — Refonte shadcn ». L'interface n'est faite que des primitives
+ * de shadcn/ui (src/components/ui), sur leurs jetons par défaut : base
+ * neutral, rayon de 10 px, police Geist.
  *
- * Une seule famille, Source Sans 3, dans deux coupes. La maquette a renoncé au
- * couple Cormorant Garamond / Lora du système d'origine : les serifs tenaient
- * mal aux corps d'interface, et le texte est monté d'un cran pour se lire à
- * bout de bras. Les filets, la palette et les chiffres tabulaires du système
- * sont conservés tels quels.
+ * La chrome reste neutre. Les trois couleurs de graphique sont réservées aux
+ * macros ; chaque barre porte son intitulé et sa valeur, la couleur n'est donc
+ * jamais le seul canal d'information.
  *
- * Deux thèmes, et non plus un seul : l'ancienne règle UX-DR-2, qui imposait un
- * thème sombre unique, est levée. Par défaut l'application suit le réglage du
- * système, iOS comme Android, via `prefers-color-scheme`. Un choix explicite
- * pose `data-theme` sur <html> et l'emporte alors dans les deux sens.
+ * Deux thèmes. Par défaut l'application suit `prefers-color-scheme`, donc le
+ * réglage iOS ou Android. Un choix explicite pose `data-theme` sur <html> et
+ * l'emporte alors dans les deux sens.
  */
 
-@plugin "daisyui" {
-  themes: nutriperso-light --default, nutriperso-dark --prefersdark;
+@custom-variant dark {
+  &:where([data-theme='dark'], [data-theme='dark'] *) {
+    @slot;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    &:where(:root:not([data-theme='light']), :root:not([data-theme='light']) *) {
+      @slot;
+    }
+  }
 }
 
-@plugin "daisyui/theme" {
-  name: 'nutriperso-light';
-  default: true;
-  color-scheme: light;
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 
-  --color-base-100: #f3f2f2;
-  --color-base-200: #eae9e9;
-  --color-base-300: #d7d3d3;
-  --color-base-content: #201f1d;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
 
-  --color-primary: #b68235;
-  --color-primary-content: #fff3e4;
-  --color-secondary: #605d5d;
-  --color-secondary-content: #f8f4f4;
-  --color-accent: #b68235;
-  --color-accent-content: #fff3e4;
-  --color-neutral: #444141;
-  --color-neutral-content: #f8f4f4;
+  /* Les macros, nommées pour ce qu'elles sont plutôt que par leur rang. */
+  --color-protein: var(--chart-1);
+  --color-carb: var(--chart-2);
+  --color-fat: var(--chart-3);
 
-  --color-info: #605d5d;
-  --color-info-content: #f8f4f4;
-  --color-success: #5a3b0a;
-  --color-success-content: #fff3e4;
-  --color-warning: #a06f24;
-  --color-warning-content: #fff3e4;
-  --color-error: #8a2f2f;
-  --color-error-content: #fff3e4;
-
-  --radius-selector: 999px;
-  --radius-field: 4px;
-  --radius-box: 7px;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
 }
-
-@plugin "daisyui/theme" {
-  name: 'nutriperso-dark';
-  prefersdark: true;
-  color-scheme: dark;
-
-  --color-base-100: #1b1a19;
-  --color-base-200: #252322;
-  --color-base-300: #3a3735;
-  --color-base-content: #f8f4f4;
-
-  --color-primary: #e1ad66;
-  --color-primary-content: #201f1d;
-  --color-secondary: #bab6b6;
-  --color-secondary-content: #201f1d;
-  --color-accent: #e1ad66;
-  --color-accent-content: #201f1d;
-  --color-neutral: #252322;
-  --color-neutral-content: #bab6b6;
-
-  --color-info: #bab6b6;
-  --color-info-content: #201f1d;
-  --color-success: #facb8d;
-  --color-success-content: #201f1d;
-  --color-warning: #e1ad66;
-  --color-warning-content: #201f1d;
-  --color-error: #e08585;
-  --color-error-content: #201f1d;
-
-  --radius-selector: 999px;
-  --radius-field: 4px;
-  --radius-box: 7px;
-  --size-selector: 0.25rem;
-  --size-field: 0.25rem;
-  --border: 1px;
-  --depth: 0;
-  --noise: 0;
-}
-
-/*
- * La trame du système est un multiple de 4,6 px. Poser cette valeur comme pas
- * de base aligne d'un coup toutes les utilitaires d'espacement de Tailwind :
- * `gap-4` vaut alors 18,4 px, soit très exactement le `--space-4` du système.
- */
-@theme {
-  --spacing: 4.6px;
-  --font-ui: var(--font-source-sans), 'Source Sans 3', -apple-system,
-    BlinkMacSystemFont, system-ui, sans-serif;
-}
-
-/* ══════════════════════════════════════════════════════════════════════════
-   Jetons du système.
-
-   Les rampes tonales sont communes aux deux thèmes : ce sont les mêmes
-   couleurs. Seuls les jetons sémantiques basculent, en désignant un autre
-   échelon de la même rampe.
-   ══════════════════════════════════════════════════════════════════════ */
 
 :root {
-  --color-neutral-100: #f8f4f4;
-  --color-neutral-200: #eae7e7;
-  --color-neutral-300: #d7d3d3;
-  --color-neutral-400: #bab6b6;
-  --color-neutral-500: #9b9797;
-  --color-neutral-600: #7d7979;
-  --color-neutral-700: #605d5d;
-  --color-neutral-800: #444141;
-  --color-neutral-900: #2d2b2b;
+  --radius: 0.625rem;
 
-  --color-accent-100: #fff3e4;
-  --color-accent-200: #ffe3bf;
-  --color-accent-300: #facb8d;
-  --color-accent-400: #e1ad66;
-  --color-accent-500: #c28d41;
-  --color-accent-600: #a06f24;
-  --color-accent-700: #7d5411;
-  --color-accent-800: #5a3b0a;
-  --color-accent-900: #3a270d;
-
-  --shadow-lg: 0 12px 32px color-mix(in srgb, #2d2b2b 22%, transparent);
-
-  /* Thème clair. */
-  --color-bg: #f3f2f2;
-  --color-surface: #eae9e9;
-  --color-text: #201f1d;
-  --color-accent: #b68235;
-  --color-divider: color-mix(in srgb, #201f1d 16%, transparent);
-  /* Variante lisible de l'accent sur le fond, pour un texte ou un soulignement. */
-  --color-accent-ink: #7d5411;
-  --color-danger: #8a2f2f;
-  --color-scrim: color-mix(in srgb, #2d2b2b 34%, transparent);
-
-  /*
-   * Trois échelons mesurés d'une même teinte, et non trois couleurs : les
-   * macros sont trois parts d'un même total, pas trois catégories étrangères.
-   * Chaque barre porte son intitulé et sa valeur, la couleur n'est donc jamais
-   * le seul canal d'information.
-   */
-  --color-macro-protein: var(--color-accent-700);
-  --color-macro-carb: var(--color-accent-500);
-  --color-macro-fat: var(--color-accent-300);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --destructive: oklch(0.577 0.245 27.325);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
+  --chart-1: oklch(0.646 0.222 41.116);
+  --chart-2: oklch(0.6 0.118 184.704);
+  --chart-3: oklch(0.398 0.07 227.392);
+  --chart-4: oklch(0.828 0.189 84.429);
+  --chart-5: oklch(0.769 0.188 70.08);
 }
 
-/* Thème sombre, quand le système le demande et qu'aucun choix ne l'emporte. */
+/*
+ * Le thème sombre est écrit deux fois : sous condition de média quand aucun
+ * choix ne l'emporte, et sans condition quand il est choisi. Une variable CSS
+ * ne se factorise pas entre un sélecteur et une requête média.
+ */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='nutriperso-light']) {
-    --color-bg: #1b1a19;
-    --color-surface: #252322;
-    --color-text: #f8f4f4;
-    --color-accent: #e1ad66;
-    --color-divider: color-mix(in srgb, #f8f4f4 20%, transparent);
-    --color-accent-ink: #facb8d;
-    --color-danger: #e08585;
-    --color-scrim: color-mix(in srgb, #000000 55%, transparent);
-    /* Sur fond sombre la progression va vers le clair, en miroir du thème clair. */
-    --color-macro-protein: var(--color-accent-400);
-    --color-macro-carb: var(--color-accent-300);
-    --color-macro-fat: var(--color-accent-200);
+  :root:not([data-theme='light']) {
+    --background: oklch(0.145 0 0);
+    --foreground: oklch(0.985 0 0);
+    --card: oklch(0.205 0 0);
+    --card-foreground: oklch(0.985 0 0);
+    --popover: oklch(0.205 0 0);
+    --popover-foreground: oklch(0.985 0 0);
+    --primary: oklch(0.922 0 0);
+    --primary-foreground: oklch(0.205 0 0);
+    --secondary: oklch(0.269 0 0);
+    --secondary-foreground: oklch(0.985 0 0);
+    --muted: oklch(0.269 0 0);
+    --muted-foreground: oklch(0.708 0 0);
+    --accent: oklch(0.269 0 0);
+    --accent-foreground: oklch(0.985 0 0);
+    --destructive: oklch(0.704 0.191 22.216);
+    --border: oklch(1 0 0 / 12%);
+    --input: oklch(1 0 0 / 16%);
+    --ring: oklch(0.556 0 0);
+    --chart-1: oklch(0.488 0.243 264.376);
+    --chart-2: oklch(0.696 0.17 162.48);
+    --chart-3: oklch(0.769 0.188 70.08);
+    --chart-4: oklch(0.627 0.265 303.9);
+    --chart-5: oklch(0.645 0.246 16.439);
   }
 }
 
-/* Thème sombre choisi explicitement : l'emporte même en plein jour. */
-:root[data-theme='nutriperso-dark'] {
-  --color-bg: #1b1a19;
-  --color-surface: #252322;
-  --color-text: #f8f4f4;
-  --color-accent: #e1ad66;
-  --color-divider: color-mix(in srgb, #f8f4f4 20%, transparent);
-  --color-accent-ink: #facb8d;
-  --color-danger: #e08585;
-  --color-scrim: color-mix(in srgb, #000000 55%, transparent);
-  --color-macro-protein: var(--color-accent-400);
-  --color-macro-carb: var(--color-accent-300);
-  --color-macro-fat: var(--color-accent-200);
+/* Aussi sur un sous-arbre : le scanner et la séance restent sombres en plein jour. */
+[data-theme='dark'] {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.922 0 0);
+  --primary-foreground: oklch(0.205 0 0);
+  --secondary: oklch(0.269 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.269 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 12%);
+  --input: oklch(1 0 0 / 16%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.488 0.243 264.376);
+  --chart-2: oklch(0.696 0.17 162.48);
+  --chart-3: oklch(0.769 0.188 70.08);
+  --chart-4: oklch(0.627 0.265 303.9);
+  --chart-5: oklch(0.645 0.246 16.439);
 }
 
-/* ══════════════════════════════════════════════════════════════════════════
-   Fondations
-   ══════════════════════════════════════════════════════════════════════ */
-
-html,
-body {
-  background-color: var(--color-bg);
-  color: var(--color-text);
-  overscroll-behavior-y: none;
-}
-
-body {
-  font-family: var(--font-ui);
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
-}
-
-::selection {
-  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
-}
-
-:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
-}
-
-/* Chiffres tabulaires pour toute valeur numérique en liste (UX-DR-9). */
-.tabular {
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: 'tnum';
-}
-
-/* Cible tactile minimale de 44 px (UX-DR-3, NFR-6). */
-.tap-target {
-  min-height: 44px;
-  min-width: 44px;
-}
-
-/* Zones sûres iOS : rien de cliquable sous l'indicateur d'accueil. */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-.safe-top {
-  padding-top: env(safe-area-inset-top, 0px);
-}
-
-@layer components {
-  /* — filets et titres — */
-
-  .rule {
-    height: 1px;
-    border: 0;
-    margin: 0;
-    background: var(--color-divider);
-    flex: none;
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
   }
 
-  /* Surtitre capitalisé, en accent. Porte la date, la source, l'unité. */
-  .kicker {
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--color-accent-ink);
+  html,
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-size: 14px;
+    line-height: 1.45;
+    letter-spacing: -0.006em;
+  }
+
+  /* Chiffres tabulaires pour toute valeur numérique en liste (UX-DR-9). */
+  .tabular {
     font-variant-numeric: tabular-nums;
   }
+}
 
-  /* Le même surtitre, mais neutre : pour ce qui n'appelle aucune action. */
-  .kicker-quiet {
-    color: var(--color-text);
-    opacity: 0.5;
-  }
-
-  /* Titre d'écran. Cormorant au corps d'affichage, dans sa coupe normale. */
-  .display {
-    font-weight: 600;
-    font-size: 31px;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    margin: 5px 0 0;
-  }
-
-  .display-sm {
-    font-weight: 600;
-    font-size: 29px;
-    line-height: 1.12;
-    letter-spacing: -0.02em;
-    margin: 0;
-  }
-
-  /* Nombre mis en scène : le total du jour, la cible, la quantité saisie. */
-  .figure {
-    font-weight: 600;
-    line-height: 1;
-    letter-spacing: -0.02em;
-    font-variant-numeric: tabular-nums;
-    font-feature-settings: 'tnum';
-  }
-
-  .note {
-    font-size: 13.5px;
-    line-height: 1.6;
-    opacity: 0.68;
-  }
-
-  .label {
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
-    color: var(--color-text);
-    opacity: 0.65;
-  }
-
-  /* Lien discret : un soulignement à l'accent, et non un bouton. */
-  .link-accent {
-    color: var(--color-accent-ink);
-    border-bottom: 1px solid var(--color-accent);
-    padding-bottom: 2px;
-    text-decoration: none;
-  }
-
-  /* — champs — */
-
-  .field {
-    width: 100%;
-    min-height: 46px;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    border: 0;
-    border-bottom: 1px solid var(--color-divider);
-    background: transparent;
-    font-family: inherit;
-    font-size: 18px;
-    color: var(--color-text);
-    caret-color: var(--color-accent);
-    padding: 0 0 6px;
-    border-radius: 0;
-    outline: none;
-  }
-
-  .field:focus,
-  .field:focus-visible,
-  .field-accent {
-    border-bottom-color: var(--color-accent);
-    outline: none;
-  }
-
-  .field::placeholder {
-    color: var(--color-text);
-    opacity: 0.35;
-  }
-
-  .field:disabled,
-  .field[readonly] {
-    opacity: 0.55;
-  }
-
-  /* — actions — */
-
-  .action {
-    width: 100%;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 8px;
-    border: 1px solid var(--color-accent);
-    color: var(--color-accent);
-    background: transparent;
-    border-radius: 4px;
-    font-family: inherit;
-    font-weight: 600;
-    font-size: 16px;
-    letter-spacing: 0.01em;
-    text-decoration: none;
-    cursor: pointer;
-  }
-
-  .action:active {
-    background: color-mix(in srgb, var(--color-accent) 16%, transparent);
-  }
-
-  .action:disabled {
-    opacity: 0.4;
-    cursor: not-allowed;
-  }
-
-  .action-quiet {
-    border-color: var(--color-divider);
-    color: var(--color-text);
-  }
-
-  .action-quiet:active {
-    background: color-mix(in srgb, var(--color-text) 10%, transparent);
-  }
-
-  .action-danger {
-    border-color: color-mix(in srgb, var(--color-danger) 55%, transparent);
-    color: var(--color-danger);
-  }
-
-  .action-danger:active {
-    background: color-mix(in srgb, var(--color-danger) 12%, transparent);
-  }
-
-  /* — lignes de journal — */
-
-  .entry-row {
-    display: flex;
-    align-items: baseline;
-    gap: 13.8px;
-    width: 100%;
-    padding: 13px 0;
-    border-bottom: 1px solid var(--color-divider);
-    text-align: left;
-  }
-
-  .entry-name {
-    flex: 1;
-    min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 16px;
-  }
-
-  .entry-meta {
-    font-size: 13px;
-    opacity: 0.6;
-    font-variant-numeric: tabular-nums;
-  }
-
-  .entry-kcal {
-    width: 58px;
-    flex: none;
-    text-align: right;
-    font-weight: 600;
-    font-size: 17px;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* En-tête de repas : intitulé capitalisé à gauche, sous-total à droite. */
-  .meal-head {
-    display: flex;
-    align-items: baseline;
-    justify-content: space-between;
-    padding: 18.4px 0 4.6px;
-  }
-
-  .meal-head h2 {
-    font-weight: 600;
-    font-size: 12px;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin: 0;
-  }
-
-  .meal-head span {
-    font-weight: 600;
-    font-size: 13px;
-    opacity: 0.6;
-    font-variant-numeric: tabular-nums;
-  }
-
-  /* — jauges — */
-
-  .bar {
-    height: 2px;
-    background: var(--color-divider);
-    position: relative;
-    overflow: hidden;
-  }
-
-  .bar > i {
-    position: absolute;
-    inset: 0 auto 0 0;
-    display: block;
-  }
-
-  /* — rangée de navigation, type « réglages » — */
-
-  .mode-row {
-    display: flex;
-    align-items: center;
-    gap: 18.4px;
-    width: 100%;
-    padding: 15px 0;
-    border-bottom: 1px solid var(--color-divider);
-    color: var(--color-text);
-    text-decoration: none;
-    text-align: left;
-  }
-
-  .mode-row strong {
-    font-weight: 600;
-    font-size: 17px;
-    letter-spacing: -0.01em;
-    display: block;
-  }
-
-  .mode-row small {
-    font-size: 13.5px;
-    opacity: 0.65;
-    display: block;
-    margin-top: 1px;
-  }
-
-  /* — sélecteur segmenté — */
-
-  .segmented {
-    display: flex;
-    width: 100%;
-    border: 1px solid var(--color-divider);
-    border-radius: 4px;
-    overflow: hidden;
-  }
-
-  /*
-   * Le segment est un bouton quand il change l'état de l'écran, et un lien
-   * quand il change d'adresse — les onglets du catalogue en sont, et doivent
-   * rester ouvrables dans un nouvel onglet. Les deux partagent l'apparence,
-   * et le segment courant se dit `aria-pressed` pour l'un, `aria-current`
-   * pour l'autre : ce sont deux natures, pas un détail de balisage.
-   */
-  .segmented > button,
-  .segmented > a {
-    flex: 1;
-    min-width: 0;
-    min-height: 46px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0 4px;
-    font-family: inherit;
-    font-weight: 600;
-    font-size: 15px;
-    text-align: center;
-    line-height: 1.15;
-    color: var(--color-text);
-    background: transparent;
-    cursor: pointer;
-  }
-
-  .segmented > button + button,
-  .segmented > a + a {
-    border-left: 1px solid var(--color-divider);
-  }
-
-  .segmented > button[aria-pressed='true'],
-  .segmented > a[aria-current='page'] {
-    color: var(--color-accent);
-    box-shadow: inset 0 0 0 1px var(--color-accent);
-  }
-
-  /* — puces de quantité — */
-
-  .chip {
-    min-height: 44px;
-    display: flex;
-    align-items: center;
-    padding: 0 18.4px;
-    border: 1px solid var(--color-divider);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--color-text);
-    font-size: 15px;
-    cursor: pointer;
-  }
-
-  .chip[aria-pressed='true'] {
-    border-color: var(--color-accent);
-    color: var(--color-accent);
-  }
-
-  /*
-   * Cadre de photo. Le léger virage sépia rattache l'image à la palette du
-   * système, qui est chaude : une photo de repas prise au néon y jurerait.
-   */
-  .plate {
-    box-sizing: border-box;
-    filter: sepia(0.22) saturate(0.82) contrast(1.05);
-    border: 6px solid var(--color-surface);
-    outline: 1px solid var(--color-divider);
-  }
-
-  /* — encadré de résultat, filet d'accent à gauche — */
-
-  .aside-accent {
-    border-left: 2px solid var(--color-accent);
-    padding-left: 13.8px;
-  }
-
-  /* — feuille modale — */
-
-  .scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 50;
-    background: var(--color-scrim);
-    border: 0;
-  }
-
-  /*
-   * Rendue sur un <dialog> : il faut donc défaire ses styles par défaut, qui
-   * la centreraient dans la fenêtre avec une bordure pleine et une marge auto.
-   */
-  .sheet {
-    position: fixed;
-    inset: auto 0 0 0;
-    z-index: 51;
-    margin: 0 auto;
-    width: 100%;
-    max-width: 32rem;
-    max-height: 88dvh;
-    overflow-y: auto;
-    background: var(--color-bg);
-    color: var(--color-text);
-    border: 0;
-    border-top: 1px solid var(--color-accent);
-    border-radius: 14px 14px 0 0;
-    box-shadow: var(--shadow-lg);
-    padding: 18.4px 18.4px calc(18.4px + env(safe-area-inset-bottom, 0px));
-  }
-
-  .sheet::backdrop {
-    background: var(--color-scrim);
-  }
-
-  /* — barre d'onglets — */
-
-  /*
-   * Réserve sous le contenu la place de la barre fixe. Une marge basse posée
-   * sur le conteneur de page ne suffirait pas : la barre disparaît sur
-   * certains écrans, et la réserve doit disparaître avec elle.
-   */
-  .tabbar-spacer {
-    box-sizing: content-box;
-    height: 63px;
+@layer utilities {
+  /* Zones sûres iOS : rien de cliquable sous l'indicateur d'accueil. */
+  .safe-bottom {
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  .tabbar {
-    position: fixed;
-    inset-inline: 0;
-    bottom: 0;
-    z-index: 40;
-    background: var(--color-bg);
-    border-top: 1px solid var(--color-divider);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
   }
 
-  .tab {
-    flex: 1;
-    min-width: 52px;
-    min-height: 48px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 4px;
-    color: var(--color-text);
-    opacity: 0.42;
-    text-decoration: none;
-  }
-
-  .tab[aria-current='page'] {
-    opacity: 1;
-    color: var(--color-accent);
-  }
-
-  .tab span {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.07em;
-    text-transform: uppercase;
-  }
-
-  .add-pill {
-    flex: 1.5;
-    min-height: 48px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 7px;
-    border: 1px solid var(--color-accent);
-    border-radius: 999px;
-    background: transparent;
-    color: var(--color-accent);
-    font-family: inherit;
-    font-weight: 600;
-    font-size: 15px;
-    letter-spacing: 0.01em;
-    cursor: pointer;
-  }
-
-  /*
-   * Sous 360 px, la pilule ne garde que son signe.
-   *
-   * Quatre onglets et une pilule tiennent leurs 44 px de large dès 375 px, la
-   * largeur du plus petit iPhone encore à jour. En deçà, il faut rendre de la
-   * place à quelqu'un : la retirer au libellé d'un bouton que son signe suffit
-   * à désigner coûte moins que de rétrécir cinq cibles tactiles.
-   */
-  @media (max-width: 359px) {
-    .add-pill-label {
-      display: none;
-    }
-
-    .add-pill {
-      flex: 1;
-    }
+  /* Trame des emplacements d'image absente : photo, vignette de recette. */
+  .hatch {
+    background: repeating-linear-gradient(
+      135deg,
+      var(--muted) 0 11px,
+      var(--background) 11px 22px
+    );
   }
 }

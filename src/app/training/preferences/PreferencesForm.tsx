@@ -2,7 +2,20 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { NavHeader } from '@/components/ScreenHeader';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Label } from '@/components/ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { generateProgram, savePreferences } from '@/lib/client/training';
 import {
   EQUIPMENT_PREFERENCE_LABELS,
@@ -91,112 +104,120 @@ export function PreferencesForm({
     router.refresh();
   }
 
+  /** Valeur du sélecteur de salle : Radix refuse la chaîne vide comme valeur d'option. */
+  const NO_GYM = 'none';
+
   return (
     <>
-      <NavHeader label="Sport" href="/training" mode="back" />
+      <NavHeader label="Sport" href="/training" />
 
-      <h1 className="display-sm">Mes séances</h1>
-      <p className="note mt-1">
-        Trois réponses, et le programme se compose. Il se refait à volonté :
-        les séances remplacées sont archivées, jamais perdues.
-      </p>
+      <PageTitle
+        title="Mes séances"
+        description="Trois réponses, et le programme se compose. Il se refait à volonté : les séances remplacées sont archivées, jamais perdues."
+        className="mb-5"
+      />
 
-      <p className="kicker mt-6 mb-2">Ce que je veux travailler</p>
-      <div className="segmented">
-        {(['upper', 'lower', 'full'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={focus === value}
-            onClick={() => setFocus(value)}
+      <div className="flex flex-col gap-5">
+        <div className="grid gap-2">
+          <Label id="focus-label">Ce que je veux travailler</Label>
+          <Tabs
+            value={focus}
+            onValueChange={(value) =>
+              (value === 'upper' || value === 'lower' || value === 'full') && setFocus(value)
+            }
           >
-            {value === 'upper' ? 'Haut' : value === 'lower' ? 'Bas' : 'Les deux'}
-          </button>
-        ))}
-      </div>
-      <p className="note mt-2">
-        {FOCUS_LABELS[focus]}. {FOCUS_HINTS[focus]}
-      </p>
+            <TabsList aria-labelledby="focus-label" className="w-full">
+              {(['upper', 'lower', 'full'] as const).map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {value === 'upper' ? 'Haut' : value === 'lower' ? 'Bas' : 'Les deux'}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <p className="text-[12.5px] text-muted-foreground">
+            {FOCUS_LABELS[focus]}. {FOCUS_HINTS[focus]}
+          </p>
+        </div>
 
-      <p className="kicker mt-6 mb-2">Ma salle</p>
-      <label htmlFor="gym" className="sr-only">
-        Salle de sport
-      </label>
-      <select
-        id="gym"
-        className="field w-full"
-        value={gymId === null ? '' : String(gymId)}
-        onChange={(event) =>
-          setGymId(event.target.value === '' ? null : Number(event.target.value))
-        }
-      >
-        <option value="">Je ne précise pas</option>
-        {gyms.map((gym) => (
-          <option key={gym.id} value={gym.id}>
-            {gym.name}
-          </option>
-        ))}
-      </select>
-      <p className="note mt-2">
-        {chosenGym === null
-          ? 'Tout le catalogue reste proposé.'
-          : (chosenGym.note ??
-            'Les exercices sont limités à ce que cette enseigne propose.')}
-      </p>
-
-      <p className="kicker mt-6 mb-2">Poids libre ou machine</p>
-      <div className="segmented">
-        {(['free', 'machine', 'any'] as const).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={equipment === value}
-            onClick={() => setEquipment(value)}
+        <div className="grid gap-2">
+          <Label htmlFor="gym">Ma salle</Label>
+          <Select
+            value={gymId === null ? NO_GYM : String(gymId)}
+            onValueChange={(value) => setGymId(value === NO_GYM ? null : Number(value))}
           >
-            {EQUIPMENT_PREFERENCE_LABELS[value]}
-          </button>
-        ))}
-      </div>
-      <p className="note mt-2">{EQUIPMENT_HINTS[equipment]}</p>
+            <SelectTrigger id="gym" className="w-full data-[size=default]:h-10">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_GYM}>Je ne précise pas</SelectItem>
+              {gyms.map((gym) => (
+                <SelectItem key={gym.id} value={String(gym.id)}>
+                  {gym.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-[12.5px] text-muted-foreground">
+            {chosenGym === null
+              ? 'Tout le catalogue reste proposé.'
+              : (chosenGym.note ?? 'Les exercices sont limités à ce que cette enseigne propose.')}
+          </p>
+        </div>
 
-      <p className="kicker mt-6 mb-2">Séances par semaine</p>
-      <div className="segmented">
-        {Array.from(
-          { length: MAX_SESSIONS_PER_WEEK - MIN_SESSIONS_PER_WEEK + 1 },
-          (_, index) => index + MIN_SESSIONS_PER_WEEK,
-        ).map((value) => (
-          <button
-            key={value}
-            type="button"
-            aria-pressed={sessionsPerWeek === value}
-            onClick={() => setSessionsPerWeek(value)}
-            className="tabular"
+        <div className="grid gap-2">
+          <Label id="equipment-label">Poids libre ou machine</Label>
+          <Tabs
+            value={equipment}
+            onValueChange={(value) =>
+              (value === 'free' || value === 'machine' || value === 'any') && setEquipment(value)
+            }
           >
-            {value}
-          </button>
-        ))}
+            <TabsList aria-labelledby="equipment-label" className="w-full">
+              {(['free', 'machine', 'any'] as const).map((value) => (
+                <TabsTrigger key={value} value={value}>
+                  {EQUIPMENT_PREFERENCE_LABELS[value]}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+          <p className="text-[12.5px] text-muted-foreground">{EQUIPMENT_HINTS[equipment]}</p>
+        </div>
+
+        <div className="grid gap-2">
+          <Label id="sessions-label">Séances par semaine</Label>
+          <Tabs
+            value={String(sessionsPerWeek)}
+            onValueChange={(value) => setSessionsPerWeek(Number(value))}
+          >
+            <TabsList aria-labelledby="sessions-label" className="w-full">
+              {Array.from(
+                { length: MAX_SESSIONS_PER_WEEK - MIN_SESSIONS_PER_WEEK + 1 },
+                (_, index) => index + MIN_SESSIONS_PER_WEEK,
+              ).map((value) => (
+                <TabsTrigger key={value} value={String(value)} className="tabular">
+                  {value}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </Tabs>
+        </div>
       </div>
 
-      {error ? (
-        <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       {missing !== null ? (
-        <p className="note mt-4">
-          Aucun exercice disponible pour : {missing.join(', ')}. Ces créneaux ont été
-          laissés de côté.
-        </p>
+        <Alert className="mt-4">
+          <AlertDescription>
+            Aucun exercice disponible pour : {missing.join(', ')}. Ces créneaux ont été laissés
+            de côté.
+          </AlertDescription>
+        </Alert>
       ) : null}
 
-      <button
-        type="button"
-        onClick={() => void submit()}
-        disabled={busy}
-        className="action mt-6"
-      >
-        {busy ? 'Composition…' : 'Composer le programme'}
-      </button>
+      <BottomBar>
+        <Button type="button" onClick={() => void submit()} disabled={busy} className="w-full">
+          {busy ? 'Composition…' : 'Composer le programme'}
+        </Button>
+      </BottomBar>
     </>
   );
 }

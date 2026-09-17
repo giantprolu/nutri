@@ -47,13 +47,13 @@ export function readAppearance(value: string | undefined): Appearance {
  */
 export function themeAttribute(appearance: Appearance): string | undefined {
   if (appearance === 'light') {
-    return 'nutriperso-light';
+    return 'light';
   }
   if (appearance === 'dark') {
-    return 'nutriperso-dark';
+    return 'dark';
   }
   return undefined;
 }
 
 /** Couleur de fond des deux thèmes, pour la barre d'état du système. */
-export const THEME_COLORS = { light: '#f3f2f2', dark: '#1b1a19' } as const;
+export const THEME_COLORS = { light: '#ffffff', dark: '#0a0a0a' } as const;

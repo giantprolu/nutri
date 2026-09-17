@@ -1,11 +1,13 @@
+import { ShoppingCartIcon } from 'lucide-react';
 import Link from 'next/link';
 import { ScreenHeader } from '@/components/ScreenHeader';
-import { KitchenIcon } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { requireUserId } from '@/server/guard';
 import { basketFor } from '@/server/services/basket';
 import { planForWeek, weekDays } from '@/server/services/meal-plan';
 import { recipesFor } from '@/server/services/recipes';
 import { formatWeekRange, isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
+import { KitchenTabs } from './KitchenTabs';
 import { WeekBasket } from './WeekBasket';
 import { WeekPlanner } from './WeekPlanner';
 
@@ -22,8 +24,6 @@ export const dynamic = 'force-dynamic';
  *
  * Le panier vient avant le plan pour la même raison. Il porte les deux gestes
  * du début de semaine — choisir, puis acheter — et le plan celui du soir même.
- * Un écran qui ouvrirait sur sept jours vides demanderait de décider lundi ce
- * qu'on mangera jeudi, ce que personne ne sait.
  *
  * Composant serveur, aucun import client (AD-10).
  */
@@ -55,28 +55,31 @@ export default async function KitchenPage({
       <ScreenHeader
         title="Cuisine"
         kicker={formatWeekRange(startDate)}
-        action={{
-          href: '/kitchen/recipes',
-          label: 'Voir mes recettes',
-          icon: <KitchenIcon className="h-[22px] w-[22px]" />,
-        }}
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link href={`/kitchen/shopping?from=${startDate}`}>
+              <ShoppingCartIcon />
+              Courses
+            </Link>
+          </Button>
+        }
       />
+
+      <KitchenTabs current="week" />
 
       <WeekBasket weekStart={startDate} basket={basket} />
 
-      <hr className="rule mt-5" />
-
       {recipes.length === 0 ? (
         <div className="py-8 text-center">
-          <p className="mx-auto max-w-[26ch] text-[23px] leading-[1.35] font-semibold">
+          <p className="mx-auto max-w-[26ch] text-lg font-semibold tracking-tight">
             Une semaine se remplit avec des plats.
           </p>
-          <p className="note mx-auto mt-3 max-w-[32ch]">
+          <p className="mx-auto mt-2 max-w-[32ch] text-muted-foreground">
             Choisis-les dans le catalogue, ou écris les tiens.
           </p>
-          <Link href="/kitchen/recipes" className="action-quiet mx-auto mt-6 max-w-[240px]">
-            Écrire mes propres recettes
-          </Link>
+          <Button asChild variant="outline" className="mt-5">
+            <Link href="/kitchen/recipes">Écrire mes propres recettes</Link>
+          </Button>
         </div>
       ) : (
         <WeekPlanner

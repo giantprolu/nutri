@@ -2,6 +2,8 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
 import type { Entry } from '@/lib/types';
 import { groupByMeal } from '@/lib/journal';
 import { formatGrams, formatKcal } from '@/lib/nutrition';
@@ -22,10 +24,19 @@ import { SwipeToDeleteRow } from './SwipeToDeleteRow';
 
 function EntryRow({ entry }: { entry: Entry }) {
   return (
-    <div className="entry-row">
-      <span className="entry-name">{entry.foodLabel}</span>
-      <span className="entry-meta">{formatGrams(entry.quantityG)} g</span>
-      <span className="entry-kcal">{formatKcal(entry.macros.kcal)}</span>
+    <div className="flex items-center gap-3 border-b py-2.5">
+      <Avatar aria-hidden className="size-[34px]">
+        <AvatarFallback className="text-xs font-semibold uppercase">
+          {entry.foodLabel.trim().charAt(0)}
+        </AvatarFallback>
+      </Avatar>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-[14.5px] font-medium tracking-tight">{entry.foodLabel}</p>
+        <p className="tabular mt-px text-[12.5px] text-muted-foreground">
+          {formatGrams(entry.quantityG)} g
+        </p>
+      </div>
+      <p className="tabular font-medium">{formatKcal(entry.macros.kcal)}</p>
     </div>
   );
 }
@@ -54,20 +65,16 @@ export function MealJournal({
 
   return (
     <>
-      {sections.map((section, sectionIndex) => (
+      {sections.map((section) => (
         <section key={section.meal} aria-label={section.label}>
-          <div className="meal-head">
-            <h2>{section.label}</h2>
-            <span>{formatKcal(section.macros.kcal)} kcal</span>
+          <div className="flex items-center justify-between pt-[18px] pb-1.5">
+            <h2 className="text-[13px] font-semibold tracking-tight">{section.label}</h2>
+            <Badge variant="secondary" className="tabular">
+              {formatKcal(section.macros.kcal)} kcal
+            </Badge>
           </div>
 
-          <ul
-            // Le dernier filet du dernier repas est retiré : c'est la fin du
-            // journal, et un trait dans le vide se lit comme une suite absente.
-            className={
-              sectionIndex === sections.length - 1 ? '[&>li:last-child_.entry-row]:border-b-0' : ''
-            }
-          >
+          <ul>
             {section.entries.map((entry) =>
               deletable ? (
                 <SwipeToDeleteRow

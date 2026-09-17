@@ -1,8 +1,9 @@
 'use client';
 
+import { CheckIcon, ShoppingCartIcon } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CartIcon } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { addRecipeToBasket } from '@/lib/client/basket';
 
 /**
@@ -15,6 +16,9 @@ import { addRecipeToBasket } from '@/lib/client/basket';
  * Les parts proposées sont celles de la recette : on cuisine ce qu'elle
  * produit, et c'est au panier qu'on ajuste ensuite si la semaine en demande
  * le double.
+ *
+ * Il vit dans la barre basse : l'échec se dit donc dans le bouton lui-même,
+ * qui reste le seul endroit que le regard vient de quitter.
  */
 export function AddToBasket({
   recipeId,
@@ -41,33 +45,34 @@ export function AddToBasket({
       router.refresh();
       return;
     }
-    setError(
-      outcome.kind === 'unauthorized'
-        ? 'Session expirée.'
-        : 'Ce plat n’a pas pu être mis au panier.',
-    );
+    setError(outcome.kind === 'unauthorized' ? 'Session expirée' : 'Échec, réessayer');
   }
 
   if (alreadyChosen) {
-    return <p className="note mt-4 text-center">Ce plat est au panier de la semaine.</p>;
+    return (
+      <Button type="button" variant="outline" disabled className="flex-1">
+        <CheckIcon />
+        Au panier
+      </Button>
+    );
   }
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => void add()}
-        disabled={busy}
-        className="action-quiet mt-3"
-      >
-        <CartIcon className="h-4 w-4" />
-        {busy ? 'Ajout…' : 'Mettre au panier de la semaine'}
-      </button>
+    <Button
+      type="button"
+      variant="outline"
+      onClick={() => void add()}
+      disabled={busy}
+      aria-describedby={error ? `basket-error-${recipeId}` : undefined}
+      className={error ? 'flex-1 text-destructive' : 'flex-1'}
+    >
+      <ShoppingCartIcon />
+      {busy ? 'Ajout…' : (error ?? 'Au panier')}
       {error ? (
-        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
+        <span id={`basket-error-${recipeId}`} role="alert" className="sr-only">
+          Ce plat n’a pas pu être mis au panier.
+        </span>
       ) : null}
-    </>
+    </Button>
   );
 }

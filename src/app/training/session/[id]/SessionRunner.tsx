@@ -1,9 +1,31 @@
 'use client';
 
+import { CheckIcon, FlameIcon, TrendingUpIcon } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
 import { ExerciseSheet, type SheetExercise } from '@/components/ExerciseSheet';
-import { NavHeader } from '@/components/ScreenHeader';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Progress } from '@/components/ui/progress';
+import { Toggle } from '@/components/ui/toggle';
+import { cn } from '@/lib/utils';
 import { discardSession, finishSession, recordSet } from '@/lib/client/training';
 import {
   bestSet,
@@ -172,186 +194,249 @@ export function SessionRunner({
   }
 
   const closed = session.finishedAt !== null;
+  const plannedSets = exercises.reduce((total, entry) => total + entry.targetSets, 0);
+  const recordedSets = session.sets.length;
 
   return (
     <>
-      <NavHeader label="Sport" href="/training" mode="back" />
+      <NavHeader label="Sport" href="/training" />
 
-      <h1 className="display-sm">{session.templateName ?? 'Séance libre'}</h1>
-      <p className="kicker kicker-quiet mt-1">
-        {session.sets.length} série{session.sets.length > 1 ? 's' : ''} ·{' '}
-        {sessionVolume(session.sets).toLocaleString('fr-FR')} kg soulevés
-        {closed ? ' · terminée' : ''}
-      </p>
-
-      {error ? (
-        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
+      <PageTitle
+        title={session.templateName ?? 'Séance libre'}
+        description={
+          <span className="tabular">
+            {plannedSets > 0 ? `${recordedSets} séries sur ${plannedSets}` : `${recordedSets} série${recordedSets > 1 ? 's' : ''}`}{' '}
+            · {sessionVolume(session.sets).toLocaleString('fr-FR')} kg soulevés
+            {closed ? ' · terminée' : ''}
+          </span>
+        }
+      />
+      {plannedSets > 0 ? (
+        <Progress
+          value={Math.min(100, (recordedSets / plannedSets) * 100)}
+          aria-label="Séries enregistrées"
+          className="mt-3"
+        />
       ) : null}
 
+      {error ? <ErrorAlert>{error}</ErrorAlert> : null}
+
       {exercises.length === 0 ? (
-        <p className="note mt-6">
+        <p className="mt-6 text-muted-foreground">
           Cette séance ne suit aucun modèle : ses séries ne peuvent pas être préremplies.
         </p>
       ) : null}
 
-      {exercises.map((entry) => {
-        const history = previous[entry.exercise.id] ?? [];
-        const reference = bestSet(history);
-        const isTimed = entry.exercise.kind === 'hold' || entry.exercise.kind === 'cardio';
+      <div className="mt-4 flex flex-col gap-2.5">
+        {exercises.map((entry) => {
+          const history = previous[entry.exercise.id] ?? [];
+          const reference = bestSet(history);
+          const isTimed = entry.exercise.kind === 'hold' || entry.exercise.kind === 'cardio';
+          const indices = Array.from({ length: entry.targetSets }, (_, index) => index + 1);
+          const doneCount = indices.filter((setIndex) =>
+            doneSets.has(draftKey(entry.exercise.id, setIndex)),
+          ).length;
+          // La prochaine série à faire est mise en avant : c'est la seule que
+          // le regard cherche en revenant au téléphone entre deux séries.
+          const nextIndex = indices.find(
+            (setIndex) => !doneSets.has(draftKey(entry.exercise.id, setIndex)),
+          );
 
-        return (
-          <section key={entry.id} className="mt-5">
-            {/*
-              Le nom ouvre la fiche, ici aussi. C'est en salle, devant la
-              machine, qu'on a le plus besoin de vérifier qu'on est au bon
-              appareil — et c'est le seul endroit où l'on ne peut pas aller
-              chercher l'information ailleurs sans perdre sa place.
-            */}
-            <div className="meal-head">
-              <button
-                type="button"
-                onClick={() => setShown(entry.exercise)}
-                className="link-accent text-left"
-              >
-                {entry.exercise.name}
-              </button>
-              <span className="kicker tabular">{formatPrescription(entry)}</span>
-            </div>
+          return (
+            <Card key={entry.id} role="region" aria-label={entry.exercise.name}>
+              <CardContent>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    {/*
+                      Le nom ouvre la fiche, ici aussi. C'est en salle, devant la
+                      machine, qu'on a le plus besoin de vérifier qu'on est au bon
+                      appareil — et c'est le seul endroit où l'on ne peut pas aller
+                      chercher l'information ailleurs sans perdre sa place.
+                    */}
+                    <button
+                      type="button"
+                      onClick={() => setShown(entry.exercise)}
+                      className="text-left text-[15px] font-medium tracking-tight underline decoration-border underline-offset-4"
+                    >
+                      {entry.exercise.name}
+                    </button>
+                    <p className="tabular mt-0.5 text-[12.5px] text-muted-foreground">
+                      Objectif {formatPrescription(entry)}
+                    </p>
+                  </div>
+                  <div className="flex flex-none items-center gap-1">
+                    {reference !== null ? (
+                      <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
+                        <Link
+                          href={`/training/progress/${entry.exercise.id}`}
+                          aria-label={`Progression sur ${entry.exercise.name}`}
+                        >
+                          <TrendingUpIcon />
+                        </Link>
+                      </Button>
+                    ) : null}
+                    <Badge
+                      variant={doneCount === entry.targetSets ? 'secondary' : 'outline'}
+                      className="tabular"
+                    >
+                      {doneCount}/{entry.targetSets}
+                    </Badge>
+                  </div>
+                </div>
 
-            {entry.notes !== null ? <p className="note mb-1">{entry.notes}</p> : null}
+                {entry.notes !== null ? (
+                  <p className="mt-2 text-[12.5px] text-muted-foreground">{entry.notes}</p>
+                ) : null}
 
-            {reference !== null ? (
-              <p className="entry-meta mb-2">
-                La dernière fois : {formatSet(reference)}
-                {history.length > 1 ? ` sur ${history.length} séries` : ''}
-              </p>
-            ) : (
-              <p className="entry-meta mb-2">Première fois sur cet exercice.</p>
-            )}
+                <p className="tabular mt-2.5 mb-1 text-[12.5px] text-muted-foreground">
+                  {reference !== null
+                    ? `La dernière fois : ${formatSet(reference)}${history.length > 1 ? `, sur ${history.length} séries` : ''}`
+                    : 'Première fois sur cet exercice.'}
+                </p>
 
-            <ul>
-              {Array.from({ length: entry.targetSets }, (_, index) => index + 1).map(
-                (setIndex) => {
-                  const key = draftKey(entry.exercise.id, setIndex);
-                  const recorded = doneSets.get(key);
-                  const draft = readDraft(entry, setIndex);
+                <ul>
+                  {indices.map((setIndex) => {
+                    const key = draftKey(entry.exercise.id, setIndex);
+                    const recorded = doneSets.get(key);
+                    const draft = readDraft(entry, setIndex);
+                    const isNext = setIndex === nextIndex && !closed;
 
-                  return (
-                    <li key={setIndex} className="flex items-center gap-2 py-1.5">
-                      <span
-                        className="kicker kicker-quiet tabular w-[54px] flex-none"
-                        style={recorded ? { color: 'var(--color-accent)' } : undefined}
+                    return (
+                      <li
+                        key={setIndex}
+                        className={cn('flex items-center gap-2 py-1.5', recorded && 'opacity-60 focus-within:opacity-100')}
                       >
-                        {recorded ? '■' : '□'} S{setIndex}
-                      </span>
+                        <span className="tabular w-5 flex-none text-[12px] text-muted-foreground">
+                          {setIndex}
+                        </span>
 
-                      {isTimed ? (
-                        <label className="flex flex-1 items-center gap-2">
-                          <span className="sr-only">
-                            Durée de la série {setIndex} en secondes
-                          </span>
-                          <input
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            value={draft.seconds}
-                            onChange={(event) => patch(key, { seconds: event.target.value })}
-                            className="field w-full text-right text-[17px]"
-                          />
-                          <span className="entry-meta flex-none">s</span>
-                        </label>
-                      ) : (
-                        <>
-                          <label className="flex flex-1 items-center gap-1">
-                            <span className="sr-only">
-                              Charge de la série {setIndex} en kilogrammes
-                            </span>
-                            <input
-                              type="number"
-                              inputMode="decimal"
-                              min={0}
-                              step={0.5}
-                              value={draft.weightKg}
-                              onChange={(event) => patch(key, { weightKg: event.target.value })}
-                              className="field w-full text-right text-[17px]"
-                            />
-                            <span className="entry-meta flex-none">kg</span>
-                          </label>
-                          <span className="entry-meta flex-none">×</span>
-                          <label className="flex w-[72px] flex-none items-center gap-1">
-                            <span className="sr-only">
-                              Répétitions de la série {setIndex}
-                            </span>
-                            <input
+                        {isTimed ? (
+                          <div className="relative min-w-0 flex-1">
+                            <Input
                               type="number"
                               inputMode="numeric"
                               min={1}
-                              value={draft.reps}
-                              onChange={(event) => patch(key, { reps: event.target.value })}
-                              className="field w-full text-right text-[17px]"
+                              aria-label={`Durée de la série ${setIndex} en secondes`}
+                              value={draft.seconds}
+                              onChange={(event) => patch(key, { seconds: event.target.value })}
+                              className="tabular pr-7"
                             />
-                          </label>
-                        </>
-                      )}
+                            <span
+                              aria-hidden
+                              className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[12px] text-muted-foreground"
+                            >
+                              s
+                            </span>
+                          </div>
+                        ) : (
+                          <>
+                            <div className="relative min-w-0 flex-1">
+                              <Input
+                                type="number"
+                                inputMode="decimal"
+                                min={0}
+                                step={0.5}
+                                aria-label={`Charge de la série ${setIndex} en kilogrammes`}
+                                value={draft.weightKg}
+                                onChange={(event) => patch(key, { weightKg: event.target.value })}
+                                className="tabular pr-8"
+                              />
+                              <span
+                                aria-hidden
+                                className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-[12px] text-muted-foreground"
+                              >
+                                kg
+                              </span>
+                            </div>
+                            <div className="relative w-[74px] flex-none">
+                              <Input
+                                type="number"
+                                inputMode="numeric"
+                                min={1}
+                                aria-label={`Répétitions de la série ${setIndex}`}
+                                value={draft.reps}
+                                onChange={(event) => patch(key, { reps: event.target.value })}
+                                className="tabular pr-9"
+                              />
+                              <span
+                                aria-hidden
+                                className="pointer-events-none absolute top-1/2 right-2.5 -translate-y-1/2 text-[12px] text-muted-foreground"
+                              >
+                                rép.
+                              </span>
+                            </div>
+                          </>
+                        )}
 
-                      {/*
-                        L'échec se marque au moment où il a lieu, d'un appui,
-                        et non dans un écran de correction : « 6 répétitions »
-                        et « 6 répétitions à l'échec » ne demandent pas la même
-                        charge la semaine suivante, et c'est cette différence
-                        qui rend la ligne relisible.
-                      */}
-                      <button
-                        type="button"
-                        onClick={() => patch(key, { toFailure: !draft.toFailure })}
-                        disabled={busy || closed}
-                        aria-pressed={draft.toFailure}
-                        aria-label={`Série ${setIndex} menée à l'échec`}
-                        className="chip flex-none"
-                      >
-                        éch.
-                      </button>
+                        {/*
+                          L'échec se marque au moment où il a lieu, d'un appui,
+                          et non dans un écran de correction : « 6 répétitions »
+                          et « 6 répétitions à l'échec » ne demandent pas la même
+                          charge la semaine suivante, et c'est cette différence
+                          qui rend la ligne relisible.
+                        */}
+                        <Toggle
+                          variant="outline"
+                          pressed={draft.toFailure}
+                          onPressedChange={(pressed) => patch(key, { toFailure: pressed })}
+                          disabled={busy || closed}
+                          aria-label={`Série ${setIndex} menée à l'échec`}
+                          className="size-10 flex-none"
+                        >
+                          <FlameIcon />
+                        </Toggle>
 
-                      <button
-                        type="button"
-                        onClick={() => void save(entry, setIndex)}
-                        disabled={busy || closed}
-                        aria-label={`Enregistrer la série ${setIndex} de ${entry.exercise.name}`}
-                        className="chip flex-none"
-                      >
-                        {recorded ? 'Corriger' : 'Valider'}
-                      </button>
-                    </li>
-                  );
-                },
-              )}
-            </ul>
-          </section>
-        );
-      })}
+                        <Button
+                          type="button"
+                          variant={recorded ? 'secondary' : isNext ? 'default' : 'outline'}
+                          size="icon"
+                          onClick={() => void save(entry, setIndex)}
+                          disabled={busy || closed}
+                          aria-label={`${recorded ? 'Corriger' : 'Valider'} la série ${setIndex} de ${entry.exercise.name}`}
+                          className="flex-none"
+                        >
+                          <CheckIcon />
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </CardContent>
+            </Card>
+          );
+        })}
+      </div>
 
       {!closed ? (
-        <>
-          <hr className="rule mt-6" />
-          <button
-            type="button"
-            onClick={() => void finish()}
-            disabled={busy}
-            className="action mt-4"
-          >
+        <BottomBar surface="card" className="flex gap-2.5">
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button type="button" variant="outline" disabled={busy} className="flex-1">
+                Abandonner
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Abandonner la séance ?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Les séries de cette séance ne seront pas enregistrées.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Continuer la séance</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => void discard()}
+                  className="bg-destructive text-white hover:bg-destructive/90"
+                >
+                  Abandonner
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+          <Button type="button" onClick={() => void finish()} disabled={busy} className="flex-[1.4]">
             Terminer la séance
-          </button>
-          <button
-            type="button"
-            onClick={() => void discard()}
-            disabled={busy}
-            className="action-danger mt-3"
-          >
-            Abandonner sans enregistrer
-          </button>
-        </>
+          </Button>
+        </BottomBar>
       ) : null}
 
       <ExerciseSheet exercise={shown} onClose={() => setShown(null)} />

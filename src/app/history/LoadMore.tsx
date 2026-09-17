@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 import type { DayTotals } from '@/lib/types';
 import { DayRow } from './DayRow';
 
@@ -45,20 +46,21 @@ export function LoadMore({ initialOffset }: { initialOffset: number }) {
       ) : null}
 
       {error ? (
-        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
+        <p role="alert" className="mt-3 text-destructive">
           {error}
         </p>
       ) : null}
 
       {exhausted ? null : (
-        <button
+        <Button
           type="button"
+          variant="outline"
           onClick={() => void loadMore()}
           disabled={loading}
-          className="action action-quiet mt-4"
+          className="mt-4 w-full"
         >
           {loading ? 'Chargement…' : 'Jours précédents'}
-        </button>
+        </Button>
       )}
     </>
   );

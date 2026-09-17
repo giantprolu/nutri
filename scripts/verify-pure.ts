@@ -53,6 +53,15 @@ import {
   slugFromName,
 } from '../src/lib/workout-log';
 import { buildProgram } from '../src/lib/workout-plan';
+import {
+  estimatedOneRepMax,
+  exerciseProgress,
+  formatChange,
+  formatMetric,
+  progressMetric,
+  weeklyTotals,
+  type ProgressSet,
+} from '../src/lib/workout-progress';
 import { gymInventory, SEED_EXERCISES, SEED_GYMS } from '../src/lib/workout-seed';
 import {
   demoSearchUrl,
@@ -978,5 +987,85 @@ assert.equal(
   '6 kg × 10',
   'sans echec, rien ne s affiche',
 );
+
+// --- Progression ---
+
+// Une repetition unique vaut sa charge : c'est le seul maximum mesure.
+assert.equal(estimatedOneRepMax(100, 1), 100, '1RM d une serie unique');
+assert.equal(estimatedOneRepMax(60, 10), 80, 'Epley a 10 repetitions');
+assert.equal(estimatedOneRepMax(null, 10), null, 'sans charge, pas de 1RM');
+assert.equal(estimatedOneRepMax(0, 10), null, 'charge nulle, pas de 1RM');
+
+const serie = (
+  sessionId: number,
+  sessionDate: string,
+  weightKg: number | null,
+  reps: number | null,
+  seconds: number | null = null,
+): ProgressSet => ({
+  sessionId,
+  sessionDate,
+  exerciseId: 1,
+  weightKg,
+  reps,
+  seconds,
+  toFailure: false,
+});
+
+// Une traction se lit en repetitions, jusqu'au jour ou elle est lestee.
+assert.equal(progressMetric('strength', [serie(1, '2026-09-01', null, 8)]), 'reps', 'poids du corps');
+assert.equal(
+  progressMetric('strength', [serie(1, '2026-09-01', null, 8), serie(2, '2026-09-08', 5, 6)]),
+  'load',
+  'une serie lestee bascule sur la charge',
+);
+assert.equal(progressMetric('hold', [serie(1, '2026-09-01', 10, 10)]), 'time', 'gainage en duree');
+
+const couche = { id: 1, name: 'Développé couché', kind: 'strength' as const, muscleGroup: 'Pectoraux' };
+
+// 60 x 6 puis 60 x 10 : la charge maximale ne bouge pas, le 1RM estime si.
+const progres = exerciseProgress(couche, [
+  serie(2, '2026-09-08', 60, 10),
+  serie(1, '2026-09-01', 60, 6),
+  serie(1, '2026-09-01', 50, 10),
+]);
+assert.ok(progres !== null, 'progression calculee');
+assert.equal(progres.metric, 'load', 'mesure en charge');
+assert.deepEqual(
+  progres.points.map((point) => point.sessionDate),
+  ['2026-09-01', '2026-09-08'],
+  'seances dans l ordre chronologique',
+);
+assert.equal(progres.points[0]!.value, 72, 'meilleur 1RM de la premiere seance');
+assert.equal(progres.points[0]!.volume, 860, 'tonnage de la premiere seance');
+assert.equal(progres.change, 8, 'ecart sur la periode');
+assert.equal(progres.record.sessionId, 2, 'record sur la derniere seance');
+
+// Une seance sans mesure est omise, et non rendue a zero.
+const lacunaire = exerciseProgress(couche, [serie(1, '2026-09-01', 60, 8), serie(2, '2026-09-08', null, null)]);
+assert.equal(lacunaire?.points.length, 1, 'seance sans mesure omise');
+assert.equal(lacunaire?.change, null, 'une seule seance, pas d ecart');
+assert.equal(exerciseProgress(couche, []), null, 'aucune seance, aucune progression');
+
+// Les semaines vides restent sur le graphique.
+const semaines = weeklyTotals(
+  [serie(1, '2026-09-14', 50, 10), serie(1, '2026-09-14', 50, 10), serie(2, '2026-09-01', 40, 10)],
+  3,
+  '2026-09-17',
+);
+assert.deepEqual(
+  semaines.map((week) => [week.weekStart, week.volume, week.sessions]),
+  [
+    ['2026-08-31', 400, 1],
+    ['2026-09-07', 0, 0],
+    ['2026-09-14', 1000, 1],
+  ],
+  'tonnage par semaine, semaines vides comprises',
+);
+
+assert.equal(formatMetric('load', 72.5), '72,5 kg', 'charge formatee');
+assert.equal(formatMetric('time', 90), '1 min 30 s', 'duree formatee');
+assert.equal(formatChange('reps', -3), '−3 rép.', 'regression signee');
+assert.equal(formatChange('load', 0), '=', 'stagnation');
 
 console.log('Toutes les verifications pures passent.');

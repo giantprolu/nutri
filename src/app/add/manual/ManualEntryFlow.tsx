@@ -2,8 +2,14 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { NavHeader } from '@/components/ScreenHeader';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { QuantityPad } from '@/components/QuantityPad';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { buildQuantityShortcuts, type QuantityShortcut } from '@/lib/shortcuts';
 import { createEntry, fetchRecentQuantities } from '@/lib/client/entries';
 import { isValidNutrient } from '@/lib/nutrition';
@@ -23,10 +29,10 @@ type Step =
   | { name: 'quantity'; foodLabel: string; per100g: Macros; shortcuts: QuantityShortcut[] };
 
 const FIELDS = [
-  { key: 'kcal', label: 'Énergie', unit: 'kcal' },
-  { key: 'proteinG', label: 'Protéines', unit: 'g' },
-  { key: 'carbsG', label: 'Glucides', unit: 'g' },
-  { key: 'fatG', label: 'Lipides', unit: 'g' },
+  { key: 'kcal', label: 'Énergie (kcal)' },
+  { key: 'proteinG', label: 'Protéines (g)' },
+  { key: 'carbsG', label: 'Glucides (g)' },
+  { key: 'fatG', label: 'Lipides (g)' },
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number]['key'];
@@ -111,8 +117,7 @@ export function ManualEntryFlow() {
     return (
       <>
         <NavHeader
-          label="Quantité"
-          mode="back"
+          label="Saisir à la main"
           onDismiss={() => {
             setError(null);
             setStep({ name: 'food' });
@@ -126,80 +131,77 @@ export function ManualEntryFlow() {
           submitting={submitting}
           onSubmit={save}
         />
-        {error ? (
-          <p role="alert" className="mt-4 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-            {error}
-          </p>
-        ) : null}
+        {error ? <ErrorAlert>{error}</ErrorAlert> : null}
       </>
     );
   }
 
   return (
     <>
-      <NavHeader label="Saisie manuelle" href="/" />
-
-      <h1 className="display-sm mt-3">Une entrée ad hoc</h1>
-      <p className="note mt-2">
-        Rien n&apos;est ajouté aux tables de référence. Cette fiche ne vit que dans ton journal.
-      </p>
-      <hr className="rule mt-4 mb-6" />
+      <NavHeader label="Ajouter" href="/add" />
+      <PageTitle
+        title="Saisir à la main"
+        description="Rien n'est ajouté aux tables de référence."
+        className="mb-5"
+      />
 
       <form
+        className="flex flex-col gap-4"
         onSubmit={(event) => {
           event.preventDefault();
           void goToQuantity();
         }}
       >
-        <label htmlFor="foodLabel" className="label">
-          Désignation
-        </label>
-        <input
-          id="foodLabel"
-          name="foodLabel"
-          type="text"
-          required
-          maxLength={200}
-          autoComplete="off"
-          value={foodLabel}
-          onChange={(event) => setFoodLabel(event.target.value)}
-          className="field mt-2 mb-6"
-        />
+        <div className="grid gap-2">
+          <Label htmlFor="foodLabel">Désignation</Label>
+          <Input
+            id="foodLabel"
+            name="foodLabel"
+            type="text"
+            required
+            maxLength={200}
+            autoComplete="off"
+            placeholder="Tarte aux poireaux, maison"
+            value={foodLabel}
+            onChange={(event) => setFoodLabel(event.target.value)}
+          />
+        </div>
 
-        <fieldset>
-          <legend className="kicker kicker-quiet">Valeurs pour 100 g</legend>
-          <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-4">
-            {FIELDS.map((field) => (
-              <div key={field.key}>
-                <label htmlFor={field.key} className="label">
-                  {field.label}
-                </label>
-                <div className="field mt-1.5 items-baseline">
-                  <input
-                    id={field.key}
-                    name={field.key}
-                    type="text"
-                    inputMode="decimal"
-                    required
-                    autoComplete="off"
-                    value={values[field.key]}
-                    onChange={(event) =>
-                      setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
-                    }
-                    className="tabular w-full min-w-0 border-0 bg-transparent p-0 outline-none"
-                  />
-                  <span aria-hidden className="flex-none text-[14px] opacity-45">
-                    {field.unit}
-                  </span>
-                </div>
+        <Card>
+          <CardContent>
+            <fieldset aria-labelledby="manual-values">
+              <CardTitle id="manual-values" className="text-[13.5px]">
+                Valeurs pour 100 g
+              </CardTitle>
+              <div className="grid grid-cols-2 gap-3 pt-3">
+                {FIELDS.map((field) => (
+                  <div key={field.key} className="grid min-w-0 gap-2">
+                    <Label htmlFor={field.key}>{field.label}</Label>
+                    <Input
+                      id={field.key}
+                      name={field.key}
+                      type="text"
+                      inputMode="decimal"
+                      required
+                      autoComplete="off"
+                      value={values[field.key]}
+                      onChange={(event) =>
+                        setValues((previous) => ({ ...previous, [field.key]: event.target.value }))
+                      }
+                      className="tabular"
+                    />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </fieldset>
+            </fieldset>
+          </CardContent>
+        </Card>
 
-        <button type="submit" disabled={!foodReady} className="action mt-8">
-          Continuer vers la quantité
-        </button>
+        <BottomBar>
+          <Button type="submit" disabled={!foodReady} className="w-full">
+            Continuer
+          </Button>
+        </BottomBar>
       </form>
     </>
   );

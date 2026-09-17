@@ -2,6 +2,9 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 
 /**
  * Connexion et inscription sur le même écran (FR-1).
@@ -64,76 +67,70 @@ export function UnlockForm() {
   const remaining = MIN_PASSWORD_LENGTH - password.length;
 
   return (
-    <form onSubmit={submit}>
-      <label htmlFor="email" className="label">
-        Adresse
-      </label>
-      <input
-        id="email"
-        name="email"
-        type="email"
-        inputMode="email"
-        autoComplete="username"
-        autoFocus
-        required
-        value={email}
-        onChange={(event) => setEmail(event.target.value)}
-        className="field mt-2 mb-6"
-      />
+    <form onSubmit={submit} className="flex flex-col gap-3.5">
+      <div className="grid gap-2">
+        <Label htmlFor="email">Adresse</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          inputMode="email"
+          autoComplete="username"
+          autoFocus
+          required
+          placeholder="toi@exemple.fr"
+          value={email}
+          onChange={(event) => setEmail(event.target.value)}
+        />
+      </div>
 
-      <label htmlFor="password" className="label">
-        Mot de passe
-      </label>
-      <input
-        id="password"
-        name="password"
-        type="password"
-        autoComplete={isRegister ? 'new-password' : 'current-password'}
-        required
-        minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
-        value={password}
-        onChange={(event) => setPassword(event.target.value)}
-        aria-invalid={error !== null}
-        aria-describedby={error ? 'password-error' : undefined}
-        className="field field-accent mt-2 tracking-[0.3em]"
-      />
+      <div className="grid gap-2">
+        <Label htmlFor="password">Mot de passe</Label>
+        <Input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete={isRegister ? 'new-password' : 'current-password'}
+          required
+          minLength={isRegister ? MIN_PASSWORD_LENGTH : undefined}
+          value={password}
+          onChange={(event) => setPassword(event.target.value)}
+          aria-invalid={error !== null}
+          aria-describedby={error ? 'password-error' : undefined}
+        />
+        {isRegister ? (
+          <p className="text-[12.5px] text-muted-foreground">
+            {tooShort
+              ? `Encore ${remaining} caractère${remaining > 1 ? 's' : ''}.`
+              : `${MIN_PASSWORD_LENGTH} caractères minimum. Aucune récupération n'est possible : note-le.`}
+          </p>
+        ) : null}
+        {error ? (
+          <p id="password-error" role="alert" className="text-destructive">
+            {error}
+          </p>
+        ) : null}
+      </div>
 
-      {isRegister ? (
-        <p className="note mt-2">
-          {tooShort
-            ? `Encore ${remaining} caractère${remaining > 1 ? 's' : ''}.`
-            : `${MIN_PASSWORD_LENGTH} caractères minimum. Aucune récupération n'est possible : note-le.`}
-        </p>
-      ) : null}
-
-      {error ? (
-        <p
-          id="password-error"
-          role="alert"
-          className="mt-2 text-[15px]"
-          style={{ color: 'var(--color-danger)' }}
-        >
-          {error}
-        </p>
-      ) : null}
-
-      <button
+      <Button
         type="submit"
         disabled={pending || email.length === 0 || password.length === 0 || tooShort}
-        className="action mt-6"
+        className="mt-1 w-full"
       >
         {pending ? 'Vérification…' : isRegister ? 'Créer le compte' : 'Se connecter'}
-      </button>
+      </Button>
 
-      <div className="mt-2 flex min-h-12 items-center justify-center">
-        <button
+      <p className="mt-2 text-center text-muted-foreground">
+        {isRegister ? 'Déjà un compte ?' : 'Pas encore de compte ?'}{' '}
+        <Button
           type="button"
+          variant="link"
           onClick={() => switchMode(isRegister ? 'login' : 'register')}
-          className="link-accent text-[15px]"
+          className="h-auto p-0 text-foreground underline underline-offset-[3px]"
         >
-          {isRegister ? "J'ai déjà un compte" : 'Créer un compte'}
-        </button>
-      </div>
+          {isRegister ? 'Se connecter' : 'En créer un'}
+        </Button>
+      </p>
     </form>
   );
 }

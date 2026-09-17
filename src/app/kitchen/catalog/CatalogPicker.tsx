@@ -1,13 +1,20 @@
 'use client';
 
+import { ChevronRightIcon, ShoppingCartIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { CartIcon, ChevronRightIcon } from '@/components/icons';
+import { BottomBar } from '@/components/BottomBar';
+import { ErrorAlert } from '@/components/ErrorAlert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
 import { chooseMeals } from '@/lib/client/basket';
 import { CATALOG_GOAL_LABELS, CATALOG_GOAL_NOTES } from '@/lib/meal-catalog';
 import type { Goal } from '@/lib/energy';
-import { MEALS, MEAL_SHORT_LABELS, type Meal } from '@/lib/meal';
+import { MEALS, MEAL_SHORT_LABELS, isMeal, type Meal } from '@/lib/meal';
 import { CatalogMealSheet } from './CatalogMealSheet';
 
 /**
@@ -41,7 +48,7 @@ export interface CatalogCard {
 /**
  * Le choix des plats de la semaine.
  *
- * Chaque ligne ne porte que le nom, et se touche à deux endroits : le rond
+ * Chaque ligne ne porte que le nom, et se touche à deux endroits : la case
  * choisit, le reste ouvre le détail. Deux gestes distincts parce que ce sont
  * deux intentions — on parcourt une liste de trente plats pour reconnaître un
  * nom, et on ouvre le détail des deux ou trois dont on hésite. Empiler
@@ -133,42 +140,40 @@ export function CatalogPicker({
 
   return (
     <>
-      <nav className="segmented mt-4" aria-label="Objectif">
-        {(['lose', 'maintain', 'gain'] as const).map((candidate) => (
-          <Link
-            key={candidate}
-            href={`/kitchen/catalog?from=${weekStart}&goal=${candidate}`}
-            aria-current={goal === candidate ? 'page' : undefined}
-          >
-            {CATALOG_GOAL_LABELS[candidate]}
-          </Link>
-        ))}
-      </nav>
-      <p className="note mt-2">{CATALOG_GOAL_NOTES[goal]}</p>
+      <Tabs value={goal} className="mt-4">
+        <TabsList aria-label="Objectif" className="w-full">
+          {(['lose', 'maintain', 'gain'] as const).map((candidate) => (
+            <TabsTrigger key={candidate} value={candidate} asChild>
+              <Link
+                href={`/kitchen/catalog?from=${weekStart}&goal=${candidate}`}
+                aria-current={goal === candidate ? 'page' : undefined}
+              >
+                {CATALOG_GOAL_LABELS[candidate]}
+              </Link>
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
+      <p className="mt-2 text-[12.5px] text-muted-foreground">{CATALOG_GOAL_NOTES[goal]}</p>
 
-      <div className="segmented mt-4" role="group" aria-label="Type de repas">
-        <button type="button" onClick={() => setSlot('all')} aria-pressed={slot === 'all'}>
-          Tout
-        </button>
-        {MEALS.map((candidate) => (
-          <button
-            key={candidate}
-            type="button"
-            onClick={() => setSlot(candidate)}
-            aria-pressed={slot === candidate}
-          >
-            {MEAL_SHORT_LABELS[candidate]}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        value={slot}
+        onValueChange={(value) => setSlot(value === 'all' ? 'all' : isMeal(value) ? value : 'all')}
+        className="mt-3.5"
+      >
+        <TabsList aria-label="Type de repas" className="w-full">
+          <TabsTrigger value="all">Tout</TabsTrigger>
+          {MEALS.map((candidate) => (
+            <TabsTrigger key={candidate} value={candidate} className="px-1">
+              {MEAL_SHORT_LABELS[candidate]}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+      </Tabs>
 
-      {error ? (
-        <p role="alert" className="mt-3 text-[15px]" style={{ color: 'var(--color-danger)' }}>
-          {error}
-        </p>
-      ) : null}
+      {error ? <ErrorAlert className="mt-3">{error}</ErrorAlert> : null}
       {notice ? (
-        <p role="status" className="note mt-3">
+        <p role="status" className="mt-3 text-muted-foreground">
           {notice}
         </p>
       ) : null}
@@ -176,88 +181,83 @@ export function CatalogPicker({
       <ul className="mt-2">
         {shown.map((card) => {
           const picked = selected.has(card.slug);
+          const id = `catalog-${card.slug}`;
           return (
-            <li
-              key={card.slug}
-              className="flex items-center gap-2"
-              style={{ borderBottom: '1px solid var(--color-divider)' }}
-            >
+            <li key={card.slug} className="flex items-center gap-1 border-b">
               {/*
-                Deux boutons frères et non l'un dans l'autre : un bouton
-                imbriqué est un balisage invalide, que les lecteurs d'écran
-                rendent de façon imprévisible. Le rond garde ses 44 px de
-                cible, sans quoi il se touche une fois sur deux.
+                La case et le bouton de détail sont frères et non imbriqués : un
+                contrôle dans un autre est un balisage invalide, que les lecteurs
+                d'écran rendent de façon imprévisible. La case garde une cible de
+                44 px, sans quoi elle se touche une fois sur deux.
               */}
-              <button
-                type="button"
-                disabled={busy || card.inBasket}
-                onClick={() => toggle(card.slug)}
-                aria-pressed={picked}
-                aria-label={`Choisir ${card.name}`}
-                className="tap-target -ml-2 flex flex-none items-center justify-center"
+              <label
+                htmlFor={id}
+                className="-ml-3 flex size-11 flex-none cursor-pointer items-center justify-center"
               >
-                <span
-                  aria-hidden
-                  className="flex h-[22px] w-[22px] items-center justify-center rounded-full border text-[13px] leading-none font-semibold"
-                  style={{
-                    borderColor:
-                      picked || card.inBasket ? 'var(--color-accent)' : 'var(--color-divider)',
-                    color: 'var(--color-accent)',
-                    opacity: card.inBasket ? 0.55 : 1,
-                  }}
-                >
-                  {picked || card.inBasket ? '✓' : ''}
-                </span>
-              </button>
+                <Checkbox
+                  id={id}
+                  checked={picked || card.inBasket}
+                  disabled={busy || card.inBasket}
+                  onCheckedChange={() => toggle(card.slug)}
+                  aria-label={`Choisir ${card.name}`}
+                  className="size-[18px]"
+                />
+              </label>
 
               <button
                 type="button"
                 onClick={() => setDetail(card)}
-                className="flex min-w-0 flex-1 items-center gap-2 py-[13px] text-left"
+                className="flex min-w-0 flex-1 items-center gap-2 py-3 text-left transition-colors active:bg-accent"
                 aria-haspopup="dialog"
               >
                 <span
-                  className="entry-name"
-                  style={card.inBasket ? { opacity: 0.55 } : undefined}
+                  className={cn(
+                    'min-w-0 flex-1 truncate text-[14.5px] font-medium tracking-tight',
+                    card.inBasket && 'text-muted-foreground',
+                  )}
                 >
                   {card.name}
                 </span>
-                {card.inBasket ? <span className="entry-meta flex-none">Au panier</span> : null}
-                <ChevronRightIcon className="h-4 w-4 flex-none opacity-40" />
+                {card.inBasket ? <Badge variant="secondary">Au panier</Badge> : null}
+                <ChevronRightIcon aria-hidden className="size-4 flex-none text-muted-foreground" />
               </button>
             </li>
           );
         })}
       </ul>
 
-      {/*
-        Le bouton de validation reste en bas du flux et non en position fixe :
-        la liste se parcourt d'une traite, et une barre flottante mangerait la
-        hauteur utile d'un téléphone pour un geste qu'on fait une fois.
-      */}
-      <button
-        type="button"
-        onClick={() => void confirm()}
-        disabled={busy || selected.size === 0}
-        className="action mt-5"
-      >
-        {busy
-          ? 'Ajout…'
-          : selected.size === 0
-            ? 'Choisis des plats'
-            : selected.size === 1
-              ? 'Ajouter 1 plat au panier'
-              : `Ajouter ${selected.size} plats au panier`}
-      </button>
-
       {basketCount > 0 ? (
-        <Link href={`/kitchen/shopping?from=${weekStart}`} className="action-quiet mt-3">
-          <CartIcon className="h-4 w-4" />
-          {basketCount === 1
-            ? '1 plat au panier — passer aux courses'
-            : `${basketCount} plats au panier — passer aux courses`}
-        </Link>
+        <Button asChild variant="ghost" className="mt-4 w-full">
+          <Link href={`/kitchen/shopping?from=${weekStart}`}>
+            <ShoppingCartIcon />
+            {basketCount === 1
+              ? '1 plat au panier — passer aux courses'
+              : `${basketCount} plats au panier — passer aux courses`}
+          </Link>
+        </Button>
       ) : null}
+
+      {/*
+        La validation vit dans la barre basse : on coche en parcourant, et le
+        geste qui clôt la sélection doit rester sous le pouce, où qu'on soit
+        arrivé dans la liste.
+      */}
+      <BottomBar>
+        <Button
+          type="button"
+          onClick={() => void confirm()}
+          disabled={busy || selected.size === 0}
+          className="w-full"
+        >
+          {busy
+            ? 'Ajout…'
+            : selected.size === 0
+              ? 'Choisis des plats'
+              : selected.size === 1
+                ? 'Ajouter 1 plat au panier'
+                : `Ajouter ${selected.size} plats au panier`}
+        </Button>
+      </BottomBar>
 
       <CatalogMealSheet
         card={detail}

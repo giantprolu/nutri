@@ -1,6 +1,15 @@
+import { ExternalLinkIcon } from 'lucide-react';
 import Image from 'next/image';
-import { useEffect, useRef, useState } from 'react';
-import { CloseIcon } from '@/components/icons';
+import { useEffect, useState } from 'react';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from '@/components/ui/sheet';
 import { demoSearchUrl, illustrationFor, ILLUSTRATION_RATIO } from '@/lib/exercise-media';
 import { EQUIPMENT_LABELS, type Exercise } from '@/lib/workout';
 
@@ -26,10 +35,7 @@ import { EQUIPMENT_LABELS, type Exercise } from '@/lib/workout';
  */
 
 /** Ce dont la fiche a besoin : moins qu'un exercice complet. */
-export type SheetExercise = Pick<
-  Exercise,
-  'slug' | 'name' | 'muscleGroup' | 'equipment'
->;
+export type SheetExercise = Pick<Exercise, 'slug' | 'name' | 'muscleGroup' | 'equipment'>;
 
 /** Durée d'affichage de chaque pose. Assez lent pour lire, assez vif pour lier. */
 const FRAME_MS = 1100;
@@ -42,21 +48,8 @@ export function ExerciseSheet({
   exercise: SheetExercise | null;
   onClose: () => void;
 }) {
-  const ref = useRef<HTMLDialogElement>(null);
   const [frame, setFrame] = useState(0);
   const [still, setStill] = useState(false);
-
-  useEffect(() => {
-    const dialog = ref.current;
-    if (!dialog) {
-      return;
-    }
-    if (exercise !== null && !dialog.open) {
-      dialog.showModal();
-    } else if (exercise === null && dialog.open) {
-      dialog.close();
-    }
-  }, [exercise]);
 
   useEffect(() => {
     const query = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -80,110 +73,91 @@ export function ExerciseSheet({
   const frames = exercise === null ? null : illustrationFor(exercise.slug);
 
   return (
-    <dialog
-      ref={ref}
-      onClose={onClose}
-      onClick={(event) => {
-        if (event.target === ref.current) {
-          onClose();
-        }
-      }}
-      aria-label={exercise?.name ?? 'Détail de l’exercice'}
-      className="sheet"
-    >
-      {exercise === null ? null : (
-        <>
-          <div className="flex items-baseline justify-between gap-3">
-            <div className="min-w-0">
-              <p className="kicker">
-                {exercise.muscleGroup ?? EQUIPMENT_LABELS[exercise.equipment]}
-              </p>
-              <h2 className="display-sm mt-1">{exercise.name}</h2>
-            </div>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Fermer"
-              className="tap-target -mr-2 flex flex-none items-center justify-center opacity-55"
-            >
-              <CloseIcon className="h-5 w-5" />
-            </button>
-          </div>
-
-          {frames === null ? (
-            <p className="note mt-4">
-              Pas d’illustration pour cet exercice : il a été créé depuis une séance
-              saisie à la main, et son nom est tout ce qu’on en connaît.
-            </p>
-          ) : still ? (
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              {frames.map((source, index) => (
-                <div
-                  key={source}
-                  className="plate relative overflow-hidden"
-                  style={{ aspectRatio: ILLUSTRATION_RATIO }}
-                >
-                  <Image
-                    src={source}
-                    alt={
-                      index === 0
-                        ? `${exercise.name} : position de départ`
-                        : `${exercise.name} : position d’arrivée`
-                    }
-                    fill
-                    sizes="(max-width: 32rem) 50vw, 16rem"
-                    className="object-cover"
-                  />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div
-              className="plate relative mt-4 overflow-hidden"
-              style={{ aspectRatio: ILLUSTRATION_RATIO }}
-            >
-              {frames.map((source, index) => (
-                <Image
-                  key={source}
-                  src={source}
-                  alt={index === 0 ? `${exercise.name}, le mouvement` : ''}
-                  aria-hidden={index === 1}
-                  fill
-                  priority={index === 0}
-                  sizes="(max-width: 32rem) 100vw, 32rem"
-                  className="object-cover transition-opacity duration-300"
-                  style={{ opacity: frame === index ? 1 : 0 }}
-                />
-              ))}
-            </div>
-          )}
-
-          <div className="mode-row mt-4">
-            <span className="min-w-0 flex-1">
-              <strong>{EQUIPMENT_LABELS[exercise.equipment]}</strong>
-              <small>
+    <Sheet open={exercise !== null} onOpenChange={(next) => (next ? undefined : onClose())}>
+      <SheetContent
+        side="bottom"
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]"
+      >
+        <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
+        {exercise === null ? (
+          <SheetTitle className="sr-only">Détail de l’exercice</SheetTitle>
+        ) : (
+          <>
+            <SheetHeader className="p-0 pr-10">
+              <SheetTitle className="text-[17px]">{exercise.name}</SheetTitle>
+              <SheetDescription>
                 {exercise.muscleGroup === null
                   ? 'Cardio, sans groupe musculaire dominant'
                   : `Travaille surtout : ${exercise.muscleGroup.toLowerCase()}`}
-              </small>
-            </span>
-          </div>
+              </SheetDescription>
+            </SheetHeader>
 
-          {/*
-            Un lien sortant, pas une vidéo intégrée : deux photos répondent
-            déjà à « c'est quoi, cet exercice ». Celui qui veut la technique
-            complète la trouvera mieux là-bas que dans une fenêtre de 400 px.
-          */}
-          <a
-            href={demoSearchUrl(exercise.name)}
-            target="_blank"
-            rel="noreferrer"
-            className="action-quiet mt-4"
-          >
-            Chercher une démonstration
-          </a>
-        </>
-      )}
-    </dialog>
+            <div className="mt-2.5">
+              <Badge variant="outline">{EQUIPMENT_LABELS[exercise.equipment]}</Badge>
+            </div>
+
+            {frames === null ? (
+              <p className="mt-4 text-muted-foreground">
+                Pas d’illustration pour cet exercice : il a été créé depuis une séance saisie à la
+                main, et son nom est tout ce qu’on en connaît.
+              </p>
+            ) : still ? (
+              <div className="mt-4 grid grid-cols-2 gap-2">
+                {frames.map((source, index) => (
+                  <div
+                    key={source}
+                    className="relative overflow-hidden rounded-lg border"
+                    style={{ aspectRatio: ILLUSTRATION_RATIO }}
+                  >
+                    <Image
+                      src={source}
+                      alt={
+                        index === 0
+                          ? `${exercise.name} : position de départ`
+                          : `${exercise.name} : position d’arrivée`
+                      }
+                      fill
+                      sizes="(max-width: 32rem) 50vw, 16rem"
+                      className="object-cover"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div
+                className="relative mt-4 overflow-hidden rounded-xl border"
+                style={{ aspectRatio: ILLUSTRATION_RATIO }}
+              >
+                {frames.map((source, index) => (
+                  <Image
+                    key={source}
+                    src={source}
+                    alt={index === 0 ? `${exercise.name}, le mouvement` : ''}
+                    aria-hidden={index === 1}
+                    fill
+                    priority={index === 0}
+                    sizes="(max-width: 32rem) 100vw, 32rem"
+                    className="object-cover transition-opacity duration-300"
+                    style={{ opacity: frame === index ? 1 : 0 }}
+                  />
+                ))}
+              </div>
+            )}
+
+            {/*
+              Un lien sortant, pas une vidéo intégrée : deux photos répondent
+              déjà à « c'est quoi, cet exercice ». Celui qui veut la technique
+              complète la trouvera mieux là-bas que dans une fenêtre de 400 px.
+            */}
+            <Button asChild variant="outline" className="mt-4 w-full">
+              <a href={demoSearchUrl(exercise.name)} target="_blank" rel="noreferrer">
+                <ExternalLinkIcon />
+                Chercher une démonstration
+              </a>
+            </Button>
+          </>
+        )}
+      </SheetContent>
+    </Sheet>
   );
 }

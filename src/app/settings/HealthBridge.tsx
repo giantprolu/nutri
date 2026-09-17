@@ -1,9 +1,12 @@
 'use client';
 
 import { useState } from 'react';
+import { StepList } from '@/components/StepList';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { formatRelativeJournalDate } from '@/lib/date';
 import { CopyField } from './CopyField';
-
 
 /**
  * Pont vers Santé d'Apple, par l'app Raccourcis (FR-27).
@@ -56,12 +59,9 @@ const SHARED_STEPS = [
 
 function Line({ label, value }: { label: string; value: string }) {
   return (
-    <div
-      className="flex items-baseline justify-between gap-3 py-[13px]"
-      style={{ borderBottom: '1px solid var(--color-divider)' }}
-    >
-      <dt className="text-[15px] opacity-70">{label}</dt>
-      <dd className="tabular text-[15px]">{value}</dd>
+    <div className="flex items-baseline justify-between gap-3">
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd className="tabular text-right">{value}</dd>
     </div>
   );
 }
@@ -123,16 +123,16 @@ export function HealthBridge({
 
   return (
     <>
-      <p className="note mt-2">
+      <p className="mt-1 text-muted-foreground">
         Un raccourci iOS envoie ton énergie active du jour. La cible passe alors sur ta dépense
         réelle, moyennée sur quatorze jours, au lieu du niveau d&apos;activité déclaré. Il faut
         au moins trois journées envoyées pour que la bascule se fasse.
       </p>
 
-      <hr className="rule mt-4" />
-
-      <p className="kicker kicker-quiet mt-4 mb-2 block">État</p>
-      <dl>
+      <h2 className="mt-5 mb-2 text-[12.5px] text-muted-foreground">État</h2>
+      <Card>
+        <CardContent>
+      <dl className="flex flex-col gap-2">
         <Line
           label="Dernière journée reçue"
           value={
@@ -152,42 +152,35 @@ export function HealthBridge({
           }
         />
       </dl>
-      <p className="note mt-2">
+      <p className="mt-3 text-[12.5px] text-muted-foreground">
         {status.dayCount >= status.requiredDays
           ? 'La cible suit ta dépense mesurée.'
           : `Encore ${missing} journée${missing > 1 ? 's' : ''} avant que la cible bascule sur la mesure.`}
       </p>
+        </CardContent>
+      </Card>
       {suspect ? (
-        <p role="alert" className="note mt-2" style={{ color: 'var(--color-danger)', opacity: 1 }}>
+        <Alert variant="destructive" className="mt-3">
+          <AlertDescription>
           Une journée de la fenêtre atteint {Math.round(status.peakKcal)} kcal actives, ce
           qu&apos;aucun corps ne dépense. Ton raccourci envoie probablement un cumul et non le
           total du jour : vérifie que « Rechercher des échantillons » porte bien sur aujourd&apos;hui
           seulement. La cible ignore cette journée, elle est calculée sur la médiane.
-        </p>
+          </AlertDescription>
+        </Alert>
       ) : null}
 
-      <p className="kicker kicker-quiet mt-6 mb-2 block">Mode d&apos;emploi</p>
-      <hr className="rule" />
-      <ol>
-        {steps.map((step, index) => (
-          <li key={step} className="mode-row items-baseline">
-            <span className="kicker flex-none">{index + 1}</span>
-            <span className="flex-1 text-[15px] leading-relaxed">{step}</span>
-          </li>
-        ))}
-      </ol>
+      <h2 className="mt-5 mb-2 text-[12.5px] text-muted-foreground">Mode d&apos;emploi</h2>
+      <StepList steps={steps} />
 
       {shortcutUrl === null ? null : (
-        <a
-          href={shortcutUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="action mt-4"
-          // Le raccourci ne s'ajoute que depuis un iPhone ou un iPad : sur un
-          // ordinateur, le lien ouvre une page qui ne mène à rien.
-        >
-          Ajouter le raccourci
-        </a>
+        // Le raccourci ne s'ajoute que depuis un iPhone ou un iPad : sur un
+        // ordinateur, le lien ouvre une page qui ne mène à rien.
+        <Button asChild className="mt-4 w-full">
+          <a href={shortcutUrl} target="_blank" rel="noreferrer">
+            Ajouter le raccourci
+          </a>
+        </Button>
       )}
 
       <CopyField label="Adresse à appeler" value={endpoint} />
@@ -200,18 +193,19 @@ export function HealthBridge({
         />
       ) : null}
 
-      <button
+      <Button
         type="button"
+        variant="outline"
         onClick={generate}
         disabled={pending}
-        className="action action-quiet mt-6"
+        className="mt-5 w-full"
       >
         {pending
           ? 'Fabrication…'
           : hasToken || token
             ? 'Fabriquer un nouveau jeton'
             : 'Fabriquer un jeton'}
-      </button>
+      </Button>
     </>
   );
 }

@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { cookies } from 'next/headers';
-import { Source_Sans_3 } from 'next/font/google';
+import { Geist, Geist_Mono } from 'next/font/google';
 import { TabBar } from '@/components/TabBar';
 import { INSTALL_PROMPT_KEY, INSTALL_READY_EVENT } from '@/lib/client/install';
 import {
@@ -12,18 +12,23 @@ import {
 import './globals.css';
 
 /**
- * Source Sans 3, en deux coupes : la normale pour le texte courant, la demi-
- * grasse pour les titres, les intitulés et les chiffres mis en scène.
+ * Geist, la police de shadcn/ui, et sa déclinaison à chasse fixe pour les
+ * codes-barres saisis à la main.
  *
  * `next/font` la sert depuis notre propre domaine plutôt que depuis Google :
  * aucune requête vers un tiers au chargement, donc pas de fuite d'adresse IP,
  * et la substitution de police est calculée à la compilation, ce qui évite le
  * décalage de mise en page à l'affichage.
  */
-const sourceSans = Source_Sans_3({
+const geistSans = Geist({
   subsets: ['latin'],
-  weight: ['400', '600'],
-  variable: '--font-source-sans',
+  variable: '--font-geist-sans',
+  display: 'swap',
+});
+
+const geistMono = Geist_Mono({
+  subsets: ['latin'],
+  variable: '--font-geist-mono',
   display: 'swap',
 });
 
@@ -97,13 +102,13 @@ export default async function RootLayout({
       lang="fr"
       // Rien en mode auto : l'absence d'attribut rend la main au système.
       {...(theme === undefined ? {} : { 'data-theme': theme })}
-      className={sourceSans.variable}
+      className={`${geistSans.variable} ${geistMono.variable}`}
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_SCRIPT }} />
       </head>
-      <body className="min-h-dvh">
-        <main className="safe-top mx-auto w-full max-w-lg px-4">{children}</main>
+      <body className="min-h-dvh font-sans">
+        <main className="safe-top mx-auto w-full max-w-lg px-5 pb-6">{children}</main>
         <TabBar />
       </body>
     </html>
