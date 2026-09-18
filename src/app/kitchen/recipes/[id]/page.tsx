@@ -11,9 +11,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { requireUserId } from '@/server/guard';
 import { basketFor } from '@/server/services/basket';
 import { recipeFor } from '@/server/services/recipes';
-import { formatIngredientQuantity, macrosPerServing, recipeMacros } from '@/lib/recipe';
+import {
+  formatIngredientQuantity,
+  formatServings,
+  ingredientsForServings,
+  macrosPerServing,
+  recipeMacros,
+} from '@/lib/recipe';
 import { formatGrams, formatKcal, scaleMacros } from '@/lib/nutrition';
-import { startOfWeek, todayInParis } from '@/lib/date';
+import { isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
 import { AddToBasket } from './AddToBasket';
 import { DeleteRecipe } from './DeleteRecipe';
 
@@ -22,11 +28,23 @@ export const dynamic = 'force-dynamic';
 /**
  * Fiche d'une recette.
  *
- * Les macros affichées sont celles d'une part, et le total de la recette n'est
- * rappelé qu'en second : on ne mange pas une recette, on en mange une part.
- * C'est aussi la seule grandeur comparable à la cible de la journée.
+ * Les macros affichées sont celles d'une part, et le total n'est rappelé qu'en
+ * second : on ne mange pas une recette, on en mange une part. C'est aussi la
+ * seule grandeur comparable à la cible de la journée.
+ *
+ * Les quantités, elles, sont celles du panier quand le plat y figure, et non
+ * celles écrites dans la recette. On ouvre cette fiche depuis sa liste de
+ * repas, le sac de courses posé sur la table : le riz qu'on y a mis pèse ce
+ * que la liste a fait acheter, pas ce que la recette annonçait pour un nombre
+ * de parts qu'on a changé depuis.
  */
-export default async function RecipePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function RecipePage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ from?: string }>;
+}) {
   const userId = await requireUserId();
   const id = Number((await params).id);
   if (!Number.isSafeInteger(id) || id <= 0) {
@@ -38,14 +56,25 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
     notFound();
   }
 
-  // La semaine du jour, et non celle qu'on consultait : on arrive ici depuis
-  // une recherche ou un lien, et « cette semaine » ne veut dire qu'une chose.
-  const weekStart = startOfWeek(todayInParis());
+  // La semaine d'où l'on vient, à défaut celle du jour : on arrive ici depuis
+  // le panier d'une semaine précise, et c'est son panier qui décide des
+  // quantités. Une date hors format retombe sur la semaine courante plutôt que
+  // de faire échouer l'écran, le paramètre venant d'une URL.
+  const requested = (await searchParams).from;
+  const weekStart = startOfWeek(
+    requested !== undefined && isJournalDate(requested) ? requested : todayInParis(),
+  );
   const basket = await basketFor(userId, weekStart);
-  const alreadyChosen = basket.some((item) => item.recipeId === recipe.id);
+  const chosen = basket.find((item) => item.recipeId === recipe.id) ?? null;
 
+  // Hors panier, la recette parle pour elle-même : ses propres parts.
+  const servings = chosen === null ? recipe.servings : chosen.servings;
+  const ingredients = ingredientsForServings(recipe.ingredients, recipe.servings, servings);
+
+  // La part reste la part : la mise à l'échelle ne la change pas, et c'est
+  // pourquoi elle se lit sur la recette et non sur les quantités affichées.
   const perServing = macrosPerServing(recipe);
-  const total = recipeMacros(recipe.ingredients);
+  const batch = recipeMacros(ingredients);
   const hasSteps = recipe.steps.length > 0;
 
   return (
@@ -73,9 +102,9 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
           </Badge>
         )}
         <Badge variant="outline" className="tabular">
-          {recipe.servings === 1 ? '1 part' : `${recipe.servings} parts`}
+          {formatServings(servings)}
         </Badge>
-        {alreadyChosen ? <Badge variant="secondary">Au panier</Badge> : null}
+        {chosen === null ? null : <Badge variant="secondary">Au panier</Badge>}
       </div>
 
       <Card className="mt-4 bg-muted">
@@ -113,8 +142,20 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
         </TabsList>
 
         <TabsContent value="ingredients" className="mt-2.5">
+          {/*
+            Dit dès qu'il y a un écart, et seulement alors : une quantité qui
+            n'est pas celle de la recette doit s'expliquer sur-le-champ, sinon
+            c'est la fiche qu'on soupçonne d'avoir tort.
+          */}
+          {chosen !== null && servings !== recipe.servings ? (
+            <p className="mb-2.5 text-[12.5px] text-muted-foreground">
+              Quantités pour les {formatServings(servings)} du panier de la semaine, celles-là
+              mêmes que la liste de courses a fait acheter. La recette, telle qu&apos;elle est
+              écrite, en produit {formatServings(recipe.servings)}.
+            </p>
+          ) : null}
           <ul>
-            {recipe.ingredients.map((ingredient) => (
+            {ingredients.map((ingredient) => (
               <li key={ingredient.id} className="flex items-center gap-3 border-b py-2.5">
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-[14.5px] font-medium tracking-tight">
@@ -135,8 +176,8 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
             ))}
           </ul>
           <p className="tabular mt-3 text-muted-foreground">
-            Recette entière {total.unresolvedCount > 0 ? '≈ ' : ''}
-            {formatKcal(total.macros.kcal)} kcal
+            {formatServings(servings)} en tout {batch.unresolvedCount > 0 ? '≈ ' : ''}
+            {formatKcal(batch.macros.kcal)} kcal
           </p>
         </TabsContent>
 
@@ -166,7 +207,7 @@ export default async function RecipePage({ params }: { params: Promise<{ id: str
           recipeId={recipe.id}
           servings={recipe.servings}
           weekStart={weekStart}
-          alreadyChosen={alreadyChosen}
+          alreadyChosen={chosen !== null}
         />
         {hasSteps ? (
           <Button asChild className="flex-[1.4]">

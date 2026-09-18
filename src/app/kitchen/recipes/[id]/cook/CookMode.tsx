@@ -18,7 +18,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { journalMeal, planMeal } from '@/lib/client/plan';
-import { formatIngredientQuantity, stepDurationSeconds, type Recipe } from '@/lib/recipe';
+import {
+  formatIngredientQuantity,
+  formatServings,
+  ingredientsForServings,
+  stepDurationSeconds,
+  type Recipe,
+} from '@/lib/recipe';
 import { MEAL_LABELS, mealForHour, type Meal } from '@/lib/meal';
 import { hourInParis, todayInParis } from '@/lib/date';
 
@@ -46,11 +52,14 @@ function formatCountdown(seconds: number): string {
 
 export function CookMode({
   recipe,
+  batchServings,
   /** Le plat prévu aujourd'hui pour cette recette, s'il y en a un de non mangé. */
   plannedId,
   plannedServings,
 }: {
   recipe: Recipe;
+  /** Parts que l'on cuisine : celles du panier, à défaut celles de la recette. */
+  batchServings: number;
   plannedId: number | null;
   plannedServings: number | null;
 }) {
@@ -62,6 +71,16 @@ export function CookMode({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Les quantités sont celles de la fournée, jamais celles du plan : on pèse
+  // le riz une fois pour toute la casserole, et la part qu'on mangera ce soir
+  // ne change pas ce qu'il faut y mettre. Même mise à l'échelle que la liste
+  // de courses, donc les mêmes grammes que ceux du sac.
+  const ingredients = ingredientsForServings(
+    recipe.ingredients,
+    recipe.servings,
+    batchServings,
+  );
 
   const steps = recipe.steps;
   const step = steps[index] ?? '';
@@ -167,9 +186,14 @@ export function CookMode({
         <p className="tabular text-muted-foreground">
           Étape {index + 1} sur {steps.length}
         </p>
+        {/*
+          Le badge dit ce qui ira au journal, et le dit en toutes lettres : un
+          « 2 parts » seul, à côté d'ingrédients pesés pour six, se lisait comme
+          une contradiction.
+        */}
         {plannedServings === null ? null : (
           <Badge variant="outline" className="tabular">
-            {plannedServings} part{plannedServings > 1 ? 's' : ''}
+            {formatServings(plannedServings)} au journal
           </Badge>
         )}
       </div>
@@ -237,10 +261,12 @@ export function CookMode({
       */}
       <Accordion type="single" collapsible className="mt-6">
         <AccordionItem value="ingredients">
-          <AccordionTrigger>Les ingrédients</AccordionTrigger>
+          <AccordionTrigger>
+            Les ingrédients, pour {formatServings(batchServings)}
+          </AccordionTrigger>
           <AccordionContent>
             <ul>
-              {recipe.ingredients.map((ingredient) => (
+              {ingredients.map((ingredient) => (
                 <li key={ingredient.id} className="flex items-baseline justify-between gap-3 py-1.5">
                   <span className="text-[15px]">{ingredient.label}</span>
                   <span className="tabular text-muted-foreground">

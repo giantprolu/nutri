@@ -126,6 +126,48 @@ export function quantityForServings(
 }
 
 /**
+ * Les ingrédients d'une recette pour un nombre de parts donné.
+ *
+ * La même mise à l'échelle que celle de la liste de courses, parce que c'est
+ * littéralement la même fonction : `quantityForServings`, appelée avec les
+ * mêmes arguments. Ce n'est pas une coïncidence qu'on entretient, c'est la
+ * condition pour que l'écran et le rayon disent le même nombre de grammes.
+ *
+ * La fiche montrait jusqu'ici les quantités écrites dans la recette, quand la
+ * liste avait acheté de quoi faire les parts du panier : une recette de quatre
+ * parts mise au panier pour six annonçait 500 g de riz sur sa fiche et en
+ * faisait acheter 750. Des deux chiffres, c'est celui du panier qui est vrai —
+ * c'est lui qu'on a dans son sac.
+ *
+ * Seules les quantités changent. Les références, les unités et les libellés
+ * sont ceux de la recette : mettre à l'échelle ne transforme pas un œuf en
+ * autre chose.
+ */
+export function ingredientsForServings(
+  ingredients: readonly RecipeIngredient[],
+  recipeServings: number,
+  servings: number,
+): RecipeIngredient[] {
+  return ingredients.map((ingredient) => ({
+    ...ingredient,
+    quantityG: quantityForServings(ingredient.quantityG, recipeServings, servings),
+  }));
+}
+
+/**
+ * Un nombre de parts, écrit : « 6 parts », « 1 part », « 0,5 part ».
+ *
+ * Partagé par le panier, la fiche et le mode cuisine, qui affichent tous les
+ * trois la même grandeur. Trois formateurs auraient fini par arrondir
+ * différemment, et c'est exactement le genre d'écart qui fait douter du reste.
+ */
+export function formatServings(value: number): string {
+  const rounded = Math.round(value * 10) / 10;
+  const text = rounded.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+  return rounded > 1 ? `${text} parts` : `${text} part`;
+}
+
+/**
  * Pluriel d'une unité. Les noms déjà terminés par une sifflante sont
  * invariables — « une tranche », « deux tranches », mais « un ananas » reste
  * « deux ananas ».

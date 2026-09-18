@@ -24,6 +24,8 @@ import {
 } from '../src/lib/energy';
 import {
   formatIngredientQuantity,
+  formatServings,
+  ingredientsForServings,
   macrosPerServing,
   quantityForServings,
   recipeMacros,
@@ -436,6 +438,45 @@ assert.equal(quantityForServings(200, 3, 1), 67, 'un tiers de 200 g, arrondi');
 assert.equal(isValidQuantity(quantityForServings(200, 3, 1)), true, 'quantite journalisable');
 // Une epice pesee au gramme sur six parts ne doit pas disparaitre.
 assert.equal(quantityForServings(1, 6, 1), 1, 'plancher a 1 g');
+
+// La fiche et la liste de courses doivent annoncer le meme gramme : elles
+// passent par la meme fonction, et cette egalite le verifie ingredient par
+// ingredient. C'est le coeur du probleme qu'on corrige — une recette de quatre
+// parts mise au panier pour six annoncait 200 g de riz et en faisait acheter
+// 300.
+const fournee = ingredientsForServings(recette.ingredients, recette.servings, 6);
+assert.deepEqual(
+  fournee.map((ingredient) => ingredient.quantityG),
+  recette.ingredients.map((ingredient) =>
+    quantityForServings(ingredient.quantityG, recette.servings, 6),
+  ),
+  'la fiche et la liste de courses comptent pareil',
+);
+assert.equal(fournee[0]?.quantityG, 300, 'six parts d une recette qui en fait quatre');
+assert.equal(fournee[1]?.quantityG, 150, 'les oeufs suivent la meme echelle');
+// Tout le reste de l'ingredient est intact : mettre a l'echelle ne transforme
+// pas un oeuf en autre chose, et l'unite usuelle doit survivre au calcul.
+assert.equal(fournee[1]?.unitName, 'oeuf', 'l unite usuelle survit');
+assert.equal(fournee[1]?.label, 'Oeufs', 'le libelle survit');
+assert.equal(fournee[1]?.refValue, '8888', 'la reference survit');
+// Les parts du panier vont par demies : la mise a l'echelle doit les suivre.
+assert.equal(
+  ingredientsForServings(recette.ingredients, recette.servings, 0.5)[0]?.quantityG,
+  25,
+  'une demi-part',
+);
+// Une fournee egale a la recette ne bouge pas d'un gramme.
+assert.deepEqual(
+  ingredientsForServings(recette.ingredients, recette.servings, recette.servings),
+  recette.ingredients,
+  'la recette telle qu ecrite reste elle-meme',
+);
+
+// Le nombre de parts s'ecrit pareil partout : panier, fiche et mode cuisine.
+assert.equal(formatServings(6), '6 parts', 'pluriel');
+assert.equal(formatServings(1), '1 part', 'singulier');
+assert.equal(formatServings(0.5), '0,5 part', 'demi-part, virgule francaise');
+assert.equal(formatServings(2.5), '2,5 parts', 'deux parts et demie');
 
 // L'unite usuelle s'affiche avec son poids : c'est lui qui explique les macros.
 assert.equal(formatIngredientQuantity(oeufs), '2 oeufs (100 g)', 'deux oeufs');

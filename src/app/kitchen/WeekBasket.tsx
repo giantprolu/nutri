@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { removeFromBasket, setBasketServings } from '@/lib/client/basket';
 import { MAX_BASKET_SERVINGS } from '@/lib/basket';
+import { formatServings } from '@/lib/recipe';
 import type { BasketItem } from '@/server/db/queries/basket';
 
 /**
@@ -38,12 +39,6 @@ import type { BasketItem } from '@/server/db/queries/basket';
 
 /** Pas d'un réglage de parts. Un demi-plat se mange, un quart ne se cuisine pas. */
 const STEP = 0.5;
-
-function formatServings(value: number): string {
-  const rounded = Math.round(value * 10) / 10;
-  const text = rounded.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
-  return rounded > 1 ? `${text} parts` : `${text} part`;
-}
 
 export function WeekBasket({
   weekStart,
@@ -155,8 +150,14 @@ export function WeekBasket({
                     className="flex items-center gap-2 border-b py-2.5 pr-2 pl-4 last:border-b-0"
                   >
                     <div className="min-w-0 flex-1">
+                      {/*
+                        La semaine voyage avec le lien : c'est elle qui décide
+                        des parts, donc des quantités que la fiche affichera.
+                        Sans elle, un plat du panier de la semaine prochaine
+                        s'ouvrirait aux quantités de celle-ci.
+                      */}
                       <Link
-                        href={`/kitchen/recipes/${item.recipeId}`}
+                        href={`/kitchen/recipes/${item.recipeId}?from=${weekStart}`}
                         className="block truncate text-[14.5px] font-medium tracking-tight"
                       >
                         {item.recipeName}
