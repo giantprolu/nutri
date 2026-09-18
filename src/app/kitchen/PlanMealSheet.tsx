@@ -1,4 +1,6 @@
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
@@ -19,6 +21,17 @@ import { MAX_PLANNED_SERVINGS } from '@/lib/basket';
 /**
  * Feuille d'ajout d'un plat au plan.
  *
+ * Elle ne propose que les plats du panier de la semaine, et rien d'autre. Le
+ * plan ne sert qu'à dire lequel des plats achetés est passé à table : offrir
+ * le carnet entier revenait à prévoir des repas dont on n'a pas les
+ * ingrédients, sur le même rang que ceux dont on a payé les courses. Les deux
+ * listes se ressemblaient à l'écran et pas du tout dans le frigo.
+ *
+ * Conséquence assumée : un panier vide n'offre rien à prévoir, et la feuille
+ * renvoie au choix des repas. C'est l'ordre du parcours — on choisit, on
+ * achète, on met à table — dont le plan est la dernière étape et jamais la
+ * première.
+ *
  * L'ordre des questions suit celui de la décision réelle. On sait quel jour on
  * remplit — c'est le bouton qu'on vient de toucher — et on cherche quoi y
  * mettre ; le repas et les parts se règlent avant, et tombent juste le plus
@@ -34,19 +47,20 @@ const DEFAULT_SERVINGS = 1;
 export function PlanMealSheet({
   open,
   planDate,
+  weekStart,
   meal: initialMeal,
   recipes,
-  basketRecipeIds,
   busy,
   onClose,
   onConfirm,
 }: {
   open: boolean;
   planDate: string;
+  /** Lundi de la semaine, pour renvoyer au bon panier quand il est vide. */
+  weekStart: string;
   meal: Meal;
+  /** Les plats du panier de la semaine, et eux seuls. */
   recipes: readonly Recipe[];
-  /** Recettes du panier de la semaine, présentées d'abord. */
-  basketRecipeIds: ReadonlySet<number>;
   busy: boolean;
   onClose: () => void;
   onConfirm: (recipeId: number, meal: Meal, servings: number) => void;
@@ -66,9 +80,6 @@ export function PlanMealSheet({
   // « Ce plat n'a pas pu être prévu », qui n'explique rien.
   const validServings =
     Number.isFinite(servings) && servings > 0 && servings <= MAX_PLANNED_SERVINGS;
-
-  const chosen = recipes.filter((recipe) => basketRecipeIds.has(recipe.id));
-  const others = recipes.filter((recipe) => !basketRecipeIds.has(recipe.id));
 
   function renderRecipe(recipe: Recipe) {
     const per = macrosPerServing(recipe);
@@ -111,83 +122,76 @@ export function PlanMealSheet({
       >
         <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
         <SheetHeader className="p-0 pr-10">
-          <SheetTitle className="text-[17px]">Prévoir un plat</SheetTitle>
+          <SheetTitle className="text-[17px]">Mes repas de la semaine</SheetTitle>
           <SheetDescription className="first-letter:uppercase">
             {formatWeekday(planDate)} {formatDayMonth(planDate)}
           </SheetDescription>
         </SheetHeader>
 
-        <Tabs
-          value={meal}
-          onValueChange={(value) => isMeal(value) && setMeal(value)}
-          className="mt-4"
-        >
-          <TabsList aria-label="Repas" className="w-full">
-            {MEALS.map((candidate) => (
-              <TabsTrigger key={candidate} value={candidate}>
-                {MEAL_SHORT_LABELS[candidate]}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
-
-        <div className="mt-3.5 flex items-center gap-3">
-          <Label htmlFor="plan-servings" className="flex-1">
-            Parts mangées
-          </Label>
-          <Input
-            id="plan-servings"
-            type="number"
-            inputMode="decimal"
-            min={0.5}
-            max={MAX_PLANNED_SERVINGS}
-            step={0.5}
-            value={servings}
-            onChange={(event) => setServings(Number(event.target.value))}
-            aria-invalid={!validServings}
-            aria-describedby={validServings ? undefined : 'plan-servings-error'}
-            className="tabular w-[92px] text-right"
-          />
-        </div>
-        {validServings ? null : (
-          <p id="plan-servings-error" role="alert" className="mt-1.5 text-right text-destructive">
-            Entre une demi-part et {MAX_PLANNED_SERVINGS} parts.
-          </p>
-        )}
-
-        <Separator className="mt-4" />
-
+        {/*
+          Rien à régler quand il n'y a rien à choisir : le repas et les parts
+          d'un plat qu'on ne peut pas désigner ne servent à rien, et les laisser
+          au-dessus d'une impasse donne un écran qui fait mine de marcher.
+        */}
         {recipes.length === 0 ? (
-          <p className="py-6 text-center text-muted-foreground">
-            Aucune recette à prévoir pour l&apos;instant.
-          </p>
-        ) : (
-          <>
-            {/*
-              Les plats du panier d'abord, et séparés du reste. C'est pour eux
-              qu'on a fait les courses : proposer les cent recettes du carnet sur
-              le même rang obligerait à retrouver chaque soir, dans la liste,
-              celles dont les ingrédients sont effectivement au frigo.
-            */}
-            {chosen.length > 0 ? (
-              <>
-                <h3 className="pt-4 pb-1 text-[12.5px] text-muted-foreground">
-                  Au panier cette semaine
-                </h3>
-                <ul>{chosen.map(renderRecipe)}</ul>
-              </>
-            ) : null}
+          <div className="py-6 text-center">
+            <p className="mx-auto max-w-[32ch] text-muted-foreground">
+              Rien au panier pour cette semaine. Le plan dit lequel des plats achetés est passé à
+              table : il commence donc par le choix des repas.
+            </p>
+            <Button asChild variant="outline" className="mt-4">
+              <Link href={`/kitchen/catalog?from=${weekStart}`}>Choisir mes repas</Link>
+            </Button>
+          </div>
+        ) : null}
 
-            {others.length > 0 ? (
-              <>
-                {chosen.length > 0 ? (
-                  <h3 className="pt-4 pb-1 text-[12.5px] text-muted-foreground">
-                    Mes autres recettes
-                  </h3>
-                ) : null}
-                <ul>{others.map(renderRecipe)}</ul>
-              </>
-            ) : null}
+        {recipes.length === 0 ? null : (
+          <>
+            <Tabs
+              value={meal}
+              onValueChange={(value) => isMeal(value) && setMeal(value)}
+              className="mt-4"
+            >
+              <TabsList aria-label="Repas" className="w-full">
+                {MEALS.map((candidate) => (
+                  <TabsTrigger key={candidate} value={candidate}>
+                    {MEAL_SHORT_LABELS[candidate]}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+
+            <div className="mt-3.5 flex items-center gap-3">
+              <Label htmlFor="plan-servings" className="flex-1">
+                Parts mangées
+              </Label>
+              <Input
+                id="plan-servings"
+                type="number"
+                inputMode="decimal"
+                min={0.5}
+                max={MAX_PLANNED_SERVINGS}
+                step={0.5}
+                value={servings}
+                onChange={(event) => setServings(Number(event.target.value))}
+                aria-invalid={!validServings}
+                aria-describedby={validServings ? undefined : 'plan-servings-error'}
+                className="tabular w-[92px] text-right"
+              />
+            </div>
+            {validServings ? null : (
+              <p
+                id="plan-servings-error"
+                role="alert"
+                className="mt-1.5 text-right text-destructive"
+              >
+                Entre une demi-part et {MAX_PLANNED_SERVINGS} parts.
+              </p>
+            )}
+
+            <Separator className="mt-4" />
+
+            <ul className="pt-1">{recipes.map(renderRecipe)}</ul>
           </>
         )}
       </SheetContent>

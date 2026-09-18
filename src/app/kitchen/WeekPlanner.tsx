@@ -27,6 +27,11 @@ import { PlanMealSheet } from './PlanMealSheet';
  * Un plat journalisé reste affiché, barré de son horodatage. Le faire
  * disparaître priverait du seul repère qui dit ce qui a déjà été mangé, et le
  * plan se relirait comme une semaine à moitié vide.
+ *
+ * On n'y met que les plats du panier. Le plan ne dit pas ce qu'on pourrait
+ * cuisiner, il dit lequel des plats achetés est passé à table : le carnet
+ * entier n'a rien à faire dans ce choix, et les recettes dont les ingrédients
+ * ne sont pas au frigo encore moins.
  */
 
 /** Jour vers lequel la feuille s'ouvre, et repas présélectionné. */
@@ -47,7 +52,7 @@ export function WeekPlanner({
   days: readonly string[];
   planned: readonly PlannedMeal[];
   recipes: readonly Recipe[];
-  /** Recettes du panier de la semaine, mises en tête du choix. */
+  /** Recettes du panier de la semaine : les seules qu'on puisse mettre au plan. */
   basketRecipeIds: ReadonlySet<number>;
   today: string;
 }) {
@@ -57,7 +62,11 @@ export function WeekPlanner({
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
+  // Toutes les recettes servent à lire le plan — un plat prévu puis retiré du
+  // panier garde son nom et ses macros — mais seules celles du panier peuvent
+  // y entrer.
   const byRecipe = new Map(recipes.map((recipe) => [recipe.id, recipe]));
+  const choosable = recipes.filter((recipe) => basketRecipeIds.has(recipe.id));
 
   async function add(recipeId: number, meal: Meal, servings: number) {
     if (target === null) {
@@ -245,7 +254,7 @@ export function WeekPlanner({
                     }
                   >
                     <PlusIcon className="size-4" />
-                    Prévoir un plat
+                    Un plat de la semaine
                   </button>
                 </Card>
               </li>
@@ -257,9 +266,9 @@ export function WeekPlanner({
       <PlanMealSheet
         open={target !== null}
         planDate={target?.planDate ?? startDate}
+        weekStart={startDate}
         meal={target?.meal ?? 'dinner'}
-        recipes={recipes}
-        basketRecipeIds={basketRecipeIds}
+        recipes={choosable}
         busy={busy}
         onClose={() => setTarget(null)}
         onConfirm={(recipeId, meal, servings) => void add(recipeId, meal, servings)}
