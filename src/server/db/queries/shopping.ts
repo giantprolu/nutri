@@ -120,25 +120,118 @@ export async function insertShoppingList(
     throw new Error("La liste de courses n'a pas pu être créée.");
   }
 
-  if (needs.length > 0) {
-    await db()
-      .insert(schema.shoppingItems)
-      .values(
-        needs.map((need) => ({
-          listId,
-          userId,
-          refKind: need.refKind,
-          refValue: need.refValue,
-          label: need.label,
-          quantityG: String(need.quantityG),
-          aisle: need.aisle,
-          unitName: need.unitName,
-          unitGrams: need.unitGrams === null ? null : String(need.unitGrams),
-        })),
-      );
+  await insertGeneratedItems(userId, listId, needs);
+  return listId;
+}
+
+/**
+ * Ajoute à une liste des articles issus des recettes.
+ *
+ * `addedManually` reste faux : ces lignes appartiennent au plan et la
+ * synchronisation du panier a le droit de les reprendre, contrairement à
+ * celles que l'on a écrites soi-même.
+ */
+export async function insertGeneratedItems(
+  userId: number,
+  listId: number,
+  needs: readonly AggregatedNeed[],
+): Promise<void> {
+  if (needs.length === 0) {
+    return;
   }
 
-  return listId;
+  await db()
+    .insert(schema.shoppingItems)
+    .values(
+      needs.map((need) => ({
+        listId,
+        userId,
+        refKind: need.refKind,
+        refValue: need.refValue,
+        label: need.label,
+        quantityG: String(need.quantityG),
+        aisle: need.aisle,
+        unitName: need.unitName,
+        unitGrams: need.unitGrams === null ? null : String(need.unitGrams),
+      })),
+    );
+}
+
+/**
+ * La liste ouverte qui couvre une semaine donnée.
+ *
+ * Distincte de `latestShoppingList`, qui rend la dernière liste quelle que
+ * soit sa semaine — ce que veut l'écran des courses. Pour suivre un panier il
+ * faut au contraire la liste de *cette* semaine, et seulement si elle est
+ * encore ouverte : une liste close raconte des courses déjà faites, qu'un
+ * changement de parts n'a pas à réécrire.
+ */
+export async function openShoppingListFor(
+  userId: number,
+  fromDate: string,
+): Promise<ShoppingList | null> {
+  const [row] = await db()
+    .select()
+    .from(schema.shoppingLists)
+    .where(
+      and(
+        eq(schema.shoppingLists.userId, userId),
+        eq(schema.shoppingLists.fromDate, fromDate),
+        isNull(schema.shoppingLists.closedAt),
+      ),
+    )
+    .orderBy(desc(schema.shoppingLists.createdAt), desc(schema.shoppingLists.id))
+    .limit(1);
+
+  if (!row) {
+    return null;
+  }
+  return {
+    id: row.id,
+    fromDate: String(row.fromDate).slice(0, 10),
+    toDate: String(row.toDate).slice(0, 10),
+    closedAt: row.closedAt,
+    createdAt: row.createdAt,
+    items: await itemsFor(row.id),
+  };
+}
+
+/** Réaligne un article sur ce que les recettes réclament désormais. */
+export async function updateShoppingItemNeed(
+  userId: number,
+  itemId: number,
+  need: Pick<AggregatedNeed, 'label' | 'quantityG' | 'unitName' | 'unitGrams' | 'aisle'>,
+): Promise<void> {
+  await db()
+    .update(schema.shoppingItems)
+    .set({
+      label: need.label,
+      quantityG: String(need.quantityG),
+      unitName: need.unitName,
+      unitGrams: need.unitGrams === null ? null : String(need.unitGrams),
+      aisle: need.aisle,
+    })
+    .where(
+      and(eq(schema.shoppingItems.userId, userId), eq(schema.shoppingItems.id, itemId)),
+    );
+}
+
+/** Retire des articles que plus aucune recette ne réclame. */
+export async function deleteShoppingItems(
+  userId: number,
+  ids: readonly number[],
+): Promise<void> {
+  if (ids.length === 0) {
+    return;
+  }
+  await db()
+    .delete(schema.shoppingItems)
+    .where(
+      and(
+        eq(schema.shoppingItems.userId, userId),
+        inArray(schema.shoppingItems.id, [...ids]),
+      ),
+    );
 }
 
 /** Ajoute un article à la main, hors de toute recette. */

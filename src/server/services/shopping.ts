@@ -1,19 +1,29 @@
 import 'server-only';
 import { aisleFor, type Aisle } from '@/lib/aisle';
 import { quantityForServings } from '@/lib/recipe';
-import { aggregateNeeds, ingredientKey, type ShoppingNeed } from '@/lib/shopping';
+import {
+  aggregateNeeds,
+  ingredientKey,
+  planListSync,
+  type AggregatedNeed,
+  type ShoppingNeed,
+} from '@/lib/shopping';
 import { shiftDate } from '@/lib/date';
 import {
   boughtProductsFor,
   closeShoppingList,
   deleteShoppingItem,
+  deleteShoppingItems,
   forgetIngredientProduct,
   groupCodesFor,
+  insertGeneratedItems,
   insertShoppingItem,
   insertShoppingList,
   latestShoppingList,
+  openShoppingListFor,
   rememberIngredientProduct,
   setItemChecked,
+  updateShoppingItemNeed,
   type ShoppingList,
 } from '../db/queries/shopping';
 import { basketRecipesBetween } from '../db/queries/basket';
@@ -55,6 +65,28 @@ export async function generateList(
   fromDate: string,
   toDate: string = shiftDate(fromDate, WEEK_LENGTH - 1),
 ): Promise<ShoppingList | null> {
+  const needs = await computeNeeds(userId, fromDate, toDate);
+  if (needs.length === 0) {
+    return null;
+  }
+
+  await insertShoppingList(userId, fromDate, toDate, needs);
+  return latestShoppingList(userId);
+}
+
+/**
+ * Ce que le panier d'une période réclame, agrégé et rangé par rayon.
+ *
+ * Extrait de `generateList` parce que deux appelants en ont besoin : celui qui
+ * crée une liste, et celui qui réaligne une liste ouverte sur un panier qui a
+ * changé. Les faire diverger donnerait une liste refaite et une liste suivie
+ * qui ne comptent pas pareil.
+ */
+async function computeNeeds(
+  userId: number,
+  fromDate: string,
+  toDate: string,
+): Promise<AggregatedNeed[]> {
   const chosen = await basketRecipesBetween(userId, fromDate, toDate);
 
   // Les recettes sont chargées une fois chacune : un plat qui figure dans deux
@@ -94,7 +126,7 @@ export async function generateList(
   }
 
   if (raw.length === 0) {
-    return null;
+    return [];
   }
 
   // Le rayon vient du groupe alimentaire de l'ANSES, chargé en une requête
@@ -111,8 +143,35 @@ export async function generateList(
     ),
   }));
 
-  await insertShoppingList(userId, fromDate, toDate, aggregateNeeds(needs));
-  return latestShoppingList(userId);
+  return aggregateNeeds(needs);
+}
+
+/**
+ * Réaligne la liste ouverte d'une semaine sur son panier.
+ *
+ * Appelée après chaque geste qui change les repas de la semaine — les parts
+ * d'un plat, un plat ajouté, un plat retiré. Sans elle, monter un plat de deux
+ * à quatre parts laissait la liste réclamer de quoi en faire deux, et rien à
+ * l'écran ne disait qu'elle avait vieilli.
+ *
+ * Seule la liste ouverte de cette semaine est touchée. Une liste close raconte
+ * des courses déjà faites et ne bouge plus. Ce qui survit à la mise à jour —
+ * l'article écrit à la main, l'article déjà coché — est décidé par
+ * `planListSync`, fonction pure, avec ses raisons.
+ */
+export async function syncListToBasket(userId: number, weekStart: string): Promise<void> {
+  const list = await openShoppingListFor(userId, weekStart);
+  if (list === null) {
+    return;
+  }
+
+  const plan = planListSync(list.items, await computeNeeds(userId, list.fromDate, list.toDate));
+
+  for (const { id, need } of plan.update) {
+    await updateShoppingItemNeed(userId, id, need);
+  }
+  await deleteShoppingItems(userId, plan.remove);
+  await insertGeneratedItems(userId, list.id, plan.insert);
 }
 
 export function closeList(userId: number, listId: number): Promise<boolean> {

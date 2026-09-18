@@ -1,6 +1,7 @@
 import 'server-only';
 import { MAX_BASKET_SERVINGS } from '@/lib/basket';
 import {
+  basketWeekOf,
   deleteBasketItem,
   insertBasketItem,
   installedCatalogSlugs,
@@ -8,6 +9,7 @@ import {
   updateBasketServings,
   type BasketItem,
 } from '../db/queries/basket';
+import { syncListToBasket } from './shopping';
 
 /**
  * Service du panier de la semaine.
@@ -15,6 +17,13 @@ import {
  * Il ne fait presque rien, et c'est voulu : le panier est une liste de choix,
  * pas un calcul. Ce qu'il déclenche — l'installation des recettes, la liste de
  * courses, le plan — vit dans les services qui en ont la charge.
+ *
+ * Une chose lui revient pourtant : prévenir la liste de courses. Tout geste
+ * qui change les repas de la semaine réaligne la liste ouverte qui en dépend,
+ * faute de quoi elle réclamerait de quoi faire un plat pour deux alors qu'on
+ * en attend quatre. La décision de ne pas réécrire une liste sous les yeux
+ * tient toujours : ce qui est coché, écrit à la main ou déjà clos ne bouge
+ * pas, et `syncListToBasket` en porte le détail.
  */
 
 export type { BasketItem };
@@ -55,7 +64,12 @@ export async function addRecipeToBasket(
   const id = await insertBasketItem(userId, weekStart, recipeId, servings);
   // `null` signifie que la recette n'est pas la sienne : introuvable, et non
   // interdit, pour ne pas confirmer l'existence d'une recette d'un autre compte.
-  return id === null ? { kind: 'not_found' } : { kind: 'added', id };
+  if (id === null) {
+    return { kind: 'not_found' };
+  }
+
+  await syncListToBasket(userId, weekStart);
+  return { kind: 'added', id };
 }
 
 export type BasketUpdateResult = 'updated' | 'invalid' | 'not_found';
@@ -68,9 +82,27 @@ export async function setBasketServings(
   if (!Number.isFinite(servings) || servings <= 0 || servings > MAX_BASKET_SERVINGS) {
     return 'invalid';
   }
-  return (await updateBasketServings(userId, id, servings)) ? 'updated' : 'not_found';
+  if (!(await updateBasketServings(userId, id, servings))) {
+    return 'not_found';
+  }
+
+  const weekStart = await basketWeekOf(userId, id);
+  if (weekStart !== null) {
+    await syncListToBasket(userId, weekStart);
+  }
+  return 'updated';
 }
 
-export function removeFromBasket(userId: number, id: number): Promise<boolean> {
-  return deleteBasketItem(userId, id);
+export async function removeFromBasket(userId: number, id: number): Promise<boolean> {
+  // La semaine se lit avant la suppression : après, la ligne qui la portait
+  // n'existe plus et la liste à réaligner serait introuvable.
+  const weekStart = await basketWeekOf(userId, id);
+  if (!(await deleteBasketItem(userId, id))) {
+    return false;
+  }
+
+  if (weekStart !== null) {
+    await syncListToBasket(userId, weekStart);
+  }
+  return true;
 }

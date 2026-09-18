@@ -19,9 +19,13 @@ import type { BasketItem } from '@/server/db/queries/basket';
  * deux sont déjà au plan le dit ici, et nulle part ailleurs — le plan, lui,
  * montre des jours, pas des restes.
  *
- * Retirer un plat ne touche ni à la recette ni à la liste de courses déjà
- * engendrée. La liste est un instantané : elle ne suit pas le panier une fois
- * imprimée, sans quoi elle se réécrirait pendant qu'on fait les courses.
+ * Régler des parts ici décide de ce qu'il faut acheter, et la liste de courses
+ * ouverte de la semaine suit : monter un plat de deux à quatre parts double ce
+ * que ses ingrédients réclament. Ce qui est déjà coché ou écrit à la main n'y
+ * bouge pas, et une liste close ne bouge plus du tout — le détail de ce qui
+ * survit vit dans `syncListToBasket`, côté serveur.
+ *
+ * Retirer un plat ne touche pas à la recette, qui reste au carnet.
  */
 
 /** Pas d'un réglage de parts. Un demi-plat se mange, un quart ne se cuisine pas. */
@@ -169,6 +173,10 @@ export function WeekBasket({
               })}
             </ul>
           </Card>
+
+          <p className="mt-2 text-[12.5px] text-muted-foreground">
+            La liste de courses de la semaine suit ces parts, sauf ce qui y est déjà coché.
+          </p>
 
           <div className="mt-2.5 flex gap-2">
             <Button asChild className="flex-[1.4]">

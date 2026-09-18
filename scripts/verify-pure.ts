@@ -33,7 +33,14 @@ import {
 } from '../src/lib/recipe';
 import { aisleFor } from '../src/lib/aisle';
 import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
-import { aggregateNeeds, bestMatch, matchScore, ingredientKey } from '../src/lib/shopping';
+import {
+  aggregateNeeds,
+  bestMatch,
+  matchScore,
+  ingredientKey,
+  planListSync,
+  type SyncableItem,
+} from '../src/lib/shopping';
 import type { ShoppingNeed } from '../src/lib/shopping';
 import { detectPlatform } from '../src/lib/install';
 import {
@@ -556,6 +563,83 @@ assert.equal(bestMatch('Steak hache 5% MG Charal', articles)?.item.id, 1, 'le bo
 assert.equal(bestMatch('Yaourt nature Danone', articles), null, 'sous le seuil : rien');
 // Un article deja coche ne doit pas etre propose : on ne scanne pas deux fois.
 assert.equal(bestMatch('Tomates pelees appertisees', articles), null, 'article coche ignore');
+
+// --- Liste de courses qui suit le panier ---
+
+const article = (
+  id: number,
+  refValue: string,
+  label: string,
+  quantityG: number,
+  extra: Partial<SyncableItem> = {},
+): SyncableItem => ({
+  id,
+  refKind: 'ciqual',
+  refValue,
+  label,
+  quantityG,
+  unitName: null,
+  unitGrams: null,
+  aisle: 'grocery',
+  checkedAt: null,
+  addedManually: false,
+  ...extra,
+});
+
+// Monter les parts d un plat remonte la quantite de ses ingredients.
+const plusDeParts = planListSync(
+  [article(1, '31047', 'Poulet', 300)],
+  [{ ...besoin('31047', 'Poulet', 600), sourceCount: 1 }],
+);
+assert.equal(plusDeParts.update.length, 1, 'la quantite est reprise');
+assert.equal(plusDeParts.update[0]?.need.quantityG, 600, 'six cents grammes desormais');
+assert.equal(plusDeParts.remove.length, 0, 'rien a retirer');
+assert.equal(plusDeParts.insert.length, 0, 'rien a ajouter');
+
+// Un panier inchange n ecrit rien du tout.
+const rienNeBouge = planListSync(
+  [article(1, '31047', 'Poulet', 300)],
+  [{ ...besoin('31047', 'Poulet', 300), sourceCount: 1 }],
+);
+assert.equal(
+  rienNeBouge.update.length + rienNeBouge.insert.length + rienNeBouge.remove.length,
+  0,
+  'aucune ecriture sur un panier inchange',
+);
+
+// Un plat ajoute apporte ses ingredients ; un plat retire remporte les siens.
+const platAjoute = planListSync(
+  [article(1, '31047', 'Poulet', 300)],
+  [
+    { ...besoin('31047', 'Poulet', 300), sourceCount: 1 },
+    { ...besoin('9999', 'Riz', 200), sourceCount: 1 },
+  ],
+);
+assert.equal(platAjoute.insert.length, 1, 'le riz entre en liste');
+assert.equal(platAjoute.insert[0]?.refValue, '9999', 'et c est bien le riz');
+
+const platRetire = planListSync([article(1, '31047', 'Poulet', 300)], []);
+assert.deepEqual(platRetire.remove, [1], 'le poulet sort de la liste');
+
+// Ce qui est deja dans le chariot ne disparait jamais : le voir partir ferait
+// douter de l avoir pris.
+const dejaPris = planListSync([article(1, '31047', 'Poulet', 300, { checkedAt: new Date() })], []);
+assert.equal(dejaPris.remove.length, 0, 'un article coche reste, meme devenu inutile');
+
+// Sa quantite, elle, suit le panier : c est la question qu on se pose en rayon.
+const prisMaisPlusGrand = planListSync(
+  [article(1, '31047', 'Poulet', 300, { checkedAt: new Date() })],
+  [{ ...besoin('31047', 'Poulet', 800), sourceCount: 1 }],
+);
+assert.equal(prisMaisPlusGrand.update[0]?.need.quantityG, 800, 'la quantite suit malgre la coche');
+
+// Ce qu on a ecrit a la main n appartient a aucune recette : on n y touche pas.
+const aLaMain = planListSync([article(9, '7777', 'Sacs poubelle', 0, { addedManually: true })], []);
+assert.equal(
+  aLaMain.update.length + aLaMain.remove.length,
+  0,
+  'un article ajoute a la main survit a tout',
+);
 
 // --- Seances ---
 

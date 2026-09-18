@@ -4,6 +4,7 @@ import type { RecipeIngredientInput } from '@/lib/recipe';
 import { insertRecipe } from '../db/queries/recipes';
 import { installedCatalogSlugs, insertBasketItem } from '../db/queries/basket';
 import { searchReferenceFoods } from '../db/queries/search';
+import { syncListToBasket } from './shopping';
 
 /**
  * Service du catalogue : choisir des plats, et ce que ce choix engendre.
@@ -184,6 +185,13 @@ export async function chooseCatalogMeals(
       continue;
     }
     report.chosen += 1;
+  }
+
+  // Une liste de courses déjà ouverte sur cette semaine suit les plats qu'on
+  // vient d'y ajouter : une seule passe à la fin, et non par plat, le calcul
+  // portant de toute façon sur le panier entier.
+  if (report.chosen > 0) {
+    await syncListToBasket(userId, weekStart);
   }
 
   return report;

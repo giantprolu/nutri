@@ -74,6 +74,90 @@ export function aggregateNeeds(needs: readonly ShoppingNeed[]): AggregatedNeed[]
   return [...byKey.values()];
 }
 
+/** Un article de liste, vu par la synchronisation. */
+export interface SyncableItem {
+  id: number;
+  refKind: IngredientRefKind;
+  refValue: string;
+  label: string;
+  quantityG: number;
+  unitName: string | null;
+  unitGrams: number | null;
+  aisle: Aisle;
+  /** Renseigné quand l'article est déjà dans le chariot. */
+  checkedAt: Date | null;
+  /** Vrai pour un article écrit à la main, qu'aucune recette ne réclamait. */
+  addedManually: boolean;
+}
+
+/** Ce qu'il faut écrire pour qu'une liste ouverte redise le panier. */
+export interface ListSyncPlan {
+  update: { id: number; need: AggregatedNeed }[];
+  insert: AggregatedNeed[];
+  remove: number[];
+}
+
+/**
+ * Décide ce qu'une liste ouverte doit devenir quand les repas de la semaine
+ * ont changé — plus de parts, un plat de plus, un plat retiré.
+ *
+ * Ce n'est pas la liste refaite à neuf, et toute la nuance est là. Refaire
+ * réglerait les quantités et perdrait le reste ; ici trois choses survivent,
+ * parce que les perdre coûte plus cher qu'une quantité inexacte :
+ *
+ *   - l'article écrit à la main, que nulle recette ne réclamait et que nulle
+ *     recette ne peut donc redemander ;
+ *   - l'article déjà coché, même devenu inutile : il est dans le chariot, et
+ *     le voir disparaître ferait douter de l'avoir pris ;
+ *   - la quantité d'un article coché, elle, suit tout de même le panier : on
+ *     saura qu'il en faut huit cents grammes et non cinq cents, ce qui est
+ *     exactement la question qu'on se pose en rayon.
+ *
+ * Le reste suit : un ingrédient nouveau s'ajoute, un ingrédient que plus rien
+ * ne réclame s'en va s'il n'a pas encore été pris.
+ */
+export function planListSync(
+  items: readonly SyncableItem[],
+  needs: readonly AggregatedNeed[],
+): ListSyncPlan {
+  const byKey = new Map(needs.map((need) => [ingredientKey(need.refKind, need.refValue), need]));
+  const plan: ListSyncPlan = { update: [], insert: [], remove: [] };
+
+  for (const item of items) {
+    if (item.addedManually) {
+      continue;
+    }
+
+    const key = ingredientKey(item.refKind, item.refValue);
+    const need = byKey.get(key);
+
+    if (need === undefined) {
+      if (item.checkedAt === null) {
+        plan.remove.push(item.id);
+      }
+      continue;
+    }
+
+    // La clé est couverte par un article existant : le besoin ne doit pas être
+    // inséré une seconde fois.
+    byKey.delete(key);
+
+    const unchanged =
+      item.quantityG === need.quantityG &&
+      item.label === need.label &&
+      item.unitName === need.unitName &&
+      item.unitGrams === need.unitGrams &&
+      item.aisle === need.aisle;
+
+    if (!unchanged) {
+      plan.update.push({ id: item.id, need });
+    }
+  }
+
+  plan.insert.push(...byKey.values());
+  return plan;
+}
+
 /**
  * Normalise un libellé pour la comparaison : minuscules, sans accents, et
  * découpé sur tout ce qui n'est ni lettre ni chiffre.

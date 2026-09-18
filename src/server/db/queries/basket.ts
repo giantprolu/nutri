@@ -128,6 +128,23 @@ export async function insertBasketItem(
   return existing?.id ?? null;
 }
 
+/**
+ * La semaine d'une ligne du panier.
+ *
+ * Lue pour réaligner la liste de courses qui en dépend : les gestes du panier
+ * ne portent qu'un identifiant de ligne, et la liste, elle, se range par
+ * semaine. Rend `null` quand la ligne n'est pas la sienne, comme partout.
+ */
+export async function basketWeekOf(userId: number, id: number): Promise<string | null> {
+  const [row] = await db()
+    .select({ weekStart: schema.mealBasket.weekStart })
+    .from(schema.mealBasket)
+    .where(and(eq(schema.mealBasket.userId, userId), eq(schema.mealBasket.id, id)))
+    .limit(1);
+
+  return row === undefined ? null : String(row.weekStart).slice(0, 10);
+}
+
 /** Change le nombre de parts prévues d'un plat du panier. */
 export async function updateBasketServings(
   userId: number,
