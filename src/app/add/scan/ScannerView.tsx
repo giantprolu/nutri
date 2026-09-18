@@ -106,6 +106,22 @@ export function ScannerView({
     [onBarcode],
   );
 
+  /**
+   * Le viseur ne connaît de l'extérieur qu'une référence, jamais une dépendance.
+   *
+   * L'effet qui ouvre la caméra ne doit se jouer qu'une fois par montage. S'il
+   * dépendait de `handleOutcome`, la moindre lambda passée en ligne par un
+   * appelant — ou le simple rendu de son parent — le relancerait : arrêt du
+   * flux, puis second `getUserMedia` pendant que le premier est encore en vol.
+   * iOS refuse ce second appel et l'écran annonce une caméra indisponible,
+   * alors que l'appareil n'a rien refusé. C'est ce qui arrivait au scan en
+   * rayon, dont le parent se rend à nouveau dès l'ouverture.
+   */
+  const outcomeRef = useRef(handleOutcome);
+  useEffect(() => {
+    outcomeRef.current = handleOutcome;
+  }, [handleOutcome]);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video) {
@@ -113,7 +129,10 @@ export function ScannerView({
     }
 
     let cancelled = false;
-    void startScanner({ video, onOutcome: handleOutcome }).then((handle) => {
+    void startScanner({
+      video,
+      onOutcome: (outcome) => outcomeRef.current(outcome),
+    }).then((handle) => {
       handleRef.current = handle;
       if (cancelled) {
         handle.stop();
@@ -133,7 +152,8 @@ export function ScannerView({
       handleRef.current?.stop();
       handleRef.current = null;
     };
-  }, [handleOutcome]);
+    // Volontairement sans dépendance : voir la référence ci-dessus.
+  }, []);
 
   /**
    * Contrôle de l'aperçu.

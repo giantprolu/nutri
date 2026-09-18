@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ScannerView } from '@/app/add/scan/ScannerView';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -52,33 +52,49 @@ export function ScanToCheck({
 }) {
   const [step, setStep] = useState<Step>({ name: 'scanning' });
 
-  // Chaque ouverture repart du viseur, quel que soit l'état où l'on a quitté.
+  /*
+    Chaque ouverture repart du viseur, quel que soit l'état où l'on a quitté.
+
+    Le retour de l'état précédent quand il convient déjà n'est pas une
+    précaution de style : React s'arrête là, et aucun rendu ne suit. Écrire un
+    objet neuf en rendait un, ce qui renouvelait la lambda passée au viseur et
+    lui faisait rouvrir la caméra alors qu'elle s'ouvrait déjà.
+  */
   useEffect(() => {
     if (open) {
-      setStep({ name: 'scanning' });
+      setStep((previous) => (previous.name === 'scanning' ? previous : { name: 'scanning' }));
     }
   }, [open]);
 
-  async function handleBarcode(barcode: string) {
-    setStep({ name: 'resolving' });
-    const resolved = await resolveBarcode(barcode);
+  const resolveAndMatch = useCallback(
+    async (barcode: string) => {
+      setStep({ name: 'resolving' });
+      const resolved = await resolveBarcode(barcode);
 
-    if (resolved.kind !== 'cached' && resolved.kind !== 'fetched') {
-      // Produit inconnu d'Open Food Facts : l'article se coche quand même, et
-      // c'est le bon comportement. On l'a bel et bien mis dans le chariot ;
-      // seule la fiche manque, et elle ne sert qu'aux macros.
-      setStep({ name: 'unknown', barcode });
-      return;
-    }
+      if (resolved.kind !== 'cached' && resolved.kind !== 'fetched') {
+        // Produit inconnu d'Open Food Facts : l'article se coche quand même, et
+        // c'est le bon comportement. On l'a bel et bien mis dans le chariot ;
+        // seule la fiche manque, et elle ne sert qu'aux macros.
+        setStep({ name: 'unknown', barcode });
+        return;
+      }
 
-    const match = bestMatch(resolved.product.name, items as readonly MatchableItem[]);
-    setStep({
-      name: 'matched',
-      barcode,
-      productName: resolved.product.name,
-      suggested: match === null ? null : (match.item as ShoppingItem),
-    });
-  }
+      const match = bestMatch(resolved.product.name, items as readonly MatchableItem[]);
+      setStep({
+        name: 'matched',
+        barcode,
+        productName: resolved.product.name,
+        suggested: match === null ? null : (match.item as ShoppingItem),
+      });
+    },
+    [items],
+  );
+
+  /* Stable tant que la liste ne bouge pas : le viseur n'a pas à rouvrir. */
+  const onScannerBarcode = useCallback(
+    (barcode: string) => void resolveAndMatch(barcode),
+    [resolveAndMatch],
+  );
 
   if (!open) {
     return null;
@@ -86,11 +102,7 @@ export function ScanToCheck({
 
   if (step.name === 'scanning') {
     return (
-      <ScannerView
-        title="En rayon"
-        onClose={onClose}
-        onBarcode={(barcode) => void handleBarcode(barcode)}
-      />
+      <ScannerView title="En rayon" onClose={onClose} onBarcode={onScannerBarcode} />
     );
   }
 
