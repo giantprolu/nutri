@@ -31,7 +31,7 @@ export function AddFab() {
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-label="Ajouter un aliment"
-        className="fixed right-[max(1.25rem,calc(50vw-16rem+1.25rem))] bottom-[calc(5.5rem+env(safe-area-inset-bottom,0px))] z-40 size-14 rounded-full shadow-[0_8px_20px_-4px_rgb(0_0_0/0.35)] [&_svg:not([class*='size-'])]:size-6"
+        className="fixed right-[max(1.25rem,calc(50vw-16rem+1.25rem))] bottom-[calc(5.5rem+var(--safe-bottom))] z-40 size-14 rounded-full shadow-[0_8px_20px_-4px_rgb(0_0_0/0.35)] [&_svg:not([class*='size-'])]:size-6"
       >
         <PlusIcon />
       </Button>

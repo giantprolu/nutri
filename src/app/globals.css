@@ -70,6 +70,14 @@
 :root {
   --radius: 0.625rem;
 
+  /*
+   * Zones sûres, nommées une fois pour tout le reste. Elles ne servent qu'à
+   * écarter le contenu des bords que le matériel mange : l'encoche en haut,
+   * l'indicateur d'accueil en bas.
+   */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -93,6 +101,21 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+}
+
+/*
+ * Installée sur l'écran d'accueil, l'application passe sous la barre d'état
+ * (`black-translucent`) et iOS ne rapporte pas toujours le retrait haut : il
+ * arrive qu'il vaille zéro, et le titre se retrouve alors derrière l'heure.
+ *
+ * Le plancher couvre la hauteur d'une barre d'état dans ce cas. Quand le
+ * retrait est correctement rapporté, il est plus grand et l'emporte : la règle
+ * ne change alors rien.
+ */
+@media (display-mode: standalone) {
+  :root {
+    --safe-top: max(env(safe-area-inset-top, 0px), 2.75rem);
+  }
 }
 
 /*
@@ -181,11 +204,11 @@
 @layer utilities {
   /* Zones sûres iOS : rien de cliquable sous l'indicateur d'accueil. */
   .safe-bottom {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-bottom: var(--safe-bottom);
   }
 
   .safe-top {
-    padding-top: env(safe-area-inset-top, 0px);
+    padding-top: var(--safe-top);
   }
 
   /* Trame des emplacements d'image absente : photo, vignette de recette. */

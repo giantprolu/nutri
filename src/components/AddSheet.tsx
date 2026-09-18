@@ -30,7 +30,7 @@ export function AddSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
         side="bottom"
-        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+env(safe-area-inset-bottom,0px))]"
+        className="mx-auto max-h-[88dvh] max-w-lg gap-0 overflow-y-auto rounded-t-[20px] px-5 pt-2.5 pb-[calc(1.75rem+var(--safe-bottom))]"
       >
         <div aria-hidden className="mx-auto mb-3.5 h-1 w-11 rounded-full bg-border" />
         <SheetHeader className="p-0 pr-10">

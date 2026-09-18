@@ -214,7 +214,7 @@ export function ScannerView({
           </div>
         )}
 
-        <div className="relative px-5 pb-[calc(2rem+env(safe-area-inset-bottom,0px))]">
+        <div className="relative px-5 pb-[calc(2rem+var(--safe-bottom))]">
           {cameraFailed ? null : (
             <>
               <p className="mb-3.5 text-center text-[13.5px] text-white/70">

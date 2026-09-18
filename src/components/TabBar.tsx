@@ -54,12 +54,12 @@ export function TabBar() {
   return (
     // Une barre d'actions basse la remplace tant qu'elle est montée.
     <div className="contents [body:has([data-bottom-bar])_&]:hidden">
-      {/* Réserve la hauteur de la barre fixe, zone sûre comprise. */}
-      <div aria-hidden className="box-content h-[72px] pb-[env(safe-area-inset-bottom,0px)]" />
+      {/* Réserve la hauteur de la barre fixe (57 px), zone sûre et air compris. */}
+      <div aria-hidden className="h-[calc(4.5rem+var(--safe-bottom))]" />
 
       <nav
         aria-label="Navigation principale"
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[env(safe-area-inset-bottom,0px)] backdrop-blur-xl backdrop-saturate-150"
+        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[var(--safe-bottom)] backdrop-blur-xl backdrop-saturate-150"
       >
         <div className="mx-auto flex h-14 max-w-lg items-stretch px-1.5">
           {DESTINATIONS.map((destination) => {

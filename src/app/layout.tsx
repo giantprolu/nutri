@@ -108,7 +108,14 @@ export default async function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_SCRIPT }} />
       </head>
       <body className="min-h-dvh font-sans">
-        <main className="safe-top mx-auto w-full max-w-lg px-5 pb-6">{children}</main>
+        {/*
+          Le retrait haut n'est pas seulement la zone sûre : celle-ci s'arrête
+          au ras de l'encoche, et un titre posé dessus paraît collé au bord.
+          La demi-marge qui s'y ajoute donne l'air que le matériel ne donne pas.
+        */}
+        <main className="mx-auto w-full max-w-lg px-5 pt-[calc(var(--safe-top)+0.5rem)] pb-6">
+          {children}
+        </main>
         <TabBar />
       </body>
     </html>
