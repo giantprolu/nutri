@@ -19,14 +19,14 @@ import {
   insertGeneratedItems,
   insertShoppingItem,
   insertShoppingList,
-  latestShoppingList,
   openShoppingListFor,
   rememberIngredientProduct,
   setItemChecked,
+  shoppingListForWeek,
   updateShoppingItemNeed,
   type ShoppingList,
 } from '../db/queries/shopping';
-import { basketRecipesBetween } from '../db/queries/basket';
+import { basketRecipesBetween, basketWeeksForRecipe } from '../db/queries/basket';
 import { findRecipe } from '../db/queries/recipes';
 import { WEEK_LENGTH } from './meal-plan';
 
@@ -41,8 +41,15 @@ import { WEEK_LENGTH } from './meal-plan';
 
 export type { ShoppingList };
 
-export function currentList(userId: number): Promise<ShoppingList | null> {
-  return latestShoppingList(userId);
+/**
+ * La liste de la semaine consultée, ou `null` s'il n'y en a pas encore.
+ *
+ * La semaine est demandée et non déduite : l'écran des courses s'ouvre depuis
+ * une semaine précise — celle du panier qu'on veut couvrir — et lui rendre la
+ * dernière liste tous comptes faits lui montrait les courses d'une autre.
+ */
+export function listForWeek(userId: number, weekStart: string): Promise<ShoppingList | null> {
+  return shoppingListForWeek(userId, weekStart);
 }
 
 /**
@@ -71,7 +78,7 @@ export async function generateList(
   }
 
   await insertShoppingList(userId, fromDate, toDate, needs);
-  return latestShoppingList(userId);
+  return shoppingListForWeek(userId, fromDate);
 }
 
 /**
@@ -172,6 +179,39 @@ export async function syncListToBasket(userId: number, weekStart: string): Promi
   }
   await deleteShoppingItems(userId, plan.remove);
   await insertGeneratedItems(userId, list.id, plan.insert);
+}
+
+/**
+ * Réaligne les listes ouvertes que cette recette alimente.
+ *
+ * Appelée quand la recette elle-même change — un ingrédient corrigé, une
+ * quantité revue, un nombre de parts qui passe de quatre à deux. Sans elle,
+ * seuls les gestes du panier faisaient bouger la liste, et corriger une
+ * recette laissait en rayon les quantités d'avant la correction : on achetait
+ * pour un plat qu'on n'allait plus faire ainsi.
+ *
+ * Une recette peut figurer aux paniers de plusieurs semaines. Toutes sont
+ * réalignées, la synchronisation ne touchant que celles dont la liste est
+ * encore ouverte.
+ */
+export async function syncListsForRecipe(userId: number, recipeId: number): Promise<void> {
+  await syncListsForWeeks(userId, await basketWeeksForRecipe(userId, recipeId));
+}
+
+/**
+ * Réaligne les listes ouvertes de plusieurs semaines.
+ *
+ * Distincte de `syncListsForRecipe` pour un seul cas, celui de la suppression :
+ * la cascade emporte les lignes de panier, et les semaines à réaligner doivent
+ * donc être lues avant, quand la recette existe encore.
+ */
+export async function syncListsForWeeks(
+  userId: number,
+  weekStarts: readonly string[],
+): Promise<void> {
+  for (const weekStart of weekStarts) {
+    await syncListToBasket(userId, weekStart);
+  }
 }
 
 export function closeList(userId: number, listId: number): Promise<boolean> {

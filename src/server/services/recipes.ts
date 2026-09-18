@@ -16,6 +16,8 @@ import {
   missingReferences,
   updateRecipe,
 } from '../db/queries/recipes';
+import { basketWeeksForRecipe } from '../db/queries/basket';
+import { syncListsForRecipe, syncListsForWeeks } from './shopping';
 
 /**
  * Service des recettes.
@@ -144,6 +146,18 @@ export async function createRecipe(
   return { kind: 'saved', id: await insertRecipe(userId, clean) };
 }
 
+/**
+ * Enregistre une recette modifiée, et réaligne ce qu'elle fait acheter.
+ *
+ * Le réalignement n'est pas un détail d'intendance : les quantités d'une liste
+ * de courses se déduisent des ingrédients et des parts de la recette. Corriger
+ * « 200 g de riz » en « 400 g » sans toucher à la liste laissait acheter la
+ * moitié de ce qu'il fallait, et rien à l'écran ne disait que la liste datait
+ * d'avant la correction.
+ *
+ * Ce qui est déjà coché ou écrit à la main survit, comme pour un geste du
+ * panier : le détail vit dans `planListSync`, avec ses raisons.
+ */
 export async function saveRecipe(
   userId: number,
   id: number,
@@ -154,12 +168,30 @@ export async function saveRecipe(
   if (rejection !== null) {
     return { kind: 'invalid', reason: rejection };
   }
-  const updated = await updateRecipe(userId, id, clean);
-  return updated ? { kind: 'saved', id } : { kind: 'not_found' };
+  if (!(await updateRecipe(userId, id, clean))) {
+    return { kind: 'not_found' };
+  }
+
+  await syncListsForRecipe(userId, id);
+  return { kind: 'saved', id };
 }
 
-export function removeRecipe(userId: number, id: number): Promise<boolean> {
-  return deleteRecipe(userId, id);
+/**
+ * Supprime une recette, et retire des listes ouvertes ce qu'elle réclamait.
+ *
+ * Les semaines se lisent avant la suppression : la cascade emporte les lignes
+ * de panier qui les portaient, et il n'y aurait ensuite plus rien à quoi
+ * rattacher les listes à réaligner. Un article déjà coché reste, lui : il est
+ * dans le chariot, et le voir disparaître ferait douter de l'avoir pris.
+ */
+export async function removeRecipe(userId: number, id: number): Promise<boolean> {
+  const weeks = await basketWeeksForRecipe(userId, id);
+  if (!(await deleteRecipe(userId, id))) {
+    return false;
+  }
+
+  await syncListsForWeeks(userId, weeks);
+  return true;
 }
 
 export function recipeCount(userId: number): Promise<number> {

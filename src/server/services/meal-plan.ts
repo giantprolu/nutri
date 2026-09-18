@@ -3,6 +3,7 @@ import { quantityForServings, type Recipe } from '@/lib/recipe';
 import { isValidQuantity } from '@/lib/nutrition';
 import { daysFrom, shiftDate } from '@/lib/date';
 import { ingredientKey } from '@/lib/shopping';
+import { MAX_PLANNED_SERVINGS } from '@/lib/basket';
 import type { Meal } from '@/lib/meal';
 import { boughtProductsFor, type BoughtProduct } from '../db/queries/shopping';
 import {
@@ -29,8 +30,7 @@ import { recordEntry } from './entries';
 /** Une semaine pleine. Le plan ne se lit jamais jour par jour. */
 export const WEEK_LENGTH = 7;
 
-/** Au-delà, ce n'est plus un repas mais une erreur de saisie. */
-export const MAX_PLANNED_SERVINGS = 20;
+export { MAX_PLANNED_SERVINGS };
 
 export type { PlannedMeal };
 

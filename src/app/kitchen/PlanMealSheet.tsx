@@ -14,6 +14,7 @@ import { MEALS, MEAL_SHORT_LABELS, isMeal, type Meal } from '@/lib/meal';
 import { formatWeekday, formatDayMonth } from '@/lib/date';
 import { macrosPerServing, type Recipe } from '@/lib/recipe';
 import { formatKcal, scaleMacros } from '@/lib/nutrition';
+import { MAX_PLANNED_SERVINGS } from '@/lib/basket';
 
 /**
  * Feuille d'ajout d'un plat au plan.
@@ -60,6 +61,12 @@ export function PlanMealSheet({
     setServings(DEFAULT_SERVINGS);
   }, [initialMeal, planDate, open]);
 
+  // Le champ se vide en le corrigeant, et `Number('')` vaut zéro. Sans ce
+  // contrôle, choisir un plat à cet instant partait au serveur pour revenir en
+  // « Ce plat n'a pas pu être prévu », qui n'explique rien.
+  const validServings =
+    Number.isFinite(servings) && servings > 0 && servings <= MAX_PLANNED_SERVINGS;
+
   const chosen = recipes.filter((recipe) => basketRecipeIds.has(recipe.id));
   const others = recipes.filter((recipe) => !basketRecipeIds.has(recipe.id));
 
@@ -72,7 +79,7 @@ export function PlanMealSheet({
       <li key={recipe.id}>
         <button
           type="button"
-          disabled={busy}
+          disabled={busy || !validServings}
           onClick={() => onConfirm(recipe.id, meal, servings)}
           className="flex w-full items-center gap-3 border-b py-2.5 text-left transition-colors active:bg-accent disabled:opacity-50"
         >
@@ -133,12 +140,20 @@ export function PlanMealSheet({
             type="number"
             inputMode="decimal"
             min={0.5}
+            max={MAX_PLANNED_SERVINGS}
             step={0.5}
             value={servings}
             onChange={(event) => setServings(Number(event.target.value))}
+            aria-invalid={!validServings}
+            aria-describedby={validServings ? undefined : 'plan-servings-error'}
             className="tabular w-[92px] text-right"
           />
         </div>
+        {validServings ? null : (
+          <p id="plan-servings-error" role="alert" className="mt-1.5 text-right text-destructive">
+            Entre une demi-part et {MAX_PLANNED_SERVINGS} parts.
+          </p>
+        )}
 
         <Separator className="mt-4" />
 

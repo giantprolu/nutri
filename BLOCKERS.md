@@ -223,6 +223,15 @@ synchronisation OneDrive le temps de la compilation, ou travailler depuis une
 copie du dépôt placée hors du dossier synchronisé. Rien ne presse tant que
 Vercel compile.
 
+**Confirmé le 18/09/2026, sur une autre page.** L'échec s'est reproduit au
+prérendu de `/offline`, et non plus de `/unlock` : la page qui tombe change
+d'une compilation à l'autre, ce qui achève d'écarter le code des pages en
+cause. La même erreur (`TypeError: a[d] is not a function`, dans
+`webpack-runtime.js`) a été obtenue deux fois de suite sur l'arbre de travail
+portant la correction des courses, puis une troisième fois sur l'arbre propre
+remis par `git stash`. Un fichier du chargeur webpack est bien remplacé sous
+la compilation ; rien dans la révision n'est en cause.
+
 
 ---
 

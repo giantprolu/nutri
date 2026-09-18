@@ -167,6 +167,33 @@ export async function deleteBasketItem(userId: number, id: number): Promise<bool
   return deleted.length > 0;
 }
 
+/**
+ * Les semaines dont le panier contient cette recette.
+ *
+ * Lue avant de toucher à une recette : ses ingrédients et ses parts décident
+ * des quantités à acheter, et une liste engendrée avant la correction
+ * réclamerait encore l'ancienne. Rendue triée, pour que deux appels successifs
+ * réalignent dans le même ordre.
+ *
+ * Toutes les semaines sont rendues, passées comprises : c'est à l'appelant de
+ * décider ce qu'il en fait, et `syncListToBasket` ne touchera de toute façon
+ * qu'une liste encore ouverte.
+ */
+export async function basketWeeksForRecipe(
+  userId: number,
+  recipeId: number,
+): Promise<string[]> {
+  const rows = await db()
+    .selectDistinct({ weekStart: schema.mealBasket.weekStart })
+    .from(schema.mealBasket)
+    .where(
+      and(eq(schema.mealBasket.userId, userId), eq(schema.mealBasket.recipeId, recipeId)),
+    )
+    .orderBy(asc(schema.mealBasket.weekStart));
+
+  return rows.map((row) => String(row.weekStart).slice(0, 10));
+}
+
 /** Les recettes déjà installées depuis le catalogue, par `slug`. */
 export async function installedCatalogSlugs(userId: number): Promise<Map<string, number>> {
   const rows = await db()

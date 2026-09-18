@@ -152,7 +152,8 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
           La liste se déduit des plats choisis.
         </p>
         <p className="mx-auto mt-2 max-w-[32ch] text-muted-foreground">
-          Les ingrédients du panier de la semaine, additionnés et rangés par rayon.
+          Les ingrédients du panier de cette semaine, additionnés à l&apos;échelle des parts
+          prévues et rangés par rayon.
         </p>
         <div className="mx-auto mt-5 flex max-w-[260px] flex-col gap-2.5">
           <Button type="button" onClick={() => void regenerate()} disabled={busy}>
@@ -267,10 +268,11 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
         className="mt-5 w-full"
       >
         <RefreshCwIcon />
-        Refaire la liste depuis le plan
+        Refaire la liste depuis le panier
       </Button>
       <p className="mt-1 text-center text-[12.5px] text-muted-foreground">
-        Une nouvelle liste remplace celle-ci. Les plats déjà mangés en sont exclus.
+        Une nouvelle liste remplace celle-ci, coches comprises. Au quotidien, elle suit déjà
+        les parts du panier toute seule.
       </p>
 
       <BottomBar>

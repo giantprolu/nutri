@@ -74,18 +74,9 @@ async function itemsFor(listId: number): Promise<ShoppingItem[]> {
   return rows.map(toItem);
 }
 
-/** La liste la plus récente, ouverte ou non, ou `null` s'il n'y en a jamais eu. */
-export async function latestShoppingList(userId: number): Promise<ShoppingList | null> {
-  const [row] = await db()
-    .select()
-    .from(schema.shoppingLists)
-    .where(eq(schema.shoppingLists.userId, userId))
-    .orderBy(desc(schema.shoppingLists.createdAt), desc(schema.shoppingLists.id))
-    .limit(1);
-
-  if (!row) {
-    return null;
-  }
+async function toList(
+  row: typeof schema.shoppingLists.$inferSelect,
+): Promise<ShoppingList> {
   return {
     id: row.id,
     fromDate: String(row.fromDate).slice(0, 10),
@@ -97,12 +88,46 @@ export async function latestShoppingList(userId: number): Promise<ShoppingList |
 }
 
 /**
+ * La liste d'une semaine donnée, ouverte ou close, ou `null` s'il n'y en a pas.
+ *
+ * Bornée à la semaine et non « la plus récente », et c'est ce qui compte : une
+ * liste porte les quantités du panier d'une semaine précise. Rendre la
+ * dernière quelle que soit sa semaine montrait, au retour du lundi suivant,
+ * les courses de la semaine écoulée — avec ses quantités, ses articles déjà
+ * cochés, et un réglage de parts qui ne la faisait plus bouger, puisque la
+ * synchronisation ne touche que la liste de *cette* semaine.
+ *
+ * Les listes closes sont rendues comme les autres : les courses d'une semaine
+ * faite se relisent, elles ne disparaissent pas.
+ */
+export async function shoppingListForWeek(
+  userId: number,
+  fromDate: string,
+): Promise<ShoppingList | null> {
+  const [row] = await db()
+    .select()
+    .from(schema.shoppingLists)
+    .where(
+      and(eq(schema.shoppingLists.userId, userId), eq(schema.shoppingLists.fromDate, fromDate)),
+    )
+    .orderBy(desc(schema.shoppingLists.createdAt), desc(schema.shoppingLists.id))
+    .limit(1);
+
+  return row === undefined ? null : toList(row);
+}
+
+/**
  * Crée une liste et ses articles.
  *
  * L'ancienne liste de la même période n'est pas mise à jour mais remplacée :
- * une liste de courses est un instantané du plan au moment où on la demande,
+ * une liste de courses est un instantané du panier au moment où on la demande,
  * et rien n'est plus déroutant qu'une liste qui se réécrit sous les yeux
  * pendant qu'on fait les courses.
+ *
+ * Remplacée pour de bon, donc : la précédente est supprimée, et non laissée à
+ * côté de la nouvelle. Deux listes ouvertes sur la même semaine donnaient deux
+ * vérités dont une seule suivait le panier, et l'écran n'en montrait qu'une.
+ * Les listes closes sont épargnées : elles archivent des courses faites.
  */
 export async function insertShoppingList(
   userId: number,
@@ -110,6 +135,16 @@ export async function insertShoppingList(
   toDate: string,
   needs: readonly AggregatedNeed[],
 ): Promise<number> {
+  await db()
+    .delete(schema.shoppingLists)
+    .where(
+      and(
+        eq(schema.shoppingLists.userId, userId),
+        eq(schema.shoppingLists.fromDate, fromDate),
+        isNull(schema.shoppingLists.closedAt),
+      ),
+    );
+
   const [row] = await db()
     .insert(schema.shoppingLists)
     .values({ userId, fromDate, toDate })
@@ -160,11 +195,10 @@ export async function insertGeneratedItems(
 /**
  * La liste ouverte qui couvre une semaine donnée.
  *
- * Distincte de `latestShoppingList`, qui rend la dernière liste quelle que
- * soit sa semaine — ce que veut l'écran des courses. Pour suivre un panier il
- * faut au contraire la liste de *cette* semaine, et seulement si elle est
- * encore ouverte : une liste close raconte des courses déjà faites, qu'un
- * changement de parts n'a pas à réécrire.
+ * Distincte de `shoppingListForWeek`, qui rend aussi les listes closes parce
+ * que l'écran doit pouvoir les relire. Pour suivre un panier il faut au
+ * contraire la seule liste encore ouverte : une liste close raconte des
+ * courses déjà faites, qu'un changement de parts n'a pas à réécrire.
  */
 export async function openShoppingListFor(
   userId: number,
@@ -183,17 +217,7 @@ export async function openShoppingListFor(
     .orderBy(desc(schema.shoppingLists.createdAt), desc(schema.shoppingLists.id))
     .limit(1);
 
-  if (!row) {
-    return null;
-  }
-  return {
-    id: row.id,
-    fromDate: String(row.fromDate).slice(0, 10),
-    toDate: String(row.toDate).slice(0, 10),
-    closedAt: row.closedAt,
-    createdAt: row.createdAt,
-    items: await itemsFor(row.id),
-  };
+  return row === undefined ? null : toList(row);
 }
 
 /** Réaligne un article sur ce que les recettes réclament désormais. */

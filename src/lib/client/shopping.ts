@@ -10,7 +10,7 @@ export type GenerateListOutcome =
   | { kind: 'empty' }
   | { kind: 'error' };
 
-/** Engendre la liste depuis le plan de la semaine commençant à `from`. */
+/** Engendre la liste depuis le panier de la semaine commençant à `from`. */
 export async function generateList(from: string): Promise<GenerateListOutcome> {
   let response: Response;
   try {
