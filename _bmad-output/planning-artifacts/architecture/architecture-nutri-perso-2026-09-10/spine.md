@@ -62,6 +62,7 @@ graph TD
 - **Binds :** FR-13
 - **Prevents :** Une route serveur `/api/off/[barcode]` qui ferait passer tous les appels derrière l'IP de la fonction Vercel, et consommerait le quota de 15 requêtes par minute pour l'ensemble des utilisateurs de cette IP partagée.
 - **Rule :** Le seul appel à `world.openfoodfacts.org` part de `src/lib/client/openfoodfacts.ts`, exécuté dans le navigateur. Aucun fichier sous `src/server` ni `src/app/api` ne mentionne ce domaine. L'appel porte un en-tête `User-Agent` identifiant l'application et restreint les champs demandés via le paramètre `fields`.
+- **Exception, 18/09/2026 :** la recherche par nom vise `search.openfoodfacts.org`, un autre service, qui ne sert aucun en-tête CORS — son préambule répond « Disallowed CORS origin » et sa réponse ne porte pas d'`Access-Control-Allow-Origin`. Appelée depuis le navigateur elle ne rend donc jamais rien, en silence. Elle passe par `src/app/api/off/search`, qui mémorise une heure. Le quota de quinze requêtes par minute que cette décision protège est celui de l'API produit, pas celui de ce moteur : le code-barres, lui, reste appelé depuis le navigateur.
 
 ### AD-3 — Le succès d'un appel Open Food Facts se lit dans le corps, pas dans le code HTTP
 

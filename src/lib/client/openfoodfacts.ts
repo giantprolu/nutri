@@ -201,36 +201,16 @@ export async function lookupBarcode(barcode: string): Promise<OffLookup> {
  * et non l'ancien `cgi/search.pl` d'Open Food Facts : celui-ci a été observé
  * hors service, et le premier répond en quelques millisecondes.
  *
- * AD-2 s'applique ici comme pour le code-barres : l'appel part du NAVIGATEUR.
- * Une route serveur mutualiserait l'adresse IP de la plateforme Vercel, et
- * chaque frappe au clavier consommerait le quota de tout le monde.
+ * Il est joint par `/api/off/search`, et non directement comme le code-barres.
+ * Ce moteur ne sert aucun en-tête CORS — mesuré le 18/09/2026, son préambule
+ * répond « Disallowed CORS origin » — si bien que la requête aboutissait côté
+ * réseau et que la réponse était refusée au script. L'échec étant muet par
+ * construction, la recherche rendait une liste vide : « penne » et
+ * « McFlurry » restaient introuvables alors que tout ce fichier fonctionnait.
+ * La justification du relais, et son rapport à AD-2, est écrite dans la route.
  */
 
-const SEARCH_ENDPOINT = 'https://search.openfoodfacts.org/search';
-
-/**
- * Champs demandés. `_score` n'est rendu que s'il est réclamé explicitement, et
- * il faut le réclamer : c'est lui qui porte la pertinence du moteur, seule
- * information qui distingue un vrai « McFlurry » d'un produit dont le nom ne
- * partage qu'un mot avec la requête.
- */
-const SEARCH_FIELDS = [
-  '_score',
-  'code',
-  'product_name',
-  'product_name_fr',
-  'brands',
-  'nutriments',
-  'unique_scans_n',
-].join(',');
-
-/**
- * Nombre de fiches demandées au moteur. Large parce qu'une bonne part d'entre
- * elles n'a pas de valeurs nutritionnelles exploitables : sur les requêtes
- * mesurées, une fiche sur cinq est écartée pour cette raison. En demander dix
- * en rendrait huit.
- */
-const SEARCH_PAGE_SIZE = 50;
+const SEARCH_ENDPOINT = '/api/off/search';
 
 /** Nombre de produits finalement proposés, une fois le tri fait. */
 const SEARCH_LIMIT = 12;
@@ -278,8 +258,12 @@ const ATWATER_MIN_RATIO = 0.6;
  */
 const ATWATER_TOLERANCE_KCAL = 20;
 
-/** Le délai est plus court qu'au code-barres : la recherche, elle, se refrappe. */
-const SEARCH_TIMEOUT_MS = 5000;
+/**
+ * Le délai est plus court qu'au code-barres : la recherche, elle, se refrappe.
+ * Il couvre ici le relais et le moteur, donc un peu plus large que le temps
+ * accordé au moteur seul de l'autre côté.
+ */
+const SEARCH_TIMEOUT_MS = 6000;
 
 interface OffSearchHit {
   _score?: number;
@@ -397,15 +381,15 @@ export async function searchProducts(
   // requête sans effacer la temporisation qui la borne.
   signal?.addEventListener('abort', () => controller.abort(), { once: true });
 
-  const url =
-    `${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}` +
-    `&langs=fr&page_size=${SEARCH_PAGE_SIZE}&fields=${SEARCH_FIELDS}`;
+  const url = `${SEARCH_ENDPOINT}?q=${encodeURIComponent(query)}`;
 
   let payload: OffSearchPayload;
   try {
+    // Requête de même origine : ni en-tête personnalisé, ni préambule CORS.
+    // L'identification de l'application est posée par le relais.
     const response = await fetch(url, {
       signal: controller.signal,
-      headers: { Accept: 'application/json', 'X-User-Agent': USER_AGENT_COMMENT },
+      headers: { Accept: 'application/json' },
     });
     if (!response.ok) {
       return [];
