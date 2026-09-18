@@ -174,6 +174,47 @@ pas de cookie de session. Une automatisation le déclenche chaque soir.
 raccourci, le programmer. Trois journées envoyées suffisent à basculer la
 cible sur la dépense mesurée.
 
+## B-11 — `npm run build` échoue au prérendu de `/unlock` — ouvert le 18/09/2026
+
+**Constat.** `next build` compile et vérifie les types sans erreur, puis casse
+à la génération des pages statiques :
+
+```
+Could not find files for /_error in .next/build-manifest.json
+TypeError: a[d] is not a function
+    at Object.c [as require] (.next/server/webpack-runtime.js:1:127)
+Error occurred prerendering page "/unlock".
+```
+
+`/unlock` est la seule page réellement prérendue ; les autres tiennent d'une
+session et sont dynamiques. L'erreur vient du chargeur de modules de webpack,
+pas du code de la page.
+
+**Ce qui a été écarté.** L'échec se reproduit sur `HEAD` sans modification en
+cours, avec un `.next` supprimé au préalable : ce n'est ni une régression, ni
+un artefact du cache de compilation. Les versions installées correspondent au
+manifeste (`next 15.5.25`, `react 19.3.0`, `lucide-react 1.47.0`,
+`radix-ui 1.6.7`), l'arbre de travail est propre, et `npm run lint` passe.
+La page `/unlock` et son formulaire n'ont pas bougé depuis le dernier build
+réussi.
+
+**Piste.** Le dépôt vit dans un dossier synchronisé OneDrive. La
+synchronisation peut remplacer un fichier de `.next` par un espace réservé
+pendant que la compilation le lit, ce qui produit exactement ce genre de
+chargeur incomplet. Un `next build` dans un dossier hors OneDrive dirait si
+c'est bien la cause.
+
+**Conséquence.** La Definition of Done ne peut pas être tenue tant que le point
+n'est pas levé : rien n'est committé. La correction de la barre d'onglets
+(passage de `fixed` à `sticky`) attend dans l'arbre de travail, vérifiée par
+`npm run lint` et par la vérification des types du build, mais pas par un build
+complet.
+
+**À faire côté humain.** Rejouer `npm run build` depuis une copie du dépôt
+placée hors OneDrive, ou suspendre la synchronisation le temps d'un build. Si
+l'échec persiste, supprimer `node_modules` et réinstaller.
+
+
 ---
 
 ## Bilan de fin de sprint
