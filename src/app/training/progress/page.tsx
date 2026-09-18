@@ -10,7 +10,7 @@ import { PROGRESS_WEEKS, progressOverview } from '@/server/services/workouts';
 import { formatRelativeJournalDate } from '@/lib/date';
 import { formatSet } from '@/lib/workout';
 import { formatChange } from '@/lib/workout-progress';
-import { WeeklyVolumeChart } from './ProgressCharts';
+import { WeeklyVolumeChart } from './ChartsLazy';
 
 // Les séances viennent du serveur à chaque navigation : rien n'est mis en cache (AD-5).
 export const dynamic = 'force-dynamic';

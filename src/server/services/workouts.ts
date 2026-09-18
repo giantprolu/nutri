@@ -78,6 +78,18 @@ export type { WorkoutTemplate, WorkoutSession, WorkoutSet, TrainingPreferences, 
 export const HISTORY_LIMIT = 40;
 
 /**
+ * Vrai une fois le référentiel constaté complet.
+ *
+ * Porté par le module, comme la connexion elle-même : une instance chaude
+ * traite plusieurs affichages, et le comptage ci-dessous coûtait un
+ * aller-retour à la base sur chacun pour une réponse qui ne change plus après
+ * l'installation. Vider le référentiel en base demande donc de redémarrer
+ * l'instance — cela n'arrive qu'en développement, et le seuil de gêne est
+ * autrement plus bas côté téléphone.
+ */
+let catalogReady = false;
+
+/**
  * Sème le référentiel s'il manque quelque chose.
  *
  * Le garde est un simple comptage, et non les insertions idempotentes
@@ -85,8 +97,13 @@ export const HISTORY_LIMIT = 40;
  * juste une fois à l'installation et absurde à chaque affichage d'écran.
  */
 async function ensureCatalog(): Promise<void> {
+  if (catalogReady) {
+    return;
+  }
+
   const size = await catalogSize();
   if (size.exercises >= SEED_EXERCISES.length && size.gyms >= SEED_GYMS.length) {
+    catalogReady = true;
     return;
   }
   await ensureSeedExercises(SEED_EXERCISES);
@@ -98,6 +115,7 @@ async function ensureCatalog(): Promise<void> {
       exerciseSlugs: gymInventory(gym, SEED_EXERCISES),
     })),
   );
+  catalogReady = true;
 }
 
 export async function gymCatalog(): Promise<Gym[]> {

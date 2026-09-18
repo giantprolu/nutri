@@ -9,7 +9,7 @@ import { exerciseProgressFor } from '@/server/services/workouts';
 import { formatRelativeJournalDate } from '@/lib/date';
 import { formatSet } from '@/lib/workout';
 import { METRIC_LABELS, formatChange, formatMetric } from '@/lib/workout-progress';
-import { ExerciseTrendChart, SessionVolumeChart } from '../ProgressCharts';
+import { ExerciseTrendChart, SessionVolumeChart } from '../ChartsLazy';
 
 export const dynamic = 'force-dynamic';
 

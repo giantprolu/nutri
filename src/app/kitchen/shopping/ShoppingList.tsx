@@ -2,8 +2,9 @@
 
 import { BarcodeIcon, RefreshCwIcon, XIcon } from 'lucide-react';
 import Link from 'next/link';
+import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { BottomBar } from '@/components/BottomBar';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Button } from '@/components/ui/button';
@@ -15,7 +16,26 @@ import { formatIngredientQuantity, shoppingUnitCount } from '@/lib/recipe';
 import { checkItem, generateList, removeItem } from '@/lib/client/shopping';
 import { cn } from '@/lib/utils';
 import type { ShoppingList as List, ShoppingItem } from '@/server/db/queries/shopping';
-import { ScanToCheck } from './ScanToCheck';
+
+/**
+ * Le scanner arrive au premier appui, pas avec l'écran.
+ *
+ * Il porte le décodeur de codes-barres, qui pesait à lui seul un quart du
+ * script de cette page — chargé à chaque ouverture de la liste, y compris pour
+ * cocher trois articles au doigt sans jamais scanner. Le viseur est un écran
+ * plein, ouvert par un geste explicite : c'est exactement ce qui se charge à
+ * la demande.
+ */
+const ScanToCheck = dynamic(() => import('./ScanToCheck').then((module) => module.ScanToCheck), {
+  ssr: false,
+  loading: () => (
+    <div
+      aria-busy
+      aria-label="Ouverture du scanner"
+      className="fixed inset-0 z-50 bg-[#0b0b0b]"
+    />
+  ),
+});
 
 /**
  * La liste de courses, rangée par rayon.
@@ -29,6 +49,12 @@ import { ScanToCheck } from './ScanToCheck';
  * barre basse. C'est lui qui relie les courses au journal, le produit scanné
  * devenant la fiche employée par les prochains repas construits sur cet
  * ingrédient.
+ *
+ * Cocher est immédiat, et l'écriture suit. C'est le geste le plus répété de
+ * l'application, fait debout dans un rayon : attendre l'aller-retour avant de
+ * noircir la case donnait une demi-seconde d'immobilité par article, et
+ * interdisait d'en cocher deux à la suite. La case suit donc le doigt, et seul
+ * un échec la rend à son état — auquel cas il est dit.
  */
 
 /** Ce qu'une quantité demande d'acheter, en unités si l'ingrédient s'en compte. */
@@ -46,6 +72,18 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Les coches posées d'avance, en attendant que le serveur les confirme. */
+  const [posted, setPosted] = useState<ReadonlyMap<number, boolean>>(new Map());
+  const [refreshing, startRefresh] = useTransition();
+
+  // La liste rendue par le serveur porte désormais ces coches : les avances
+  // n'ont plus lieu d'être, et les garder ferait tenir une valeur périmée si
+  // l'article changeait ailleurs.
+  useEffect(() => setPosted(new Map()), [list]);
+
+  function isChecked(item: ShoppingItem): boolean {
+    return posted.get(item.id) ?? item.checkedAt !== null;
+  }
 
   async function regenerate() {
     setBusy(true);
@@ -64,23 +102,40 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
     );
   }
 
-  async function toggle(item: ShoppingItem, barcode: string | null) {
-    setBusy(true);
+  /** Bascule l'article. Le scanner, lui, coche sans jamais décocher. */
+  function toggle(item: ShoppingItem): void {
+    void setChecked(item, !isChecked(item), null);
+  }
+
+  async function setChecked(
+    item: ShoppingItem,
+    checked: boolean,
+    barcode: string | null,
+  ): Promise<void> {
+    setPosted((previous) => new Map(previous).set(item.id, checked));
     setError(null);
+
     const outcome = await checkItem({
       id: item.id,
-      checked: item.checkedAt === null,
+      checked,
       barcode,
       refKind: item.refKind,
       refValue: item.refValue,
     });
-    setBusy(false);
 
-    if (outcome.kind === 'ok') {
-      router.refresh();
+    if (outcome.kind !== 'ok') {
+      setPosted((previous) => {
+        const next = new Map(previous);
+        next.delete(item.id);
+        return next;
+      });
+      setError('Modification impossible.');
       return;
     }
-    setError('Modification impossible.');
+
+    // Les totaux, eux, viennent du serveur. La transition garde la page en
+    // place pendant ce temps plutôt que de la remplacer par une silhouette.
+    startRefresh(() => router.refresh());
   }
 
   async function drop(item: ShoppingItem) {
@@ -113,7 +168,7 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
   }
 
   const total = list.items.length;
-  const taken = list.items.filter((item) => item.checkedAt !== null).length;
+  const taken = list.items.filter((item) => isChecked(item)).length;
   const share = total === 0 ? 0 : Math.round((taken / total) * 100);
 
   return (
@@ -148,7 +203,7 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
             <Card className="gap-0 overflow-hidden py-0">
               <ul>
                 {items.map((item) => {
-                  const done = item.checkedAt !== null;
+                  const done = isChecked(item);
                   const id = `shopping-item-${item.id}`;
                   return (
                     <li
@@ -158,8 +213,7 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
                       <Checkbox
                         id={id}
                         checked={done}
-                        onCheckedChange={() => void toggle(item, null)}
-                        disabled={busy}
+                        onCheckedChange={() => toggle(item)}
                         className="size-[18px]"
                       />
                       <label
@@ -190,7 +244,7 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => void drop(item)}
-                        disabled={busy}
+                        disabled={busy || refreshing}
                         aria-label={`Retirer ${item.label} de la liste`}
                         className="text-muted-foreground"
                       >
@@ -232,15 +286,18 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
         </Button>
       </BottomBar>
 
-      <ScanToCheck
-        open={scanning}
-        items={list.items}
-        onClose={() => setScanning(false)}
-        onCheck={(item, barcode) => {
-          setScanning(false);
-          void toggle({ ...item, checkedAt: null }, barcode);
-        }}
-      />
+      {scanning ? (
+        <ScanToCheck
+          open
+          items={list.items}
+          onClose={() => setScanning(false)}
+          onCheck={(item, barcode) => {
+            setScanning(false);
+            // Le scanner coche, il ne bascule pas : l'article est dans le chariot.
+            void setChecked(item, true, barcode);
+          }}
+        />
+      ) : null}
     </>
   );
 }

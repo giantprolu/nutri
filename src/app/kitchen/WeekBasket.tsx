@@ -3,7 +3,7 @@
 import { MinusIcon, PlusIcon, ShoppingCartIcon, XIcon } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useEffect, useRef, useState, useTransition } from 'react';
 import { ErrorAlert } from '@/components/ErrorAlert';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -26,6 +26,14 @@ import type { BasketItem } from '@/server/db/queries/basket';
  * survit vit dans `syncListToBasket`, côté serveur.
  *
  * Retirer un plat ne touche pas à la recette, qui reste au carnet.
+ *
+ * Le compte de parts suit le doigt et l'écriture suit derrière : chaque demi-
+ * part réécrit la liste de courses côté serveur, et attendre cette réponse
+ * avant d'afficher le nouveau compte rendait le réglage poussif, alors qu'on
+ * le fait par petits coups répétés. Les écritures d'une même ligne sont mises
+ * à la queue plutôt qu'envoyées en vrac : deux appels concurrents pourraient
+ * arriver dans le désordre, et c'est le dernier parti qui doit gagner, pas le
+ * dernier arrivé.
  */
 
 /** Pas d'un réglage de parts. Un demi-plat se mange, un quart ne se cuisine pas. */
@@ -47,22 +55,49 @@ export function WeekBasket({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Les parts affichées d'avance, en attendant que le serveur les confirme. */
+  const [posted, setPosted] = useState<ReadonlyMap<number, number>>(new Map());
+  const [refreshing, startRefresh] = useTransition();
+  /** Une file par ligne, pour que les écritures gardent l'ordre des gestes. */
+  const queues = useRef(new Map<number, Promise<unknown>>());
 
-  async function adjust(item: BasketItem, delta: number) {
-    const next = Math.round((item.servings + delta) * 10) / 10;
+  // Le panier rendu par le serveur porte ces parts : les avances ont fait leur
+  // office, et les garder ferait tenir une valeur périmée.
+  useEffect(() => setPosted(new Map()), [basket]);
+
+  function servingsOf(item: BasketItem): number {
+    return posted.get(item.id) ?? item.servings;
+  }
+
+  function adjust(item: BasketItem, delta: number): void {
+    const current = servingsOf(item);
+    const next = Math.round((current + delta) * 10) / 10;
     if (next <= 0 || next > MAX_BASKET_SERVINGS) {
       return;
     }
-    setBusy(true);
-    setError(null);
-    const outcome = await setBasketServings(item.id, next);
-    setBusy(false);
 
-    if (outcome.kind === 'ok') {
-      router.refresh();
-      return;
-    }
-    setError('Modification impossible.');
+    setPosted((previous) => new Map(previous).set(item.id, next));
+    setError(null);
+
+    const previous = queues.current.get(item.id) ?? Promise.resolve();
+    const write = previous
+      .catch(() => undefined)
+      .then(async () => {
+        const outcome = await setBasketServings(item.id, next);
+        if (outcome.kind !== 'ok') {
+          setPosted((current) => {
+            const rolled = new Map(current);
+            rolled.delete(item.id);
+            return rolled;
+          });
+          setError('Modification impossible.');
+          return;
+        }
+        // Les parts à placer et la liste de courses se recalculent au serveur.
+        startRefresh(() => router.refresh());
+      });
+
+    queues.current.set(item.id, write);
   }
 
   async function drop(item: BasketItem) {
@@ -72,7 +107,7 @@ export function WeekBasket({
     setBusy(false);
 
     if (outcome.kind === 'ok') {
-      router.refresh();
+      startRefresh(() => router.refresh());
       return;
     }
     setError('Suppression impossible.');
@@ -111,7 +146,8 @@ export function WeekBasket({
               {basket.map((item) => {
                 // Ce qu'il reste à mettre à table. Négatif quand on a prévu plus
                 // de parts qu'on n'en a acheté : c'est dit, pas ramené à zéro.
-                const remaining = Math.round((item.servings - item.plannedServings) * 10) / 10;
+                const servings = servingsOf(item);
+                const remaining = Math.round((servings - item.plannedServings) * 10) / 10;
 
                 return (
                   <li
@@ -126,7 +162,7 @@ export function WeekBasket({
                         {item.recipeName}
                       </Link>
                       <p className="tabular mt-px text-[12.5px] text-muted-foreground">
-                        {formatServings(item.servings)} prévues
+                        {formatServings(servings)} prévues
                         {' · '}
                         {remaining <= 0
                           ? 'tout est au plan'
@@ -138,21 +174,21 @@ export function WeekBasket({
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      onClick={() => void adjust(item, -STEP)}
-                      disabled={busy || item.servings <= STEP}
+                      onClick={() => adjust(item, -STEP)}
+                      disabled={busy || servings <= STEP}
                       aria-label={`Retirer une demi-part de ${item.recipeName}`}
                     >
                       <MinusIcon />
                     </Button>
                     <span className="tabular w-8 text-center font-medium">
-                      {item.servings.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
+                      {servings.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
                     </span>
                     <Button
                       type="button"
                       variant="outline"
                       size="icon-sm"
-                      onClick={() => void adjust(item, STEP)}
-                      disabled={busy || item.servings >= MAX_BASKET_SERVINGS}
+                      onClick={() => adjust(item, STEP)}
+                      disabled={busy || servings >= MAX_BASKET_SERVINGS}
                       aria-label={`Ajouter une demi-part à ${item.recipeName}`}
                     >
                       <PlusIcon />
@@ -162,7 +198,7 @@ export function WeekBasket({
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => void drop(item)}
-                      disabled={busy}
+                      disabled={busy || refreshing}
                       aria-label={`Retirer ${item.recipeName} du panier`}
                       className="text-muted-foreground"
                     >
