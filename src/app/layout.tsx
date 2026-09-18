@@ -107,13 +107,18 @@ export default async function RootLayout({
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_SCRIPT }} />
       </head>
-      <body className="min-h-dvh font-sans">
+      {/*
+        Colonne haute d'au moins un écran : le contenu pousse, la barre
+        d'onglets se range en dernier. C'est cette mise en page qui la tient
+        au bas de l'écran, et non un positionnement fixe — voir `TabBar`.
+      */}
+      <body className="flex min-h-dvh flex-col font-sans">
         {/*
           Le retrait haut n'est pas seulement la zone sûre : celle-ci s'arrête
           au ras de l'encoche, et un titre posé dessus paraît collé au bord.
           La demi-marge qui s'y ajoute donne l'air que le matériel ne donne pas.
         */}
-        <main className="mx-auto w-full max-w-lg px-5 pt-[calc(var(--safe-top)+0.5rem)] pb-6">
+        <main className="mx-auto w-full max-w-lg flex-1 px-5 pt-[calc(var(--safe-top)+0.5rem)] pb-6">
           {children}
         </main>
         <TabBar />

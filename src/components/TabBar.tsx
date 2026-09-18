@@ -52,36 +52,44 @@ export function TabBar() {
   }
 
   return (
-    // Une barre d'actions basse la remplace tant qu'elle est montée.
-    <div className="contents [body:has([data-bottom-bar])_&]:hidden">
-      {/* Réserve la hauteur de la barre fixe (57 px), zone sûre et air compris. */}
-      <div aria-hidden className="h-[calc(4.5rem+var(--safe-bottom))]" />
+    /*
+      Collante, et non fixe.
+      Au lancement d'une application installée, iOS calcule le bloc conteneur
+      des éléments fixes avant que la fenêtre n'ait sa taille définitive et ne
+      le recalcule pas ensuite : la barre restait suspendue au-dessus du bord,
+      un vide sous elle, jusqu'à la première navigation. La mise en page
+      normale, elle, est bien reprise. La barre y revient donc : dernier
+      élément d'une colonne haute d'au moins un écran, elle touche le bas
+      quand la page est courte, et `sticky` l'y retient quand la page défile.
 
-      <nav
-        aria-label="Navigation principale"
-        className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/85 pb-[var(--safe-bottom)] backdrop-blur-xl backdrop-saturate-150"
-      >
-        <div className="mx-auto flex h-14 max-w-lg items-stretch px-1.5">
-          {DESTINATIONS.map((destination) => {
-            const active = isActive(pathname, destination.href);
-            const Icon = destination.icon;
-            return (
-              <Link
-                key={destination.href}
-                href={destination.href}
-                aria-current={active ? 'page' : undefined}
-                className={cn(
-                  'flex min-w-11 flex-1 flex-col items-center justify-center gap-[3px] text-[10.5px] font-medium text-muted-foreground transition-colors',
-                  active && 'text-foreground',
-                )}
-              >
-                <Icon aria-hidden className="size-[21px]" strokeWidth={1.75} />
-                <span>{destination.label}</span>
-              </Link>
-            );
-          })}
-        </div>
-      </nav>
-    </div>
+      Elle occupe dès lors sa propre place : plus de cale à tenir à jour
+      derrière elle, donc plus de contenu masqué quand sa hauteur change.
+      Une barre d'actions basse la remplace tant qu'elle est montée.
+    */
+    <nav
+      aria-label="Navigation principale"
+      className="sticky bottom-0 z-40 border-t bg-background/85 pb-[var(--safe-bottom)] backdrop-blur-xl backdrop-saturate-150 [body:has([data-bottom-bar])_&]:hidden"
+    >
+      <div className="mx-auto flex h-14 max-w-lg items-stretch px-1.5">
+        {DESTINATIONS.map((destination) => {
+          const active = isActive(pathname, destination.href);
+          const Icon = destination.icon;
+          return (
+            <Link
+              key={destination.href}
+              href={destination.href}
+              aria-current={active ? 'page' : undefined}
+              className={cn(
+                'flex min-w-11 flex-1 flex-col items-center justify-center gap-[3px] text-[10.5px] font-medium text-muted-foreground transition-colors',
+                active && 'text-foreground',
+              )}
+            >
+              <Icon aria-hidden className="size-[21px]" strokeWidth={1.75} />
+              <span>{destination.label}</span>
+            </Link>
+          );
+        })}
+      </div>
+    </nav>
   );
 }
