@@ -115,6 +115,8 @@ export type ScanOutcome =
   | { kind: 'decoded'; barcode: string }
   | { kind: 'permission_denied' }
   | { kind: 'unsupported' }
+  /** Flux ouvert mais aperçu refusé par le navigateur : relançable au toucher. */
+  | { kind: 'stalled' }
   | { kind: 'aborted' };
 
 /** Un candidat proposé pour un nom reconnu (FR-18). */

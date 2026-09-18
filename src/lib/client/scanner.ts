@@ -50,6 +50,9 @@ const BAND_HEIGHT_RATIO = 0.42;
  */
 const FULL_FRAME_EVERY = 4;
 
+/** Attente maximale des métadonnées de l'aperçu avant de tenter la lecture. */
+const METADATA_TIMEOUT_MS = 2_000;
+
 /** Le wasm est servi depuis public/, copié par scripts/copy-zxing-wasm.mjs. */
 const WASM_PATH = '/zxing/zxing_reader.wasm';
 
@@ -111,6 +114,12 @@ export interface CameraControls {
 export interface ScannerHandle {
   /** Arrête le flux et libère les pistes (FR-11). Idempotent. */
   stop: () => void;
+  /**
+   * Relance la lecture de l'aperçu. À appeler depuis un geste utilisateur :
+   * c'est le seul contexte où WebKit accepte à coup sûr de démarrer une
+   * vidéo qu'il a refusée une première fois.
+   */
+  play: () => Promise<void>;
   /** Ce que la caméra accepte de piloter. Figé une fois le flux ouvert. */
   controls: CameraControls;
   /** Applique un facteur de zoom, silencieux si l'appareil refuse. */
@@ -130,10 +139,54 @@ const NO_CONTROLS: CameraControls = { zoom: null, torch: false };
 function inertHandle(stop: () => void): ScannerHandle {
   return {
     stop,
+    play: async () => {},
     controls: NO_CONTROLS,
     setZoom: async () => {},
     setTorch: async () => {},
   };
+}
+
+/**
+ * Démarrage de l'aperçu, écrit pour WebKit.
+ *
+ * Sur iPhone, et particulièrement depuis l'écran d'accueil, trois détails
+ * séparent un aperçu qui s'affiche d'un rectangle noir :
+ *
+ *   1. l'élément doit être muet et en lecture sur place *avant* de recevoir le
+ *      flux. WebKit tranche à l'affectation ; une vidéo qu'il juge sonore ne
+ *      démarrera pas sans geste utilisateur, et React ne pose pas toujours
+ *      l'attribut `muted` dans le document ;
+ *   2. `play()` appelé avant les métadonnées laisse l'élément noir sans jamais
+ *      rejeter — l'attente est donc explicite ;
+ *   3. le refus de `play()` doit remonter. Avalé, il donne exactement ce que
+ *      l'on voyait : le cadre de visée sur fond noir, et aucune explication.
+ */
+async function startPlayback(video: HTMLVideoElement, stream: MediaStream): Promise<void> {
+  video.muted = true;
+  video.defaultMuted = true;
+  video.setAttribute('muted', '');
+  video.setAttribute('playsinline', 'true');
+  video.setAttribute('autoplay', 'true');
+
+  video.srcObject = stream;
+
+  if (video.readyState < HTMLMediaElement.HAVE_METADATA) {
+    await new Promise<void>((resolve) => {
+      // Le délai borne l'attente : un appareil qui n'émet jamais l'événement
+      // ne doit pas suspendre le démarrage pour autant.
+      const timer = setTimeout(resolve, METADATA_TIMEOUT_MS);
+      video.addEventListener(
+        'loadedmetadata',
+        () => {
+          clearTimeout(timer);
+          resolve();
+        },
+        { once: true },
+      );
+    });
+  }
+
+  await video.play();
 }
 
 function readControls(track: MediaStreamTrack): CameraControls {
@@ -227,9 +280,11 @@ export async function startScanner({
     return inertHandle(stop);
   }
 
-  video.srcObject = stream;
-  video.setAttribute('playsinline', 'true');
-  await video.play().catch(() => undefined);
+  await startPlayback(video, stream).catch(() => {
+    // Le décodage continue de tourner : si l'aperçu finit par démarrer, rien
+    // n'est perdu. L'interface, elle, propose sa relance au toucher.
+    onOutcome({ kind: 'stalled' });
+  });
 
   const [track] = stream.getVideoTracks();
   const controls = track === undefined ? NO_CONTROLS : readControls(track);
@@ -298,6 +353,11 @@ export async function startScanner({
 
   return {
     stop,
+    play: async () => {
+      if (!stopped) {
+        await video.play();
+      }
+    },
     controls,
     setZoom: async (value: number) => {
       if (track === undefined || stopped || controls.zoom === null) {

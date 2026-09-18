@@ -39,9 +39,15 @@ import type { ScanOutcome } from '@/lib/types';
 /** Au-delà, l'application propose explicitement la saisie manuelle (FR-11). */
 const HINT_AFTER_MS = 20_000;
 
+/** Cadence du contrôle de l'aperçu, et nombre de passages avant de le dire. */
+const PREVIEW_CHECK_MS = 1_000;
+const PREVIEW_IDLE_TICKS = 3;
+
 type Status =
   | { name: 'starting' }
   | { name: 'scanning' }
+  /** Caméra rendue, aperçu noir : le navigateur attend un toucher. */
+  | { name: 'stalled' }
   | { name: 'permission_denied' }
   | { name: 'unsupported' };
 
@@ -86,6 +92,13 @@ export function ScannerView({
         case 'unsupported':
           setStatus({ name: 'unsupported' });
           break;
+        case 'stalled':
+          setStatus((previous) =>
+            previous.name === 'permission_denied' || previous.name === 'unsupported'
+              ? previous
+              : { name: 'stalled' },
+          );
+          break;
         case 'aborted':
           break;
       }
@@ -121,6 +134,35 @@ export function ScannerView({
       handleRef.current = null;
     };
   }, [handleOutcome]);
+
+  /**
+   * Contrôle de l'aperçu.
+   *
+   * `play()` peut se résoudre sans qu'aucune image n'arrive : seule la largeur
+   * de la trame dit que la caméra donne vraiment. Trois passages à vide avant
+   * de le signaler, pour ne pas accuser un démarrage simplement lent.
+   */
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) {
+      return;
+    }
+
+    let idle = 0;
+    const timer = setInterval(() => {
+      if (video.videoWidth > 0 && !video.paused) {
+        idle = 0;
+        setStatus((previous) => (previous.name === 'stalled' ? { name: 'scanning' } : previous));
+        return;
+      }
+      idle += 1;
+      if (idle >= PREVIEW_IDLE_TICKS) {
+        setStatus((previous) => (previous.name === 'scanning' ? { name: 'stalled' } : previous));
+      }
+    }, PREVIEW_CHECK_MS);
+
+    return () => clearInterval(timer);
+  }, []);
 
   const cameraFailed = status.name === 'permission_denied' || status.name === 'unsupported';
   const manualValid = isValidBarcode(manual);
@@ -198,6 +240,26 @@ export function ScannerView({
                 ) : null}
                 <Button asChild variant="outline" className="mt-2">
                   <Link href="/add/search">Chercher par nom</Link>
+                </Button>
+              </AlertDescription>
+            </Alert>
+          </div>
+        ) : status.name === 'stalled' ? (
+          <div className="flex flex-1 items-center px-5">
+            <Alert>
+              <AlertTitle>L’aperçu de la caméra ne démarre pas.</AlertTitle>
+              <AlertDescription>
+                <p>
+                  Le téléphone a rendu la caméra, mais le navigateur attend un toucher pour
+                  l’afficher.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-2"
+                  onClick={() => void handleRef.current?.play().catch(() => undefined)}
+                >
+                  Activer la caméra
                 </Button>
               </AlertDescription>
             </Alert>
