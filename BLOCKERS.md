@@ -174,7 +174,7 @@ pas de cookie de session. Une automatisation le déclenche chaque soir.
 raccourci, le programmer. Trois journées envoyées suffisent à basculer la
 cible sur la dépense mesurée.
 
-## B-11 — `npm run build` échoue au prérendu de `/unlock` — ouvert le 18/09/2026
+## B-11 — `npm run build` échoue au prérendu de `/unlock` — **circonscrit le 18/09/2026**
 
 **Constat.** `next build` compile et vérifie les types sans erreur, puis casse
 à la génération des pages statiques :
@@ -210,9 +210,18 @@ n'est pas levé : rien n'est committé. La correction de la barre d'onglets
 `npm run lint` et par la vérification des types du build, mais pas par un build
 complet.
 
-**À faire côté humain.** Rejouer `npm run build` depuis une copie du dépôt
-placée hors OneDrive, ou suspendre la synchronisation le temps d'un build. Si
-l'échec persiste, supprimer `node_modules` et réinstaller.
+**Circonscrit.** Vercel compile et déploie la même révision sans rien signaler.
+L'échec est donc propre à ce poste, et la piste OneDrive est la bonne : rien
+dans le code n'est en cause, et la chaîne de livraison n'est pas menacée.
+
+**Conséquence sur la Definition of Done.** Son premier point ne peut pas être
+vérifié ici. `npm run lint` et `npm run typecheck` le sont, et le build de
+Vercel fait foi sur la révision poussée.
+
+**À faire côté humain.** Pour retrouver un build local : suspendre la
+synchronisation OneDrive le temps de la compilation, ou travailler depuis une
+copie du dépôt placée hors du dossier synchronisé. Rien ne presse tant que
+Vercel compile.
 
 
 ---
