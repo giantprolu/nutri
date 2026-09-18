@@ -65,7 +65,7 @@ export default async function RecipesPage() {
       <Button
         asChild
         size="icon"
-        className="fixed right-[max(1.25rem,calc(50vw-16rem+1.25rem))] bottom-[calc(5.5rem+var(--safe-bottom))] z-40 size-14 rounded-full shadow-[0_8px_20px_-4px_rgb(0_0_0/0.35)]"
+        className="fixed right-[max(1.25rem,calc(50vw-16rem+1.25rem))] top-[calc(var(--viewport-height)_-_9rem_-_var(--safe-bottom))] z-40 size-14 rounded-full shadow-[0_8px_20px_-4px_rgb(0_0_0/0.35)]"
       >
         <Link href="/kitchen/recipes/new" aria-label="Nouvelle recette">
           <PlusIcon className="size-6" />

@@ -91,6 +91,21 @@ export async function generateViewport(): Promise<Viewport> {
  */
 const CAPTURE_SCRIPT = `window.${INSTALL_PROMPT_KEY}=null;addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.${INSTALL_PROMPT_KEY}=e;dispatchEvent(new Event('${INSTALL_READY_EVENT}'))});addEventListener('appinstalled',function(){window.${INSTALL_PROMPT_KEY}=null});`;
 
+/**
+ * Relevé de la hauteur de fenêtre, dans `--app-height`.
+ *
+ * Voir `--viewport-height` dans globals.css pour ce qu'il répare. Trois
+ * raisons de l'écrire en clair dans le document plutôt que dans un composant :
+ * il doit s'exécuter avant le premier rendu, il ne dépend de rien, et une
+ * hauteur qui arriverait après coup ferait sauter la mise en page sous les
+ * yeux.
+ *
+ * L'écoute des redimensionnements est ce qui rend la valeur auto-réparatrice :
+ * même si le premier relevé est pris de court lui aussi, iOS finit par dire la
+ * vraie taille, et la barre se replace sans que personne n'ait à naviguer.
+ */
+const VIEWPORT_SCRIPT = `(function(){function m(){document.documentElement.style.setProperty('--app-height',window.innerHeight+'px')}m();addEventListener('resize',m);addEventListener('orientationchange',m);addEventListener('pageshow',m)})();`;
+
 export default async function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
@@ -106,13 +121,15 @@ export default async function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: CAPTURE_SCRIPT }} />
+        <script dangerouslySetInnerHTML={{ __html: VIEWPORT_SCRIPT }} />
       </head>
       {/*
-        Colonne haute d'au moins un écran : le contenu pousse, la barre
-        d'onglets se range en dernier. C'est cette mise en page qui la tient
-        au bas de l'écran, et non un positionnement fixe — voir `TabBar`.
+        Colonne haute d'au moins un écran — la hauteur est posée sur `body`
+        dans globals.css, parce qu'elle se calcule. Le contenu pousse, la barre
+        d'onglets se range en dernier : c'est cette mise en page qui la tient au
+        bas de l'écran, et non un positionnement fixe — voir `TabBar`.
       */}
-      <body className="flex min-h-dvh flex-col font-sans">
+      <body className="flex flex-col font-sans">
         {/*
           Le retrait haut n'est pas seulement la zone sûre : celle-ci s'arrête
           au ras de l'encoche, et un titre posé dessus paraît collé au bord.

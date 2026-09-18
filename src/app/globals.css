@@ -78,6 +78,20 @@
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
 
+  /*
+   * Hauteur de fenêtre, prise au plus généreux de deux sources qui se
+   * rattrapent l'une l'autre.
+   *
+   * Lancée depuis l'écran d'accueil, une application iOS reçoit une fenêtre
+   * dont elle ne connaît pas encore la taille définitive. Ce qu'elle en croit
+   * alors est trop court d'une barre d'état, et tout ce qui s'accroche au bas
+   * de l'écran remonte d'autant. `--app-height` est relevée en JavaScript, et
+   * relevée à nouveau à chaque redimensionnement : elle répare le cas où
+   * `100dvh` serait pris de court, sans jamais le contredire quand il a
+   * raison. Le maximum des deux est la seule valeur sûre dans les deux sens.
+   */
+  --viewport-height: max(100dvh, var(--app-height, 0px));
+
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
@@ -190,6 +204,8 @@
 
   body {
     @apply bg-background text-foreground antialiased;
+    /* La colonne de l'application fait au moins un écran : voir layout.tsx. */
+    min-height: var(--viewport-height);
     font-size: 14px;
     line-height: 1.45;
     letter-spacing: -0.006em;
