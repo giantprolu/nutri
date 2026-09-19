@@ -33,6 +33,12 @@ import {
   stepDurationSeconds,
   type RecipeIngredient,
 } from '../src/lib/recipe';
+import {
+  formatShareableRecipe,
+  formatShareableRecipes,
+  shareableRecipesTitle,
+  type ShareableRecipe,
+} from '../src/lib/share-recipes';
 import { aisleFor } from '../src/lib/aisle';
 import { startOfWeek, daysFrom, shiftDate, formatWeekRange } from '../src/lib/date';
 import {
@@ -1192,5 +1198,62 @@ assert.equal(formatMetric('load', 72.5), '72,5 kg', 'charge formatee');
 assert.equal(formatMetric('time', 90), '1 min 30 s', 'duree formatee');
 assert.equal(formatChange('reps', -3), '−3 rép.', 'regression signee');
 assert.equal(formatChange('load', 0), '=', 'stagnation');
+
+// --- Partage des recettes ---------------------------------------------------
+
+const aPartager: ShareableRecipe = {
+  id: 1,
+  name: 'Poulet au curry',
+  servings: 6,
+  prepMinutes: 35,
+  notes: '  Meilleur rechauffe le lendemain.  ',
+  steps: ['Faire revenir le poulet 5 min', 'Ajouter le riz'],
+  ingredients: [
+    { label: 'Blanc de poulet', quantityG: 600, unitName: null, unitGrams: null },
+    { label: 'Oeuf', quantityG: 100, unitName: 'oeuf', unitGrams: 50 },
+  ],
+};
+
+const texte = formatShareableRecipe(aPartager);
+assert.ok(texte.startsWith('Poulet au curry\n6 parts · 35 min'), 'nom puis parts et duree');
+assert.ok(texte.includes('- Blanc de poulet — 600 g'), 'ingredient au poids');
+assert.ok(texte.includes('- Oeuf — 2 oeufs (100 g)'), 'ingredient en unites');
+assert.ok(texte.includes('1. Faire revenir le poulet 5 min'), 'etapes numerotees');
+assert.ok(texte.includes('Note : Meilleur rechauffe le lendemain.'), 'note elaguee');
+
+// Ni macros ni references internes ne sortent : le type ne les porte pas, et
+// le texte ne doit pas les reintroduire par une autre porte.
+assert.ok(!texte.includes('kcal'), 'aucune macro partagee');
+
+const sansRien = formatShareableRecipe({
+  ...aPartager,
+  prepMinutes: null,
+  notes: '   ',
+  steps: [],
+});
+assert.ok(sansRien.startsWith('Poulet au curry\n6 parts\n'), 'sans duree, les parts seules');
+assert.ok(!sansRien.includes('Preparation'), 'aucune etape, aucune rubrique');
+assert.ok(!sansRien.includes('Note'), 'note blanche omise');
+
+const second: ShareableRecipe = { ...aPartager, id: 2, name: 'Soupe', servings: 1 };
+const ensemble = formatShareableRecipes([aPartager, second], 'du 15 au 21 septembre');
+assert.ok(
+  ensemble.startsWith('Recettes de la semaine du 15 au 21 septembre'),
+  'la semaine ouvre un envoi groupe',
+);
+assert.ok(ensemble.includes('Soupe\n1 part'), 'la seconde recette suit');
+assert.equal(ensemble.split('———').length - 1, 2, 'un separateur par jointure');
+
+// Une seule recette ne parle pas de la semaine : c'est un plat qu'on envoie.
+const seule = formatShareableRecipes([second], 'du 15 au 21 septembre');
+assert.equal(seule, formatShareableRecipe(second), 'une recette seule part telle quelle');
+assert.equal(formatShareableRecipes([], 'du 15 au 21 septembre'), '', 'rien a partager');
+
+assert.equal(shareableRecipesTitle([second], 'du 15 au 21 septembre'), 'Soupe', 'titre du plat');
+assert.equal(
+  shareableRecipesTitle([aPartager, second], 'du 15 au 21 septembre'),
+  'Recettes de la semaine du 15 au 21 septembre',
+  'titre de la semaine',
+);
 
 console.log('Toutes les verifications pures passent.');

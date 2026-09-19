@@ -1,6 +1,7 @@
 import { NavHeader, PageTitle } from '@/components/ScreenHeader';
 import { requireUserId } from '@/server/guard';
 import { listForWeek } from '@/server/services/shopping';
+import { shareableRecipesFor } from '@/server/services/recipes';
 import { formatWeekRange, isJournalDate, startOfWeek, todayInParis } from '@/lib/date';
 import { ShoppingList } from './ShoppingList';
 
@@ -18,6 +19,10 @@ export const dynamic = 'force-dynamic';
  *
  * Aucune liste pour cette semaine rend l'écran d'accueil, celui qui propose de
  * l'engendrer depuis le panier.
+ *
+ * Les recettes du panier ne sont lues que s'il y a une liste, et après elle :
+ * ce sont celles qu'on pourra partager une fois les courses faites, et sans
+ * liste il n'y a rien à partager — autant ne pas payer la lecture.
  */
 export default async function ShoppingPage({
   searchParams,
@@ -32,6 +37,7 @@ export default async function ShoppingPage({
   );
 
   const list = await listForWeek(userId, weekStart);
+  const recipes = list === null ? [] : await shareableRecipesFor(userId, weekStart);
 
   return (
     <>
@@ -41,7 +47,12 @@ export default async function ShoppingPage({
         description={formatWeekRange(weekStart)}
       />
 
-      <ShoppingList list={list} weekStart={weekStart} />
+      <ShoppingList
+        list={list}
+        weekStart={weekStart}
+        recipes={recipes}
+        weekLabel={formatWeekRange(weekStart)}
+      />
     </>
   );
 }

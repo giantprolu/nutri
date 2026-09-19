@@ -2,10 +2,12 @@ import 'server-only';
 import {
   MAX_INGREDIENTS,
   MAX_STEPS,
+  ingredientsForServings,
   isValidServings,
   type RecipeInput,
   type Recipe,
 } from '@/lib/recipe';
+import type { ShareableRecipe } from '@/lib/share-recipes';
 import { isValidQuantity } from '@/lib/nutrition';
 import {
   countRecipes,
@@ -16,7 +18,7 @@ import {
   missingReferences,
   updateRecipe,
 } from '../db/queries/recipes';
-import { basketWeeksForRecipe } from '../db/queries/basket';
+import { basketWeeksForRecipe, listBasket } from '../db/queries/basket';
 import { syncListsForRecipe, syncListsForWeeks } from './shopping';
 
 /**
@@ -196,4 +198,63 @@ export async function removeRecipe(userId: number, id: number): Promise<boolean>
 
 export function recipeCount(userId: number): Promise<number> {
   return countRecipes(userId);
+}
+
+/**
+ * Les plats du panier d'une semaine, prêts à être partagés.
+ *
+ * Le panier et non le carnet : on partage ce qu'on va cuisiner cette semaine,
+ * au moment où les courses sont faites, et le carnet entier noierait les cinq
+ * plats du sac dans quarante fiches sans rapport. Le choix de n'en envoyer
+ * qu'une partie se fait ensuite, à l'écran.
+ *
+ * Les quantités sont mises à l'échelle des parts du panier, comme le fait la
+ * fiche et comme l'a fait la liste de courses. C'est la même fonction pour les
+ * trois, et il le faut : le texte envoyé doit dire les grammes qu'on a dans
+ * son sac, pas ceux qu'annonçait la recette avant qu'on change ses parts.
+ *
+ * Ce qui sort d'ici est volontairement maigre — ni macros, ni références
+ * internes. Le détail et ses raisons vivent dans `ShareableRecipe`.
+ */
+export async function shareableRecipesFor(
+  userId: number,
+  weekStart: string,
+): Promise<ShareableRecipe[]> {
+  const basket = await listBasket(userId, weekStart);
+  if (basket.length === 0) {
+    return [];
+  }
+
+  // Une lecture par plat, comme pour la liste de courses : le carnet entier
+  // coûterait tous les ingrédients de toutes les recettes pour n'en garder que
+  // celles de la semaine.
+  const recipes = await Promise.all(basket.map((item) => findRecipe(userId, item.recipeId)));
+
+  const shareable: ShareableRecipe[] = [];
+  for (const [index, recipe] of recipes.entries()) {
+    // La recette a pu disparaître entre la lecture du panier et la sienne.
+    // Le partage n'est pas le lieu où le signaler : les autres plats partent.
+    if (recipe === null) {
+      continue;
+    }
+    const servings = basket[index]?.servings ?? recipe.servings;
+    shareable.push({
+      id: recipe.id,
+      name: recipe.name,
+      servings,
+      prepMinutes: recipe.prepMinutes,
+      steps: recipe.steps,
+      notes: recipe.notes,
+      ingredients: ingredientsForServings(recipe.ingredients, recipe.servings, servings).map(
+        (ingredient) => ({
+          label: ingredient.label,
+          quantityG: ingredient.quantityG,
+          unitName: ingredient.unitName,
+          unitGrams: ingredient.unitGrams,
+        }),
+      ),
+    });
+  }
+
+  return shareable;
 }

@@ -14,7 +14,9 @@ import { Progress } from '@/components/ui/progress';
 import { AISLES, AISLE_LABELS, type Aisle } from '@/lib/aisle';
 import { formatIngredientQuantity, shoppingUnitCount } from '@/lib/recipe';
 import { checkItem, generateList, removeItem } from '@/lib/client/shopping';
+import type { ShareableRecipe } from '@/lib/share-recipes';
 import { cn } from '@/lib/utils';
+import { ShareRecipes } from './ShareRecipes';
 import type { ShoppingList as List, ShoppingItem } from '@/server/db/queries/shopping';
 
 /**
@@ -67,7 +69,18 @@ function purchaseLabel(item: ShoppingItem): string {
   return `${count} ${plural} (${Math.round(item.quantityG).toLocaleString('fr-FR')} g)`;
 }
 
-export function ShoppingList({ list, weekStart }: { list: List | null; weekStart: string }) {
+export function ShoppingList({
+  list,
+  weekStart,
+  recipes,
+  weekLabel,
+}: {
+  list: List | null;
+  weekStart: string;
+  /** Les plats du panier de la semaine, pour les partager une fois les courses faites. */
+  recipes: readonly ShareableRecipe[];
+  weekLabel: string;
+}) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [scanning, setScanning] = useState(false);
@@ -259,6 +272,19 @@ export function ShoppingList({ list, weekStart }: { list: List | null; weekStart
           </section>
         );
       })}
+
+      {/*
+        Le partage vient après la liste, et non avant : on partage ses recettes
+        une fois les articles cochés, pas en entrant dans le magasin. Le bouton
+        prend de l'importance quand tout est pris — c'est alors le geste
+        suivant — sans jamais disparaître avant, un article laissé de côté
+        n'empêchant pas d'envoyer ce qu'on va cuisiner.
+      */}
+      <ShareRecipes
+        recipes={recipes}
+        weekLabel={weekLabel}
+        complete={total > 0 && taken === total}
+      />
 
       <Button
         type="button"
